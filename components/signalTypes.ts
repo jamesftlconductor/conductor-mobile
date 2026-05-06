@@ -12,31 +12,50 @@ export type TypeMeta = { emoji: string; color: string; label: string };
 
 export const TYPE_META: Record<string, TypeMeta> = {
   package:     { emoji: '📦', color: '#60a5fa', label: 'Package' },
+  delivery:    { emoji: '🚚', color: '#7dd3fc', label: 'Delivery' },
   food:        { emoji: '🍽', color: '#f59e0b', label: 'Food' },
   grocery:     { emoji: '🛒', color: '#a3e635', label: 'Grocery' },
   service:     { emoji: '🔧', color: '#86efac', label: 'Service' },
   reservation: { emoji: '🗓', color: '#f9a8d4', label: 'Reservation' },
+  appointment: { emoji: '📅', color: '#c4b5fd', label: 'Appointment' },
   travel:      { emoji: '✈️', color: '#2dd4bf', label: 'Travel' },
   deadline:    { emoji: '⚠️', color: '#fbbf24', label: 'Deadline' },
+  unknown:     { emoji: '📍', color: '#8a8780', label: 'Unknown' },
   urgent:      { emoji: '🚨', color: '#ef4444', label: 'Urgent' },
 };
 
 export const DEFAULT_META = TYPE_META.urgent;
 
+// Used when a signal's type isn't recognized AND we want to avoid the 🚨
+// fallback (e.g. on middle/outer rings, where ring position is meant to
+// convey urgency, not a separate red emoji).
+export const NEUTRAL_META: TypeMeta = { emoji: '📍', color: '#8a8780', label: 'Signal' };
+
 export const LEGEND_ORDER = [
   'package',
+  'delivery',
   'food',
   'grocery',
   'service',
   'reservation',
+  'appointment',
   'travel',
   'deadline',
+  'unknown',
   'urgent',
 ];
 
 export function metaFor(s: Signal): TypeMeta {
   if (s.type && TYPE_META[s.type]) return TYPE_META[s.type];
   return DEFAULT_META;
+}
+
+// Ring-aware variant: when the signal's type is unrecognized, only the inner
+// ring shows 🚨 (the urgent fallback). Middle/outer rings show a calm neutral
+// pin instead, since their visual urgency comes from ring position alone.
+export function metaForRing(s: Signal, ring: 'inner' | 'middle' | 'outer'): TypeMeta {
+  if (s.type && TYPE_META[s.type]) return TYPE_META[s.type];
+  return ring === 'inner' ? DEFAULT_META : NEUTRAL_META;
 }
 
 export function typeKeyFor(s: Signal): string {

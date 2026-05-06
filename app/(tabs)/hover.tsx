@@ -20,7 +20,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { FinaleSheet } from '@/components/FinaleSheet';
 import {
   LEGEND_ORDER,
-  metaFor,
+  metaForRing,
   Signal,
   TYPE_META,
   TypeMeta,
@@ -46,9 +46,9 @@ type RingDef = {
 };
 
 const RINGS: Record<RingKey, RingDef> = {
-  outer:  { key: 'outer',  radius: 165, rotationMs: 60000, strokeOpacity: 0.12, label: 'AHEAD',     pulseMs: 2500 },
-  middle: { key: 'middle', radius: 115, rotationMs: 30000, strokeOpacity: 0.18, label: 'THIS WEEK', pulseMs: 1500 },
-  inner:  { key: 'inner',  radius: 65,  rotationMs: 15000, strokeOpacity: 0.25, label: 'TODAY',     pulseMs: 600  },
+  outer:  { key: 'outer',  radius: 165, rotationMs: 60000, strokeOpacity: 0.12, label: 'ON THE HORIZON',    pulseMs: 2500 },
+  middle: { key: 'middle', radius: 115, rotationMs: 30000, strokeOpacity: 0.18, label: 'APPROACHING FAST',  pulseMs: 1500 },
+  inner:  { key: 'inner',  radius: 65,  rotationMs: 15000, strokeOpacity: 0.25, label: 'ACT NOW',           pulseMs: 600  },
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -219,7 +219,7 @@ function RotatingRing({
       <DashedRing radius={ring.radius} opacity={ring.strokeOpacity} />
 
       {signals.map((s) => {
-        const meta = metaFor(s);
+        const meta = metaForRing(s, ring.key);
         const angle = (angleDegForSignal(s, ring.key) * Math.PI) / 180;
         const x = size / 2 + ring.radius * Math.cos(angle - Math.PI / 2);
         const y = size / 2 + ring.radius * Math.sin(angle - Math.PI / 2);
@@ -536,8 +536,8 @@ export default function HoverScreen() {
   }, [signals, resolveAnims]);
 
   function startRest(signal: Signal) {
-    const meta = metaFor(signal);
     const ring = ringForSignal(signal);
+    const meta = metaForRing(signal, ring);
     const ringDef = RINGS[ring];
     const angle = (angleDegForSignal(signal, ring) * Math.PI) / 180;
     const startX = cx + ringDef.radius * Math.cos(angle - Math.PI / 2);
@@ -686,13 +686,13 @@ export default function HoverScreen() {
 
         {/* Fixed (non-rotating) ring labels at 12 o'clock in the gaps between rings */}
         <View pointerEvents="none" style={[styles.betweenRingLabel, { top: cy - 39 }]}>
-          <Text style={styles.betweenRingLabelText}>TODAY</Text>
+          <Text style={styles.betweenRingLabelText}>ACT NOW</Text>
         </View>
         <View pointerEvents="none" style={[styles.betweenRingLabel, { top: cy - 94 }]}>
-          <Text style={styles.betweenRingLabelText}>THIS WEEK</Text>
+          <Text style={styles.betweenRingLabelText}>APPROACHING FAST</Text>
         </View>
         <View pointerEvents="none" style={[styles.betweenRingLabel, { top: cy - 144 }]}>
-          <Text style={styles.betweenRingLabelText}>AHEAD</Text>
+          <Text style={styles.betweenRingLabelText}>ON THE HORIZON</Text>
         </View>
 
         {resolveAnims.map((a) => {
