@@ -12,7 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.jamesftl.conductormobile",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSHealthShareUsageDescription": "Conductor reads your sleep, heart rate, HRV, and activity data to tailor your morning brief and surface recovery context — never to share or store specific numbers.",
+        "NSHealthUpdateUsageDescription": "Conductor does not write data to Apple Health."
       }
     },
     "android": {
@@ -42,7 +44,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "@kingstinct/react-native-healthkit"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
+import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { Minimap } from '@/components/Minimap';
 
 type BriefSegment =
@@ -29,7 +30,33 @@ const DEFAULT_SIGNAL_COLOR = '#ef4444';
 
 const PENDING_SIGNAL_KEY = 'conductor:pendingSignalId';
 const EXPO_PUSH_TOKEN_KEY = 'expoPushToken';
+const HEALTH_CONTEXT_KEY = 'healthContext';
 const PUSH_USER_ID = 'james_totalhome_gmail_com';
+
+async function syncHealthIfStale() {
+  try {
+    const cachedRaw = await AsyncStorage.getItem(HEALTH_CONTEXT_KEY);
+    const cached: HealthSnapshot | null = cachedRaw ? JSON.parse(cachedRaw) : null;
+    // Refresh once per local calendar day. Comparing toDateString() handles
+    // DST transitions and avoids tripping on millisecond boundaries.
+    if (cached?.asOf && new Date(cached.asOf).toDateString() === new Date().toDateString()) {
+      return;
+    }
+
+    const snapshot = await fetchHealthSnapshot();
+    if (!snapshot) return;
+
+    await AsyncStorage.setItem(HEALTH_CONTEXT_KEY, JSON.stringify(snapshot));
+
+    await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: PUSH_USER_ID, healthData: snapshot }),
+    });
+  } catch {
+    // Best-effort — never block app startup on health sync.
+  }
+}
 
 async function registerForPushNotifications() {
   try {
@@ -147,6 +174,7 @@ export default function TakeoffScreen() {
 
     checkConnection();
     registerForPushNotifications();
+    syncHealthIfStale();
   }, []);
 
   async function checkConnection() {
