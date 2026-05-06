@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { Minimap } from '@/components/Minimap';
@@ -12,16 +15,66 @@ type BriefSegment =
 
 const SIGNAL_TYPE_COLORS: Record<string, string> = {
   package: '#60a5fa',
+  delivery: '#7dd3fc',
   food: '#f59e0b',
   grocery: '#a3e635',
   service: '#86efac',
   reservation: '#f9a8d4',
+  appointment: '#c4b5fd',
   travel: '#2dd4bf',
   deadline: '#fbbf24',
+  unknown: '#8a8780',
 };
 const DEFAULT_SIGNAL_COLOR = '#ef4444';
 
 const PENDING_SIGNAL_KEY = 'conductor:pendingSignalId';
+const EXPO_PUSH_TOKEN_KEY = 'expoPushToken';
+const PUSH_USER_ID = 'james_totalhome_gmail_com';
+
+async function registerForPushNotifications() {
+  try {
+    if (!Device.isDevice) return;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.DEFAULT,
+      });
+    }
+
+    const { status: existing } = await Notifications.getPermissionsAsync();
+    let final = existing;
+    if (existing !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      final = status;
+    }
+    if (final !== 'granted') return;
+
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      (Constants as any).easConfig?.projectId;
+    if (!projectId) return;
+
+    const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId });
+    const token = tokenResult.data;
+    if (!token) return;
+
+    const cached = await AsyncStorage.getItem(EXPO_PUSH_TOKEN_KEY);
+    await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
+
+    // Only round-trip to the server when the token actually changes — avoids a
+    // write per cold start once the device is registered.
+    if (cached !== token) {
+      await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: PUSH_USER_ID, expoPushToken: token }),
+      });
+    }
+  } catch {
+    // Best-effort — never block app startup on push registration.
+  }
+}
 
 const TAKEOFF_THEME = {
   bg: '#0f0f0f',
@@ -93,6 +146,7 @@ export default function TakeoffScreen() {
     }));
 
     checkConnection();
+    registerForPushNotifications();
   }, []);
 
   async function checkConnection() {
