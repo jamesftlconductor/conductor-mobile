@@ -146,23 +146,30 @@ async function registerForPushNotifications() {
       return;
     }
 
-    console.log('[push] step 9: comparing token to AsyncStorage cache');
-    const cached = await AsyncStorage.getItem(EXPO_PUSH_TOKEN_KEY);
-    await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
+    // Always POST when we have a token. Dropping the cached-token optimization
+    // because it was unsafe: the previous version wrote the cache before the
+    // POST, so a failed POST left the device permanently marked "registered"
+    // while the backend had nothing — no automatic recovery on subsequent
+    // launches. The backend write is idempotent (redis.set), so re-posting
+    // every launch costs one cheap round trip and guarantees convergence.
+    console.log('[push] step 9: POSTing token to /api/signals?type=preferences');
+    const res = await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: PUSH_USER_ID, expoPushToken: token }),
+    });
+    console.log('[push] step 9: backend POST complete, HTTP', res.status);
 
-    if (cached !== token) {
-      console.log('[push] step 10: token changed (or first run), POSTing to /api/signals?type=preferences');
-      const res = await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: PUSH_USER_ID, expoPushToken: token }),
-      });
-      console.log('[push] step 10: backend POST complete, HTTP', res.status);
-      await postRegistrationMarker('token-stored', { httpStatus: res.status });
-    } else {
-      console.log('[push] step 10: token unchanged, skipping backend POST');
-      await postRegistrationMarker('token-unchanged');
+    if (!res.ok) {
+      // Cache stays untouched on failure so the next launch retries.
+      await postRegistrationMarker('token-post-failed', { httpStatus: res.status });
+      return;
     }
+
+    // Server confirmed receipt — safe to mirror locally for observability.
+    // Nothing in this function reads the cache to gate behavior anymore.
+    await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
+    await postRegistrationMarker('token-stored', { httpStatus: res.status });
   } catch (error) {
     // Thrown error — funnel through the same marker so the backend has a
     // single ledger of what happened on the last attempt.
