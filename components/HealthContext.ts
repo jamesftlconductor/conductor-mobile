@@ -93,41 +93,52 @@ export async function fetchHealthSnapshot(): Promise<HealthSnapshot | null> {
     const last24h = new Date(now.getTime() - DAY_MS);
     const last7d = new Date(now.getTime() - 7 * DAY_MS);
 
+    // kingstinct v14 query option shape: date range nests inside
+    // filter.date.{startDate,endDate}, limit is required (0 = all samples),
+    // ascending is a boolean. The earlier {from, to} shape was a bad guess
+    // that the Nitro bridge accepted past the type cast and crashed at
+    // runtime ("Value is undefined, expected a number"). Statistics queries
+    // use a smaller {filter, unit} shape — no limit, no ascending.
     const queryResults = await Promise.allSettled([
-        queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis' as never, {
-          from: sleepWindowStart,
-          to: sleepWindowEnd,
-          ascending: true,
-        } as never),
-        queryQuantitySamples(
-          'HKQuantityTypeIdentifierHeartRateVariabilitySDNN' as never,
-          { from: last24h, to: now, ascending: false, limit: 1, unit: 'ms' } as never,
-        ),
-        queryQuantitySamples(
-          'HKQuantityTypeIdentifierHeartRateVariabilitySDNN' as never,
-          { from: last7d, to: now, unit: 'ms' } as never,
-        ),
-        queryQuantitySamples(
-          'HKQuantityTypeIdentifierRestingHeartRate' as never,
-          {
-            from: last24h,
-            to: now,
-            ascending: false,
-            limit: 1,
-            unit: 'count/min',
-          } as never,
-        ),
-        queryStatisticsForQuantity(
-          'HKQuantityTypeIdentifierStepCount' as never,
-          ['cumulativeSum'] as never,
-          { from: todayStart, to: now, unit: 'count' } as never,
-        ),
-        queryStatisticsForQuantity(
-          'HKQuantityTypeIdentifierActiveEnergyBurned' as never,
-          ['cumulativeSum'] as never,
-          { from: yesterdayStart, to: todayStart, unit: 'kcal' } as never,
-        ),
-      ]);
+      queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis' as never, {
+        filter: { date: { startDate: sleepWindowStart, endDate: sleepWindowEnd } },
+        limit: 0,
+        ascending: true,
+      }),
+      queryQuantitySamples('HKQuantityTypeIdentifierHeartRateVariabilitySDNN' as never, {
+        filter: { date: { startDate: last24h, endDate: now } },
+        limit: 1,
+        ascending: false,
+        unit: 'ms',
+      }),
+      queryQuantitySamples('HKQuantityTypeIdentifierHeartRateVariabilitySDNN' as never, {
+        filter: { date: { startDate: last7d, endDate: now } },
+        limit: 0,
+        unit: 'ms',
+      }),
+      queryQuantitySamples('HKQuantityTypeIdentifierRestingHeartRate' as never, {
+        filter: { date: { startDate: last24h, endDate: now } },
+        limit: 1,
+        ascending: false,
+        unit: 'count/min',
+      }),
+      queryStatisticsForQuantity(
+        'HKQuantityTypeIdentifierStepCount' as never,
+        ['cumulativeSum'],
+        {
+          filter: { date: { startDate: todayStart, endDate: now } },
+          unit: 'count',
+        },
+      ),
+      queryStatisticsForQuantity(
+        'HKQuantityTypeIdentifierActiveEnergyBurned' as never,
+        ['cumulativeSum'],
+        {
+          filter: { date: { startDate: yesterdayStart, endDate: todayStart } },
+          unit: 'kcal',
+        },
+      ),
+    ]);
 
     const [sleepRes, hrvRes, hrv7dRes, rhrRes, stepsRes, caloriesRes] = queryResults;
 
