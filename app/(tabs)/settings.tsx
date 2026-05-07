@@ -6,6 +6,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -250,6 +251,27 @@ function comingSoon(label: string) {
   Alert.alert(label, 'Coming soon.');
 }
 
+async function handleInviteMember() {
+  try {
+    const r = await fetch(`${API_BASE}/invite/generate?userId=${USER_ID}`);
+    if (!r.ok) {
+      Alert.alert('Invite a member', "Couldn't generate an invite. Try again later.");
+      return;
+    }
+    const data = await r.json();
+    if (!data?.inviteUrl) {
+      Alert.alert('Invite a member', "Couldn't generate an invite. Try again later.");
+      return;
+    }
+    await Share.share({
+      message: `Join my Conductor household: ${data.inviteUrl}\n\nShare this link — it expires in 7 days.`,
+      url: data.inviteUrl,
+    });
+  } catch {
+    Alert.alert('Invite a member', "Couldn't generate an invite. Try again later.");
+  }
+}
+
 export default function SettingsScreen() {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
@@ -309,7 +331,7 @@ export default function SettingsScreen() {
 
         <SectionHeader title="Household" />
         <Row label="RangerOaks925" subtext="Your household" />
-        <ChevronRow label="Invite a member" onPress={() => comingSoon('Invite a member')} />
+        <ChevronRow label="Invite a member" onPress={handleInviteMember} />
         <Row
           label="Connected accounts"
           right={
