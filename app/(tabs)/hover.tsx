@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Line } from 'react-native-svg';
 
 import { FinaleSheet } from '@/components/FinaleSheet';
 import {
@@ -53,6 +53,14 @@ const RINGS: Record<RingKey, RingDef> = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BRASS = '#b8960c';
+const EXPANDED_RADIUS = 155;
+// Annular tolerance for tap/long-press hit detection on a ring. Each ring's
+// hit zone is its actual radius ± half the gap to its neighbour, so the
+// three zones are contiguous and non-overlapping (0–90 inner, 90–140 middle,
+// 140–200 outer). Keep these in sync with the radii in RINGS.
+const RING_HIT_BOUNDARIES = { innerOuter: 90, middleOuter: 140, outerOuter: 200 };
+const EXPANDED_HIT_TOLERANCE = 30;
+const HOUR_MS = 60 * 60 * 1000;
 
 function parseEta(eta?: string | null) {
   if (!eta) return NaN;
@@ -76,6 +84,65 @@ function idAngle(id: Signal['id']): number {
   // Spread between 30° and 330° so the 12 o'clock area stays clear.
   const n = typeof id === 'number' ? id : parseInt(String(id), 10) || 0;
   return (Math.abs(n) % 300) + 30;
+}
+
+// Used while a ring is EXPANDED. Snap each signal to the time/day/week
+// position that matches the marker scheme around the expanded ring.
+//
+// Inner (Act Now): 6 AM → 9 PM mapped linearly to 45° → 270° (15 hours
+//   across 225°, so 15° per hour). Times outside that range clamp to the
+//   nearest boundary.
+// Middle (Approaching Fast): day-of-week × (360/7), Monday at the top.
+// Outer (On the Horizon): (week - 1) × 90°, week 1 at the top, capped
+//   at week 4 for ETAs further out.
+//
+// Signals without a parseable ETA fall back to evenly distributing across
+// the visible arc using the array index passed in by the caller.
+const INNER_ARC_START_DEG = 45;
+const INNER_ARC_HOURS_START = 6;
+const INNER_ARC_HOURS_END = 21; // 9 PM
+const INNER_DEG_PER_HOUR = 15;
+const MIDDLE_DEG_PER_DAY = 360 / 7;
+
+function expandedAngleForSignal(
+  s: Signal,
+  ring: RingKey,
+  fallbackIndex: number,
+  fallbackTotal: number,
+): number {
+  const ms = parseEta(s.eta);
+  const hasEta = !isNaN(ms);
+
+  if (ring === 'inner') {
+    if (hasEta) {
+      const d = new Date(ms);
+      const hours = d.getHours() + d.getMinutes() / 60;
+      const clamped = Math.max(INNER_ARC_HOURS_START, Math.min(INNER_ARC_HOURS_END, hours));
+      return INNER_ARC_START_DEG + (clamped - INNER_ARC_HOURS_START) * INNER_DEG_PER_HOUR;
+    }
+    // Distribute evenly across 45° → 270° (225° arc).
+    if (fallbackTotal <= 0) return INNER_ARC_START_DEG;
+    return INNER_ARC_START_DEG + (fallbackIndex / fallbackTotal) * 225;
+  }
+
+  if (ring === 'middle') {
+    if (hasEta) {
+      const d = new Date(ms);
+      const dayIdx = (d.getDay() + 6) % 7; // Mon=0..Sun=6
+      return dayIdx * MIDDLE_DEG_PER_DAY;
+    }
+    if (fallbackTotal <= 0) return 0;
+    return (fallbackIndex / fallbackTotal) * 360;
+  }
+
+  // outer
+  if (hasEta) {
+    const days = Math.max(0, (ms - Date.now()) / DAY_MS);
+    const week = Math.min(4, Math.max(1, Math.ceil((days + 0.001) / 7)));
+    return (week - 1) * 90;
+  }
+  if (fallbackTotal <= 0) return 270; // park missing-ETA signals near WEEK 4
+  return (fallbackIndex / fallbackTotal) * 360;
 }
 
 // Position depends on ring:
@@ -139,6 +206,121 @@ function DashedRing({ radius, opacity }: { radius: number; opacity: number }) {
   );
 }
 
+// Ring of text markers placed just outside the expanded ring's radius.
+// Inner: 6 hour stamps across 6 AM–9 PM. Middle: 7 weekday stamps. Outer:
+// 4 week stamps. Doesn't rotate.
+function ExpandedRingMarkers({
+  ring,
+  cx,
+  cy,
+}: {
+  ring: RingKey;
+  cx: number;
+  cy: number;
+}) {
+  const labelRadius = EXPANDED_RADIUS + 18;
+
+  let markers: { label: string; angleDeg: number }[] = [];
+  if (ring === 'inner') {
+    markers = [
+      { label: '6AM', angleDeg: 45 },
+      { label: '9AM', angleDeg: 90 },
+      { label: '12PM', angleDeg: 135 },
+      { label: '3PM', angleDeg: 180 },
+      { label: '6PM', angleDeg: 225 },
+      { label: '9PM', angleDeg: 270 },
+    ];
+  } else if (ring === 'middle') {
+    const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    markers = days.map((label, i) => ({ label, angleDeg: i * MIDDLE_DEG_PER_DAY }));
+  } else {
+    markers = [
+      { label: 'WEEK 1', angleDeg: 0 },
+      { label: 'WEEK 2', angleDeg: 90 },
+      { label: 'WEEK 3', angleDeg: 180 },
+      { label: 'WEEK 4', angleDeg: 270 },
+    ];
+  }
+
+  return (
+    <>
+      {markers.map((m, i) => {
+        const a = (m.angleDeg * Math.PI) / 180;
+        const x = cx + labelRadius * Math.cos(a - Math.PI / 2);
+        const y = cy + labelRadius * Math.sin(a - Math.PI / 2);
+        return (
+          <View
+            key={i}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: x - 30,
+              top: y - 6,
+              width: 60,
+              alignItems: 'center',
+            }}>
+            <Text style={styles.expandedMarker}>{m.label}</Text>
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
+// Faint full circle at the expanded radius — visual reference frame so
+// the user sees the orbit even if no signals are visible at some angles.
+function ReferenceCircle({ cx, cy }: { cx: number; cy: number }) {
+  const size = EXPANDED_RADIUS * 2 + 4;
+  return (
+    <Svg
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: cx - size / 2,
+        top: cy - size / 2,
+      }}
+      width={size}
+      height={size}>
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        r={EXPANDED_RADIUS}
+        stroke={OFF_WHITE}
+        strokeOpacity={0.08}
+        strokeWidth={1}
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
+// Thin brass tick from center to the expanded ring at the current hour
+// position — only meaningful when the inner ring is expanded.
+function CurrentTimeIndicator({ cx, cy }: { cx: number; cy: number }) {
+  const now = new Date();
+  const hours = now.getHours() + now.getMinutes() / 60;
+  const clamped = Math.max(INNER_ARC_HOURS_START, Math.min(INNER_ARC_HOURS_END, hours));
+  const angleDeg = INNER_ARC_START_DEG + (clamped - INNER_ARC_HOURS_START) * INNER_DEG_PER_HOUR;
+  const a = (angleDeg * Math.PI) / 180;
+  const size = EXPANDED_RADIUS * 2 + 4;
+  const c = size / 2;
+  const tipX = c + EXPANDED_RADIUS * Math.cos(a - Math.PI / 2);
+  const tipY = c + EXPANDED_RADIUS * Math.sin(a - Math.PI / 2);
+  return (
+    <Svg
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: cx - c,
+        top: cy - c,
+      }}
+      width={size}
+      height={size}>
+      <Line x1={c} y1={c} x2={tipX} y2={tipY} stroke={BRASS} strokeOpacity={0.5} strokeWidth={1} />
+    </Svg>
+  );
+}
+
 function RotatingRing({
   ring,
   cx,
@@ -147,6 +329,7 @@ function RotatingRing({
   pausedSignalId,
   dimmedTypeKey,
   highlightedTypeKey,
+  expandedRing,
   onSignalPress,
 }: {
   ring: RingDef;
@@ -156,15 +339,54 @@ function RotatingRing({
   pausedSignalId: string | null;
   dimmedTypeKey: string | null;
   highlightedTypeKey: string | null;
+  expandedRing: RingKey | null;
   onSignalPress: (s: Signal) => void;
 }) {
   const rotation = useRef(new Animated.Value(0)).current;
-  const paused = pausedSignalId !== null && signals.some((s) => String(s.id) === pausedSignalId);
+  const isExpanded = expandedRing === ring.key;
+  const isDimmed = expandedRing !== null && !isExpanded;
+  // Rotation pauses when (a) any signal on this ring is selected for Finale
+  // OR (b) this ring itself is the expanded one. Other rings keep rotating
+  // in the background — they're visibly dimmed so the motion isn't noisy.
+  const paused =
+    isExpanded ||
+    (pausedSignalId !== null && signals.some((s) => String(s.id) === pausedSignalId));
   const pausedRef = useRef(paused);
+
+  // Scale and opacity animations driven by expansion state. Spring on the
+  // way up to 155px, timing on the way down/out to 0.7. Opacity is timing
+  // (a spring on opacity reads as a flicker). useNativeDriver false on
+  // scale because the rest of the file uses native, but mixing scale +
+  // rotate on the same view with native driver is fine — both transform
+  // properties are native-supported.
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  useEffect(() => {
+    const targetScale = isExpanded
+      ? EXPANDED_RADIUS / ring.radius
+      : isDimmed
+      ? 0.7
+      : 1;
+    const targetOpacity = isDimmed ? 0.6 : 1;
+
+    Animated.spring(scaleAnim, {
+      toValue: targetScale,
+      friction: 7,
+      tension: 70,
+      useNativeDriver: true,
+    }).start();
+    Animated.timing(opacityAnim, {
+      toValue: targetOpacity,
+      duration: 300,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [isExpanded, isDimmed, ring.radius, scaleAnim, opacityAnim]);
 
   useEffect(() => {
     let stopped = false;
@@ -205,6 +427,11 @@ function RotatingRing({
   });
 
   const size = ring.radius * 2 + 4;
+  // Index missing-ETA signals so expandedAngleForSignal can distribute
+  // them evenly without colliding.
+  const missingEtaSignals = isExpanded
+    ? signals.filter((s) => isNaN(parseEta(s.eta)))
+    : [];
   return (
     <Animated.View
       pointerEvents="box-none"
@@ -214,18 +441,33 @@ function RotatingRing({
         top: cy - size / 2,
         width: size,
         height: size,
-        transform: [{ rotate: spin }],
+        opacity: opacityAnim,
+        transform: [{ rotate: spin }, { scale: scaleAnim }],
       }}>
       <DashedRing radius={ring.radius} opacity={ring.strokeOpacity} />
 
       {signals.map((s) => {
         const meta = metaForRing(s, ring.key);
-        const angle = (angleDegForSignal(s, ring.key) * Math.PI) / 180;
+        let angleDeg: number;
+        if (isExpanded) {
+          const fallbackIndex = missingEtaSignals.findIndex(
+            (m) => String(m.id) === String(s.id),
+          );
+          angleDeg = expandedAngleForSignal(
+            s,
+            ring.key,
+            Math.max(0, fallbackIndex),
+            missingEtaSignals.length,
+          );
+        } else {
+          angleDeg = angleDegForSignal(s, ring.key);
+        }
+        const angle = (angleDeg * Math.PI) / 180;
         const x = size / 2 + ring.radius * Math.cos(angle - Math.PI / 2);
         const y = size / 2 + ring.radius * Math.sin(angle - Math.PI / 2);
         const tk = typeKeyFor(s);
         const isHighlighted = highlightedTypeKey === tk;
-        const isDimmed = dimmedTypeKey !== null && !isHighlighted;
+        const isDottedDimmed = dimmedTypeKey !== null && !isHighlighted;
         return (
           <SignalDot
             key={String(s.id)}
@@ -234,7 +476,7 @@ function RotatingRing({
             y={y}
             pulseMs={ring.pulseMs}
             paused={pausedSignalId === String(s.id)}
-            dim={isDimmed}
+            dim={isDottedDimmed}
             highlight={isHighlighted}
             onPress={() => onSignalPress(s)}
           />
@@ -474,14 +716,39 @@ export default function HoverScreen() {
   const rippleSeq = useRef(0);
   const [centerPulse] = useState(() => new Animated.Value(1));
   const [filterTypeKey, setFilterTypeKey] = useState<string | null>(null);
+  const [expandedRing, setExpandedRing] = useState<RingKey | null>(null);
   const signalsRef = useRef<Signal[]>([]);
+  const expandedRingRef = useRef<RingKey | null>(null);
 
   useEffect(() => {
     signalsRef.current = signals;
   }, [signals]);
+  useEffect(() => {
+    expandedRingRef.current = expandedRing;
+  }, [expandedRing]);
 
   const cx = width / 2;
   const cy = height / 2 - 50;
+
+  // Header + legend opacity animations driven by expandedRing. Both fade
+  // when any ring is expanded — header to 0 (out of the way), legend to
+  // 0.3 (still visible but recedes).
+  const headerOpacity = useRef(new Animated.Value(1)).current;
+  const legendOpacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.timing(headerOpacity, {
+      toValue: expandedRing ? 0 : 1,
+      duration: 300,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+    Animated.timing(legendOpacity, {
+      toValue: expandedRing ? 0.3 : 1,
+      duration: 300,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [expandedRing, headerOpacity, legendOpacity]);
 
   async function loadSignals(): Promise<Signal[]> {
     try {
@@ -641,14 +908,55 @@ export default function HoverScreen() {
       }
     });
 
+  // Long-press on any ring (or its label) expands that ring. Distance from
+  // (cx, cy) is bucketed into one of three contiguous zones so labels in
+  // the gaps and dots on the rotating ring all resolve correctly. Pressing
+  // again on the same ring collapses; on a different ring switches.
+  const longPressGesture = Gesture.LongPress()
+    .minDuration(400)
+    .runOnJS(true)
+    .onStart((event) => {
+      const dx = event.x - cx;
+      const dy = event.y - cy;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance >= RING_HIT_BOUNDARIES.outerOuter) return;
+      let target: RingKey;
+      if (distance < RING_HIT_BOUNDARIES.innerOuter) target = 'inner';
+      else if (distance < RING_HIT_BOUNDARIES.middleOuter) target = 'middle';
+      else target = 'outer';
+      setExpandedRing((prev) => (prev === target ? null : target));
+    });
+
+  // Tap-to-collapse — only when a ring is currently expanded, and only when
+  // the tap lands outside the expanded ring's annular hit zone. Taps inside
+  // that zone reach signal dots via their own TouchableOpacity, which stays
+  // working through gesture-handler races.
+  const tapGesture = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd((event) => {
+      if (expandedRingRef.current === null) return;
+      const dx = event.x - cx;
+      const dy = event.y - cy;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const insideExpandedRing =
+        Math.abs(distance - EXPANDED_RADIUS) <= EXPANDED_HIT_TOLERANCE;
+      if (!insideExpandedRing) setExpandedRing(null);
+    });
+
+  const composedGesture = Gesture.Race(swipeGesture, longPressGesture, tapGesture);
+
   return (
-    <GestureDetector gesture={swipeGesture}>
+    <GestureDetector gesture={composedGesture}>
       <View style={styles.container}>
-        <View
+        <Animated.View
           pointerEvents="none"
-          style={[styles.topHeader, { top: insets.top + 8 }]}>
+          style={[styles.topHeader, { top: insets.top + 8, opacity: headerOpacity }]}>
           <Text style={styles.topHeaderText}>Management in Motion</Text>
-        </View>
+        </Animated.View>
+
+        {expandedRing !== null && <ReferenceCircle cx={cx} cy={cy} />}
+        {expandedRing !== null && <ExpandedRingMarkers ring={expandedRing} cx={cx} cy={cy} />}
+        {expandedRing === 'inner' && <CurrentTimeIndicator cx={cx} cy={cy} />}
 
         <RotatingRing
           ring={RINGS.outer}
@@ -658,6 +966,7 @@ export default function HoverScreen() {
           pausedSignalId={pausedSignalId}
           dimmedTypeKey={filterTypeKey}
           highlightedTypeKey={filterTypeKey}
+          expandedRing={expandedRing}
           onSignalPress={setSelected}
         />
         <RotatingRing
@@ -668,6 +977,7 @@ export default function HoverScreen() {
           pausedSignalId={pausedSignalId}
           dimmedTypeKey={filterTypeKey}
           highlightedTypeKey={filterTypeKey}
+          expandedRing={expandedRing}
           onSignalPress={setSelected}
         />
         <RotatingRing
@@ -678,6 +988,7 @@ export default function HoverScreen() {
           pausedSignalId={pausedSignalId}
           dimmedTypeKey={filterTypeKey}
           highlightedTypeKey={filterTypeKey}
+          expandedRing={expandedRing}
           onSignalPress={setSelected}
         />
 
@@ -690,15 +1001,34 @@ export default function HoverScreen() {
           <Text style={styles.centerCText}>C</Text>
         </Animated.View>
 
-        {/* Fixed (non-rotating) ring labels at 12 o'clock in the gaps between rings */}
+        {/* Fixed (non-rotating) ring labels at 12 o'clock in the gaps between rings.
+            The active ring's label brightens (90% opacity, 10px) per the spec. */}
         <View pointerEvents="none" style={[styles.betweenRingLabel, { top: cy - 39 }]}>
-          <Text style={styles.betweenRingLabelText}>ACT NOW</Text>
+          <Text
+            style={[
+              styles.betweenRingLabelText,
+              expandedRing === 'inner' && styles.betweenRingLabelTextActive,
+            ]}>
+            ACT NOW
+          </Text>
         </View>
         <View pointerEvents="none" style={[styles.betweenRingLabel, { top: cy - 94 }]}>
-          <Text style={styles.betweenRingLabelText}>APPROACHING FAST</Text>
+          <Text
+            style={[
+              styles.betweenRingLabelText,
+              expandedRing === 'middle' && styles.betweenRingLabelTextActive,
+            ]}>
+            APPROACHING FAST
+          </Text>
         </View>
         <View pointerEvents="none" style={[styles.betweenRingLabel, { top: cy - 144 }]}>
-          <Text style={styles.betweenRingLabelText}>ON THE HORIZON</Text>
+          <Text
+            style={[
+              styles.betweenRingLabelText,
+              expandedRing === 'outer' && styles.betweenRingLabelTextActive,
+            ]}>
+            ON THE HORIZON
+          </Text>
         </View>
 
         {resolveAnims.map((a) => {
@@ -732,12 +1062,14 @@ export default function HoverScreen() {
           <Ripple key={r.id} cx={cx} cy={cy} color={r.color} delay={r.delay} />
         ))}
 
-        <InfiniteLedger
-          bottomInset={insets.bottom}
-          width={width}
-          activeTypeKey={filterTypeKey}
-          onTapType={handleLegendTap}
-        />
+        <Animated.View style={{ opacity: legendOpacity }}>
+          <InfiniteLedger
+            bottomInset={insets.bottom}
+            width={width}
+            activeTypeKey={filterTypeKey}
+            onTapType={handleLegendTap}
+          />
+        </Animated.View>
 
         {selected && (
           <FinaleSheet
@@ -813,6 +1145,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     opacity: 0.6,
+  },
+  betweenRingLabelTextActive: {
+    fontSize: 10,
+    opacity: 0.9,
+  },
+  expandedMarker: {
+    color: BRASS,
+    fontSize: 8,
+    letterSpacing: 1,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    opacity: 0.85,
   },
   signalHit: {
     position: 'absolute',
