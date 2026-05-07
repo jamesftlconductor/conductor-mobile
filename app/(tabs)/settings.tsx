@@ -378,7 +378,7 @@ export default function SettingsScreen() {
           }
         />
 
-        <SectionHeader title="Brief Schedule" />
+        <SectionHeader title="Programme" subtext="When the day opens and closes" />
         <ChevronRow
           label="Takeoff"
           rightText={format12Hour(settings.takeoffTime)}
