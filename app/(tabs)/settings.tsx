@@ -424,6 +424,9 @@ export default function SettingsScreen() {
           rightText={settings.horizonFrequency}
           onPress={cycleFrequency}
         />
+        {settings.horizonEnabled && (
+          <ChevronRow label="View The Horizon" onPress={() => router.push('/horizon')} />
+        )}
 
         <SectionHeader title="About" />
         <Row label="Conductor" subtext="Version 1.0.0" />

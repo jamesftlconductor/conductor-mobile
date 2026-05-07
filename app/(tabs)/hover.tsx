@@ -642,12 +642,20 @@ function InfiniteLedger({
           );
         }}
       />
-      <TouchableOpacity
-        style={styles.missedCuesLink}
-        onPress={() => router.push('/(tabs)/missed-cues')}
-        activeOpacity={0.6}>
-        <Text style={styles.missedCuesLinkText}>Missed Cues</Text>
-      </TouchableOpacity>
+      <View style={styles.deepLinkRow}>
+        <TouchableOpacity
+          style={styles.deepLink}
+          onPress={() => router.push('/(tabs)/missed-cues')}
+          activeOpacity={0.6}>
+          <Text style={styles.missedCuesLinkText}>Missed Cues</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.deepLink}
+          onPress={() => router.push('/horizon')}
+          activeOpacity={0.6}>
+          <Text style={styles.missedCuesLinkText}>The Horizon</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -1220,10 +1228,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.5,
   },
-  missedCuesLink: {
+  deepLinkRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingTop: 8,
     paddingBottom: 4,
-    alignItems: 'center',
+    gap: 28,
+  },
+  deepLink: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
   missedCuesLinkText: {
     color: '#5a5855',
