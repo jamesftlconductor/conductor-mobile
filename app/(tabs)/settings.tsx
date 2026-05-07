@@ -283,6 +283,7 @@ export default function SettingsScreen() {
     draft: string;
   }>(null);
   const [missedCuesCount, setMissedCuesCount] = useState(0);
+  const [vaultCount, setVaultCount] = useState(0);
 
   useEffect(() => {
     loadSettings().then((s) => {
@@ -291,9 +292,9 @@ export default function SettingsScreen() {
     });
   }, []);
 
-  // Refetch the missed-cues count whenever Settings gains focus, so the
-  // badge reflects state after the user resolves things on /missed-cues
-  // and navigates back.
+  // Refetch the missed-cues + vault counts whenever Settings gains focus, so
+  // the badges reflect state after the user resolves/handles items on those
+  // screens and navigates back.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -302,6 +303,22 @@ export default function SettingsScreen() {
         .then((d) => {
           if (cancelled || !d) return;
           setMissedCuesCount(Array.isArray(d.signals) ? d.signals.length : 0);
+        })
+        .catch(() => {});
+      // Vault count = items with renewalDate within the next 90 days. The
+      // server returns all active items; we filter client-side so the
+      // threshold can change without an API tweak.
+      fetch(`${API_BASE}/signals?type=vault&userId=${USER_ID}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled || !d) return;
+          const cutoff = Date.now() + 90 * 24 * 60 * 60 * 1000;
+          const within = (d.items || []).filter((v: { renewalDate?: string }) => {
+            if (!v.renewalDate) return false;
+            const ms = Date.parse(v.renewalDate);
+            return !isNaN(ms) && ms <= cutoff;
+          });
+          setVaultCount(within.length);
         })
         .catch(() => {});
       return () => {
@@ -362,6 +379,20 @@ export default function SettingsScreen() {
               {missedCuesCount > 0 && (
                 <View style={styles.missedBadge}>
                   <Text style={styles.missedBadgeText}>{missedCuesCount}</Text>
+                </View>
+              )}
+              <ChevronRight size={18} color={MUTED} />
+            </View>
+          }
+        />
+        <Row
+          label="Vault"
+          onPress={() => router.push('/vault')}
+          right={
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {vaultCount > 0 && (
+                <View style={styles.missedBadge}>
+                  <Text style={styles.missedBadgeText}>{vaultCount}</Text>
                 </View>
               )}
               <ChevronRight size={18} color={MUTED} />
