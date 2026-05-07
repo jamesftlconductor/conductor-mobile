@@ -339,101 +339,108 @@ export default function TakeoffScreen() {
   const theme = mode.title === 'Takeoff' ? TAKEOFF_THEME : CLEARANCE_THEME;
 
   return (
-    <GestureDetector gesture={swipeGesture}>
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.bg }]}
-      contentContainerStyle={styles.content}>
-      <Minimap />
-      <View style={styles.header}>
-        <Text style={[styles.greeting, { color: theme.greeting }]}>{greeting}.</Text>
-        <Text style={[styles.title, { color: theme.title }]}>{mode.title}</Text>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      {/* Fixed top-right cluster: date over the Yesterday link. Sits outside
+          the ScrollView so it doesn't scroll away with the brief. */}
+      <View pointerEvents="box-none" style={styles.topRightCluster}>
+        <Text style={[styles.topDate, { color: theme.timestamp }]}>{date}</Text>
+        <TouchableOpacity
+          onPress={() => setShowYesterday(true)}
+          activeOpacity={0.6}
+          style={styles.topYesterdayLink}>
+          <Text style={styles.topYesterdayLinkText}>Yesterday&apos;s Programme →</Text>
+        </TouchableOpacity>
       </View>
 
-      <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color={theme.brief} />
-          <Text style={styles.loadingText}>Generating your brief...</Text>
-        </View>
-      ) : (
-        <View style={styles.briefContainer}>
-          <Text style={[styles.brief, { color: theme.brief }]}>
-            {(segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment]).map((seg, i) => {
-              if (seg.type === 'signal') {
-                const color = (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
-                return (
-                  <Text
-                    key={i}
-                    onPress={() => handleSignalTap(seg.signalId)}
-                    style={{
-                      textDecorationLine: 'underline',
-                      textDecorationColor: color,
-                      textDecorationStyle: 'solid',
-                    }}>
-                    {seg.content}
-                  </Text>
-                );
-              }
-              return <Text key={i}>{seg.content}</Text>;
-            })}
-          </Text>
-        </View>
-      )}
-
-      {!loading ? (
-        <View style={styles.feedbackBlock}>
-          <Text style={styles.feedbackPrompt}>Was this helpful?</Text>
-          <View style={styles.feedbackRow}>
-            <TouchableOpacity
-              style={[
-                styles.feedbackBtn,
-                // ✓ is always white; only opacity dims when ✗ is the choice.
-                { opacity: feedback === 'down' ? 0.2 : 1 },
-              ]}
-              onPress={() => handleFeedback('up')}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={[styles.feedbackSymbol, { color: '#f0ede8' }]}>✓</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.feedbackBtn,
-                { opacity: feedback === 'up' ? 0.2 : 1 },
-              ]}
-              onPress={() => handleFeedback('down')}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              {/* ✗ is muted at rest, brightens to off-white when chosen. */}
-              <Text
-                style={[
-                  styles.feedbackSymbol,
-                  { color: feedback === 'down' ? '#f0ede8' : '#5a5855' },
-                ]}>
-                ✗
-              </Text>
-            </TouchableOpacity>
+      <GestureDetector gesture={swipeGesture}>
+        <ScrollView
+          style={styles.scrollFlex}
+          contentContainerStyle={styles.content}>
+          <Minimap />
+          <View style={styles.header}>
+            <Text style={[styles.greeting, { color: theme.greeting }]}>{greeting}.</Text>
+            <Text style={[styles.title, { color: theme.title }]}>{mode.title}</Text>
           </View>
-        </View>
-      ) : null}
 
-      {!loading && transparency ? (
-        <TouchableOpacity
-          style={styles.transparencyLink}
-          onPress={() => setShowTransparency(true)}
-          activeOpacity={0.6}>
-          <Text style={styles.transparencyLinkText}>How Conductor thought about this</Text>
-        </TouchableOpacity>
-      ) : null}
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
 
-      <Text style={[styles.timestamp, { color: theme.timestamp }]}>{date}</Text>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color={theme.brief} />
+              <Text style={styles.loadingText}>Generating your brief...</Text>
+            </View>
+          ) : (
+            <View style={styles.briefContainer}>
+              <Text style={[styles.brief, { color: theme.brief }]}>
+                {(segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment]).map((seg, i) => {
+                  if (seg.type === 'signal') {
+                    const color = (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
+                    return (
+                      <Text
+                        key={i}
+                        onPress={() => handleSignalTap(seg.signalId)}
+                        style={{
+                          textDecorationLine: 'underline',
+                          textDecorationColor: color,
+                          textDecorationStyle: 'solid',
+                        }}>
+                        {seg.content}
+                      </Text>
+                    );
+                  }
+                  return <Text key={i}>{seg.content}</Text>;
+                })}
+              </Text>
+            </View>
+          )}
 
-      <TouchableOpacity
-        style={styles.yesterdayLink}
-        onPress={() => setShowYesterday(true)}
-        activeOpacity={0.6}>
-        <Text style={styles.yesterdayLinkText}>Yesterday&apos;s Programme →</Text>
-      </TouchableOpacity>
+          {!loading ? (
+            // Signature feedback — right-aligned, single-line, reads like
+            // signing off on the brief. ✓ is always white; ✗ defaults to
+            // muted and brightens when chosen. Both dim to 0.2 when their
+            // sibling is the active selection.
+            <View style={styles.feedbackSignature}>
+              <Text style={styles.feedbackSigPrompt}>Was this helpful?</Text>
+              <TouchableOpacity
+                onPress={() => handleFeedback('up')}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+                <Text
+                  style={[
+                    styles.feedbackSigCheck,
+                    { opacity: feedback === 'down' ? 0.2 : 1 },
+                  ]}>
+                  ✓
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleFeedback('down')}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+                <Text
+                  style={[
+                    styles.feedbackSigX,
+                    {
+                      color: feedback === 'down' ? '#f0ede8' : '#5a5855',
+                      opacity: feedback === 'up' ? 0.2 : 1,
+                    },
+                  ]}>
+                  ✗
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {!loading && transparency ? (
+            <TouchableOpacity
+              style={styles.transparencyLinkBottomLeft}
+              onPress={() => setShowTransparency(true)}
+              activeOpacity={0.6}>
+              <Text style={styles.transparencyLinkText}>How Conductor thought about this</Text>
+            </TouchableOpacity>
+          ) : null}
+        </ScrollView>
+      </GestureDetector>
 
       <YesterdayModal
         visible={showYesterday}
@@ -459,8 +466,7 @@ export default function TakeoffScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
-    </GestureDetector>
+    </View>
   );
 }
 
@@ -468,6 +474,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0f0f0f',
+  },
+  scrollFlex: {
+    flex: 1,
+  },
+  topRightCluster: {
+    // Floats over the ScrollView so the date stays put while the brief
+    // scrolls. paddingTop matches contentContainerStyle.paddingTop so it
+    // sits in the same vertical band as the greeting block, but right-
+    // anchored at 20px from the edge per spec.
+    position: 'absolute',
+    top: 80,
+    right: 20,
+    alignItems: 'flex-end',
+    zIndex: 10,
+  },
+  topDate: {
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  topYesterdayLink: {
+    paddingVertical: 4,
+  },
+  topYesterdayLinkText: {
+    color: '#5a5855',
+    fontSize: 11,
+    letterSpacing: 0.5,
   },
   content: {
     padding: 32,
@@ -514,54 +546,34 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     letterSpacing: 0.2,
   },
-  timestamp: {
-    color: '#5a5855',
-    fontSize: 12,
-    letterSpacing: 0.5,
-    marginTop: 48,
-    textTransform: 'uppercase',
-  },
-  feedbackBlock: {
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  feedbackPrompt: {
-    color: '#5a5855',
-    fontSize: 11,
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  feedbackRow: {
+  feedbackSignature: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: 16,
+    marginTop: 24,
   },
-  yesterdayLink: {
-    marginTop: 12,
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  yesterdayLinkText: {
+  feedbackSigPrompt: {
     color: '#5a5855',
     fontSize: 11,
-    letterSpacing: 1,
+    letterSpacing: 0.3,
   },
-  feedbackBtn: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feedbackSymbol: {
-    fontSize: 18,
+  feedbackSigCheck: {
+    color: '#f0ede8',
+    fontSize: 16,
     fontWeight: '600',
-    lineHeight: 22,
+    marginLeft: 8,
+    lineHeight: 20,
   },
-  transparencyLink: {
+  feedbackSigX: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 6,
+    lineHeight: 20,
+  },
+  transparencyLinkBottomLeft: {
+    alignSelf: 'flex-start',
     marginTop: 16,
-    paddingVertical: 8,
-    alignItems: 'center',
+    paddingVertical: 4,
   },
   transparencyLinkText: {
     color: '#5a5855',
