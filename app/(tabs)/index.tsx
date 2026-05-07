@@ -388,22 +388,30 @@ export default function TakeoffScreen() {
             <TouchableOpacity
               style={[
                 styles.feedbackBtn,
-                { opacity: feedback === 'up' ? 1 : 0.3 },
+                // ✓ is always white; only opacity dims when ✗ is the choice.
+                { opacity: feedback === 'down' ? 0.2 : 1 },
               ]}
               onPress={() => handleFeedback('up')}
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={styles.feedbackEmoji}>👍</Text>
+              <Text style={[styles.feedbackSymbol, { color: '#f0ede8' }]}>✓</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.feedbackBtn,
-                { opacity: feedback === 'down' ? 1 : 0.3 },
+                { opacity: feedback === 'up' ? 0.2 : 1 },
               ]}
               onPress={() => handleFeedback('down')}
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={styles.feedbackEmoji}>👎</Text>
+              {/* ✗ is muted at rest, brightens to off-white when chosen. */}
+              <Text
+                style={[
+                  styles.feedbackSymbol,
+                  { color: feedback === 'down' ? '#f0ede8' : '#5a5855' },
+                ]}>
+                ✗
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -545,9 +553,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  feedbackEmoji: {
-    fontSize: 22,
-    lineHeight: 26,
+  feedbackSymbol: {
+    fontSize: 18,
+    fontWeight: '600',
+    lineHeight: 22,
   },
   transparencyLink: {
     marginTop: 16,
