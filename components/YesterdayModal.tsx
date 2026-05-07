@@ -1,0 +1,181 @@
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+const API_BASE = 'https://conductor-ivory.vercel.app/api';
+const BG = '#0f0f0f';
+const SHEET_BG = '#1a1a1a';
+const OFF_WHITE = '#f0ede8';
+const MUTED = '#5a5855';
+const SECTION_LABEL = '#8a8780';
+
+type YesterdayPayload = {
+  takeoff: string | null;
+  clearance: string | null;
+  date: string;
+};
+
+export default function YesterdayModal({
+  visible,
+  userId,
+  onClose,
+}: {
+  visible: boolean;
+  userId: string;
+  onClose: () => void;
+}) {
+  const [data, setData] = useState<YesterdayPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch fresh on every open. The two stored briefs change at most twice
+  // a day; fetching on demand avoids stale display when re-opening hours
+  // later. Best-effort — leaves data state untouched on failure.
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/brief?type=yesterday&userId=${userId}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled) setData(json);
+      } catch {
+        // best-effort
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, userId]);
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={() => {}}>
+          <View style={styles.headerRow}>
+            <Text style={styles.header}>Yesterday</Text>
+            {data?.date ? <Text style={styles.headerDate}>{data.date}</Text> : null}
+          </View>
+
+          {loading && (
+            <View style={styles.loading}>
+              <ActivityIndicator color={MUTED} />
+            </View>
+          )}
+
+          {!loading && (
+            <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+              <Text style={styles.sectionLabel}>Takeoff</Text>
+              <Text style={styles.briefText}>
+                {data?.takeoff || (
+                  <Text style={styles.noBrief}>No brief recorded</Text>
+                )}
+              </Text>
+
+              <Text style={[styles.sectionLabel, styles.sectionSpacer]}>Clearance</Text>
+              <Text style={styles.briefText}>
+                {data?.clearance || (
+                  <Text style={styles.noBrief}>No brief recorded</Text>
+                )}
+              </Text>
+            </ScrollView>
+          )}
+
+          <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+            <Text style={styles.closeBtnText}>Close</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: SHEET_BG,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 36,
+    maxHeight: '80%',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 20,
+  },
+  header: {
+    color: OFF_WHITE,
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  headerDate: {
+    color: MUTED,
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  body: {
+    marginBottom: 24,
+  },
+  loading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    marginBottom: 24,
+  },
+  sectionLabel: {
+    color: MUTED,
+    fontSize: 11,
+    letterSpacing: 2,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  sectionSpacer: {
+    marginTop: 24,
+  },
+  briefText: {
+    color: SECTION_LABEL,
+    fontSize: 14,
+    lineHeight: 22,
+    letterSpacing: 0.2,
+  },
+  noBrief: {
+    color: MUTED,
+    fontStyle: 'italic',
+  },
+  closeBtn: {
+    backgroundColor: OFF_WHITE,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  closeBtnText: {
+    color: BG,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+});

@@ -26,6 +26,7 @@ import {
   TypeMeta,
   typeKeyFor,
 } from '@/components/signalTypes';
+import YesterdayModal from '@/components/YesterdayModal';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -573,30 +574,59 @@ const WHEEL_ITEM = 60;
 
 const REPEAT_COUNT = 500;
 
+// One cycle of the wheel = all signal-type filters, then a slim visual
+// divider, then the navigation shortcuts. Repeated REPEAT_COUNT times to
+// give the FlatList an infinite-feeling scroll in either direction.
+type WheelItem =
+  | { kind: 'type'; key: string }
+  | { kind: 'divider' }
+  | { kind: 'nav'; key: string; label: string; emoji: string; route?: string; action?: 'yesterday' };
+
+const NAV_ITEMS: WheelItem[] = [
+  { kind: 'nav', key: 'home', label: 'Ground', emoji: '🏠', route: '/(tabs)/' },
+  { kind: 'nav', key: 'yesterday', label: 'Yesterday', emoji: '🌅', action: 'yesterday' },
+  // Vault route is a placeholder — the screen file doesn't exist yet, tap
+  // will trigger an expo-router 404 until app/vault.tsx is created.
+  { kind: 'nav', key: 'vault', label: 'Vault', emoji: '🗂', route: '/vault' },
+  { kind: 'nav', key: 'cues', label: 'Cues', emoji: '⚠️', route: '/(tabs)/missed-cues' },
+  { kind: 'nav', key: 'horizon', label: 'Horizon', emoji: '🔭', route: '/horizon' },
+  { kind: 'nav', key: 'settings', label: 'Settings', emoji: '⚙️', route: '/(tabs)/settings' },
+];
+
+const WHEEL_BASE: WheelItem[] = [
+  ...LEGEND_ORDER.map<WheelItem>((k) => ({ kind: 'type', key: k })),
+  { kind: 'divider' },
+  ...NAV_ITEMS,
+];
+
 function InfiniteLedger({
   bottomInset,
   width,
   activeTypeKey,
+  opacity,
   onTapType,
+  onYesterday,
 }: {
   bottomInset: number;
   width: number;
   activeTypeKey: string | null;
+  opacity: Animated.AnimatedInterpolation<number> | Animated.Value;
   onTapType: (typeKey: string) => void;
+  onYesterday: () => void;
 }) {
   // 500x repeated data; start at the center. Practically infinite in either
   // direction, so no boundary detection / jump needed.
   const repeated = useMemo(() => {
-    const out: string[] = new Array(LEGEND_ORDER.length * REPEAT_COUNT);
+    const out: WheelItem[] = new Array(WHEEL_BASE.length * REPEAT_COUNT);
     for (let i = 0; i < REPEAT_COUNT; i++) {
-      for (let j = 0; j < LEGEND_ORDER.length; j++) {
-        out[i * LEGEND_ORDER.length + j] = LEGEND_ORDER[j];
+      for (let j = 0; j < WHEEL_BASE.length; j++) {
+        out[i * WHEEL_BASE.length + j] = WHEEL_BASE[j];
       }
     }
     return out;
   }, []);
-  const listRef = useRef<FlatList<string>>(null);
-  const centerIndex = Math.floor(REPEAT_COUNT / 2) * LEGEND_ORDER.length;
+  const listRef = useRef<FlatList<WheelItem>>(null);
+  const centerIndex = Math.floor(REPEAT_COUNT / 2) * WHEEL_BASE.length;
   const sidePad = Math.max(0, width / 2 - WHEEL_ITEM / 2);
 
   useEffect(() => {
@@ -609,14 +639,14 @@ function InfiniteLedger({
   }, [centerIndex]);
 
   return (
-    <View style={[styles.legendWrap, { paddingBottom: 12 + bottomInset }]}>
+    <Animated.View style={[styles.legendWrap, { paddingBottom: 12 + bottomInset, opacity }]}>
       <View pointerEvents="none" style={[styles.wheelIndicator, { left: width / 2 - WHEEL_ITEM / 2 }]} />
       <View pointerEvents="none" style={[styles.wheelIndicator, { left: width / 2 + WHEEL_ITEM / 2 }]} />
       <FlatList
         ref={listRef}
         horizontal
         data={repeated}
-        keyExtractor={(t, i) => `${t}-${i}`}
+        keyExtractor={(item, i) => `${item.kind}-${'key' in item ? item.key : 'div'}-${i}`}
         showsHorizontalScrollIndicator={false}
         snapToInterval={WHEEL_ITEM}
         decelerationRate="fast"
@@ -627,11 +657,35 @@ function InfiniteLedger({
         getItemLayout={(_, i) => ({ length: WHEEL_ITEM, offset: WHEEL_ITEM * i, index: i })}
         contentContainerStyle={{ paddingHorizontal: sidePad }}
         renderItem={({ item }) => {
-          const meta = TYPE_META[item];
-          const isActive = activeTypeKey === item;
+          if (item.kind === 'divider') {
+            return (
+              <View pointerEvents="none" style={styles.wheelItem}>
+                <View style={styles.wheelDivider} />
+              </View>
+            );
+          }
+          if (item.kind === 'nav') {
+            return (
+              <TouchableOpacity
+                onPress={() => {
+                  if (item.action === 'yesterday') onYesterday();
+                  else if (item.route) router.push(item.route as never);
+                }}
+                activeOpacity={0.6}
+                style={styles.wheelItem}>
+                <Text style={styles.wheelEmoji}>{item.emoji}</Text>
+                <Text style={[styles.wheelLabel, styles.navLabel]}>
+                  {item.label.toLowerCase()}
+                </Text>
+              </TouchableOpacity>
+            );
+          }
+          // type filter
+          const meta = TYPE_META[item.key];
+          const isActive = activeTypeKey === item.key;
           return (
             <TouchableOpacity
-              onPress={() => onTapType(item)}
+              onPress={() => onTapType(item.key)}
               activeOpacity={0.6}
               style={[styles.wheelItem, isActive && styles.wheelItemActive]}>
               <Text style={styles.wheelEmoji}>{meta.emoji}</Text>
@@ -656,7 +710,7 @@ function InfiniteLedger({
           <Text style={styles.missedCuesLinkText}>The Horizon</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -725,6 +779,7 @@ export default function HoverScreen() {
   const [centerPulse] = useState(() => new Animated.Value(1));
   const [filterTypeKey, setFilterTypeKey] = useState<string | null>(null);
   const [expandedRing, setExpandedRing] = useState<RingKey | null>(null);
+  const [showYesterday, setShowYesterday] = useState(false);
   const signalsRef = useRef<Signal[]>([]);
   const expandedRingRef = useRef<RingKey | null>(null);
 
@@ -1070,14 +1125,20 @@ export default function HoverScreen() {
           <Ripple key={r.id} cx={cx} cy={cy} color={r.color} delay={r.delay} />
         ))}
 
-        <Animated.View style={{ opacity: legendOpacity }}>
-          <InfiniteLedger
-            bottomInset={insets.bottom}
-            width={width}
-            activeTypeKey={filterTypeKey}
-            onTapType={handleLegendTap}
-          />
-        </Animated.View>
+        <InfiniteLedger
+          bottomInset={insets.bottom}
+          width={width}
+          activeTypeKey={filterTypeKey}
+          opacity={legendOpacity}
+          onTapType={handleLegendTap}
+          onYesterday={() => setShowYesterday(true)}
+        />
+
+        <YesterdayModal
+          visible={showYesterday}
+          userId={USER_ID}
+          onClose={() => setShowYesterday(false)}
+        />
 
         {selected && (
           <FinaleSheet
@@ -1227,6 +1288,14 @@ const styles = StyleSheet.create({
   wheelLabel: {
     fontSize: 10,
     letterSpacing: 0.5,
+  },
+  navLabel: {
+    color: BRASS,
+  },
+  wheelDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(240, 237, 232, 0.18)',
   },
   deepLinkRow: {
     flexDirection: 'row',

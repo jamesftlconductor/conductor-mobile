@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -9,6 +10,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { Minimap } from '@/components/Minimap';
+import OverwatchView from '@/components/OverwatchView';
+import YesterdayModal from '@/components/YesterdayModal';
 
 type BriefSegment =
   | { type: 'text'; content: string }
@@ -122,10 +125,16 @@ const CLEARANCE_THEME = {
   timestamp: '#3a3835',
 };
 
+// Time bands:
+//   < 7   → Overwatch (overnight idle screen)
+//   7-21  → Takeoff (morning brief surface; 9am-9pm shows the same most-recent
+//                    Takeoff prose, no separate band needed)
+//   21-22 → Clearance (one-hour evening close window)
+//   ≥ 22  → Overwatch
 function getBriefMode(hour: number) {
-  return hour < 21
-    ? { title: 'Takeoff', endpoint: 'brief' }
-    : { title: 'Clearance', endpoint: 'clearance' };
+  if (hour < 7 || hour >= 22) return { title: 'Overwatch', endpoint: null as string | null };
+  if (hour < 21) return { title: 'Takeoff', endpoint: 'brief' as string | null };
+  return { title: 'Clearance', endpoint: 'clearance' as string | null };
 }
 
 async function fetchWithTimeout(url: string, timeoutMs: number) {
@@ -160,6 +169,24 @@ export default function TakeoffScreen() {
   const [greeting, setGreeting] = useState('');
   const [date, setDate] = useState('');
   const [mode, setMode] = useState(getBriefMode(new Date().getHours()));
+  const [showYesterday, setShowYesterday] = useState(false);
+  const navigation = useNavigation();
+
+  // Hide the bottom tab bar while Overwatch is active. Reaching `getParent()`
+  // walks up to the Tabs navigator where the tabBarStyle option is meaningful.
+  // The cleanup restores the bar when the screen unmounts or the mode flips.
+  useEffect(() => {
+    const parent = navigation.getParent();
+    if (!parent) return;
+    if (mode.title === 'Overwatch') {
+      parent.setOptions({ tabBarStyle: { display: 'none' } });
+    } else {
+      parent.setOptions({ tabBarStyle: undefined });
+    }
+    return () => {
+      parent.setOptions({ tabBarStyle: undefined });
+    };
+  }, [mode.title, navigation]);
 
   useEffect(() => {
     const now = new Date();
@@ -198,11 +225,17 @@ export default function TakeoffScreen() {
   async function generateBrief() {
     // Each brief generation is its own session for feedback purposes — wipe
     // any previous thumbs choice so the buttons return to their resting
-    // 40%/40% state on reload.
+    // state on reload.
     setFeedback(null);
+    const { endpoint } = getBriefMode(new Date().getHours());
+    if (!endpoint) {
+      // Overwatch mode — no brief to fetch. Just exit loading so the
+      // OverwatchView renders.
+      setLoading(false);
+      return;
+    }
     try {
       const userId = 'james_totalhome_gmail_com'; // temporary hardcode — will come from OAuth
-      const { endpoint } = getBriefMode(new Date().getHours());
       const res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/${endpoint}?userId=${userId}`);
       const data = await res.json();
       setBrief(data.brief);
@@ -277,6 +310,21 @@ export default function TakeoffScreen() {
     );
   }
 
+  // Overwatch — overnight idle surface (10pm–7am). Renders alongside the
+  // YesterdayModal so the same modal can be opened from the bottom link.
+  if (mode.title === 'Overwatch') {
+    return (
+      <>
+        <OverwatchView onYesterday={() => setShowYesterday(true)} />
+        <YesterdayModal
+          visible={showYesterday}
+          userId="james_totalhome_gmail_com"
+          onClose={() => setShowYesterday(false)}
+        />
+      </>
+    );
+  }
+
   // Swipe left → go to Hover
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-30, 30])
@@ -334,27 +382,30 @@ export default function TakeoffScreen() {
       )}
 
       {!loading ? (
-        <View style={styles.feedbackRow}>
-          <TouchableOpacity
-            style={[
-              styles.feedbackBtn,
-              { opacity: feedback === null ? 0.4 : feedback === 'up' ? 1 : 0.2 },
-            ]}
-            onPress={() => handleFeedback('up')}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.feedbackEmoji}>👍</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.feedbackBtn,
-              { opacity: feedback === null ? 0.4 : feedback === 'down' ? 1 : 0.2 },
-            ]}
-            onPress={() => handleFeedback('down')}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.feedbackEmoji}>👎</Text>
-          </TouchableOpacity>
+        <View style={styles.feedbackBlock}>
+          <Text style={styles.feedbackPrompt}>Was this helpful?</Text>
+          <View style={styles.feedbackRow}>
+            <TouchableOpacity
+              style={[
+                styles.feedbackBtn,
+                { opacity: feedback === 'up' ? 1 : 0.3 },
+              ]}
+              onPress={() => handleFeedback('up')}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.feedbackEmoji}>👍</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.feedbackBtn,
+                { opacity: feedback === 'down' ? 1 : 0.3 },
+              ]}
+              onPress={() => handleFeedback('down')}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.feedbackEmoji}>👎</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : null}
 
@@ -368,6 +419,19 @@ export default function TakeoffScreen() {
       ) : null}
 
       <Text style={[styles.timestamp, { color: theme.timestamp }]}>{date}</Text>
+
+      <TouchableOpacity
+        style={styles.yesterdayLink}
+        onPress={() => setShowYesterday(true)}
+        activeOpacity={0.6}>
+        <Text style={styles.yesterdayLinkText}>Yesterday&apos;s Programme →</Text>
+      </TouchableOpacity>
+
+      <YesterdayModal
+        visible={showYesterday}
+        userId="james_totalhome_gmail_com"
+        onClose={() => setShowYesterday(false)}
+      />
 
       <Modal
         visible={showTransparency}
@@ -449,12 +513,31 @@ const styles = StyleSheet.create({
     marginTop: 48,
     textTransform: 'uppercase',
   },
+  feedbackBlock: {
+    alignItems: 'center',
+    marginTop: 32,
+  },
+  feedbackPrompt: {
+    color: '#5a5855',
+    fontSize: 11,
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
   feedbackRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 16,
-    marginTop: 32,
+  },
+  yesterdayLink: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  yesterdayLinkText: {
+    color: '#5a5855',
+    fontSize: 11,
+    letterSpacing: 1,
   },
   feedbackBtn: {
     width: 28,
