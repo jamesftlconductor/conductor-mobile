@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { router } from 'expo-router';
 import { ChevronRight, Lock } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -280,6 +282,7 @@ export default function SettingsScreen() {
     label: string;
     draft: string;
   }>(null);
+  const [missedCuesCount, setMissedCuesCount] = useState(0);
 
   useEffect(() => {
     loadSettings().then((s) => {
@@ -287,6 +290,25 @@ export default function SettingsScreen() {
       setLoaded(true);
     });
   }, []);
+
+  // Refetch the missed-cues count whenever Settings gains focus, so the
+  // badge reflects state after the user resolves things on /missed-cues
+  // and navigates back.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      fetch(`${API_BASE}/signals?type=missedcues&userId=${USER_ID}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled || !d) return;
+          setMissedCuesCount(Array.isArray(d.signals) ? d.signals.length : 0);
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   function update(next: Settings) {
     setSettings(next);
@@ -332,6 +354,20 @@ export default function SettingsScreen() {
         <SectionHeader title="Household" />
         <Row label="RangerOaks925" subtext="Your household" />
         <ChevronRow label="Invite a member" onPress={handleInviteMember} />
+        <Row
+          label="Missed Cues"
+          onPress={() => router.push('/(tabs)/missed-cues')}
+          right={
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {missedCuesCount > 0 && (
+                <View style={styles.missedBadge}>
+                  <Text style={styles.missedBadgeText}>{missedCuesCount}</Text>
+                </View>
+              )}
+              <ChevronRight size={18} color={MUTED} />
+            </View>
+          }
+        />
         <Row
           label="Connected accounts"
           right={
@@ -508,6 +544,21 @@ const styles = StyleSheet.create({
     color: SAGE,
     fontSize: 13,
     letterSpacing: 0.3,
+  },
+  missedBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: BRASS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 7,
+  },
+  missedBadgeText: {
+    color: BG,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   modalBackdrop: {
     flex: 1,

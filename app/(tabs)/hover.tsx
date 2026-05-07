@@ -400,6 +400,12 @@ function InfiniteLedger({
           );
         }}
       />
+      <TouchableOpacity
+        style={styles.missedCuesLink}
+        onPress={() => router.push('/(tabs)/missed-cues')}
+        activeOpacity={0.6}>
+        <Text style={styles.missedCuesLinkText}>Missed Cues</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -865,5 +871,16 @@ const styles = StyleSheet.create({
   wheelLabel: {
     fontSize: 10,
     letterSpacing: 0.5,
+  },
+  missedCuesLink: {
+    paddingTop: 8,
+    paddingBottom: 4,
+    alignItems: 'center',
+  },
+  missedCuesLinkText: {
+    color: '#5a5855',
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
 });
