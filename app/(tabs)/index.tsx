@@ -60,46 +60,91 @@ async function syncHealthIfStale() {
 
 async function registerForPushNotifications() {
   try {
-    if (!Device.isDevice) return;
+    console.log('[push] step 1: registration start');
+
+    if (!Device.isDevice) {
+      console.log('[push] step 2: not a physical device, bailing');
+      return;
+    }
+    console.log('[push] step 2: physical device confirmed');
 
     if (Platform.OS === 'android') {
+      console.log('[push] step 3: configuring Android default channel');
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
         importance: Notifications.AndroidImportance.DEFAULT,
       });
+    } else {
+      console.log('[push] step 3: iOS, no channel needed');
     }
 
+    console.log('[push] step 4: reading existing notification permission');
     const { status: existing } = await Notifications.getPermissionsAsync();
+    console.log('[push] step 4: existing permission status =', existing);
     let final = existing;
     if (existing !== 'granted') {
+      console.log('[push] step 5: requesting permission');
       const { status } = await Notifications.requestPermissionsAsync();
+      console.log('[push] step 5: requested permission status =', status);
       final = status;
+    } else {
+      console.log('[push] step 5: skipped (already granted)');
     }
-    if (final !== 'granted') return;
+    if (final !== 'granted') {
+      console.log('[push] step 6: permission not granted, bailing');
+      return;
+    }
+    console.log('[push] step 6: permission granted');
 
+    console.log('[push] step 7: resolving EAS projectId from app.json');
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       (Constants as any).easConfig?.projectId;
-    if (!projectId) return;
+    console.log('[push] step 7: projectId =', projectId);
+    if (!projectId) {
+      console.log('[push] step 7: no projectId, bailing');
+      return;
+    }
 
+    console.log('[push] step 8: calling getExpoPushTokenAsync');
     const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenResult.data;
-    if (!token) return;
+    console.log('[push] step 8: token =', token ? `${token.slice(0, 30)}...` : 'null');
+    if (!token) {
+      console.log('[push] step 8: empty token, bailing');
+      return;
+    }
 
+    console.log('[push] step 9: comparing token to AsyncStorage cache');
     const cached = await AsyncStorage.getItem(EXPO_PUSH_TOKEN_KEY);
     await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
 
-    // Only round-trip to the server when the token actually changes — avoids a
-    // write per cold start once the device is registered.
     if (cached !== token) {
-      await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
+      console.log('[push] step 10: token changed (or first run), POSTing to /api/signals?type=preferences');
+      const res = await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: PUSH_USER_ID, expoPushToken: token }),
       });
+      console.log('[push] step 10: backend POST complete, HTTP', res.status);
+    } else {
+      console.log('[push] step 10: token unchanged, skipping backend POST');
     }
-  } catch {
-    // Best-effort — never block app startup on push registration.
+  } catch (error) {
+    // Diagnostic catch — surface the failure to the backend so we can see
+    // exactly what threw without needing USB debugging. Stashed under the
+    // preferences object so it doesn't disturb expoPushToken/healthData.
+    console.log('[push] caught error in registration:', error);
+    try {
+      await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: 'james_totalhome_gmail_com',
+          preferences: { lastRegistrationError: String(error) },
+        }),
+      });
+    } catch {}
   }
 }
 
