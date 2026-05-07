@@ -58,123 +58,49 @@ async function syncHealthIfStale() {
   }
 }
 
-// Diagnostic marker — non-throwing, fire-and-forget. Posts a single key into
-// the user's preferences (server-side shallow-merges) so the backend reflects
-// the last step the function reached even if it returned early at a gate
-// rather than throwing. Safe to call from any branch.
-async function postRegistrationMarker(
-  step: string,
-  extra?: Record<string, unknown>,
-) {
-  try {
-    await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: PUSH_USER_ID,
-        preferences: {
-          lastRegistrationStep: step,
-          lastRegistrationAt: new Date().toISOString(),
-          ...(extra || {}),
-        },
-      }),
-    });
-  } catch {
-    // Diagnostic must never crash the app.
-  }
-}
-
 async function registerForPushNotifications() {
   try {
-    console.log('[push] step 1: registration start');
-    await postRegistrationMarker('start');
-
-    if (!Device.isDevice) {
-      console.log('[push] step 2: not a physical device, bailing');
-      await postRegistrationMarker('not-physical-device');
-      return;
-    }
-    console.log('[push] step 2: physical device confirmed');
+    if (!Device.isDevice) return;
 
     if (Platform.OS === 'android') {
-      console.log('[push] step 3: configuring Android default channel');
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
         importance: Notifications.AndroidImportance.DEFAULT,
       });
-    } else {
-      console.log('[push] step 3: iOS, no channel needed');
     }
 
-    console.log('[push] step 4: reading existing notification permission');
     const { status: existing } = await Notifications.getPermissionsAsync();
-    console.log('[push] step 4: existing permission status =', existing);
     let final = existing;
     if (existing !== 'granted') {
-      console.log('[push] step 5: requesting permission');
       const { status } = await Notifications.requestPermissionsAsync();
-      console.log('[push] step 5: requested permission status =', status);
       final = status;
-    } else {
-      console.log('[push] step 5: skipped (already granted)');
     }
-    if (final !== 'granted') {
-      console.log('[push] step 6: permission not granted, bailing');
-      await postRegistrationMarker('permission-denied', { permissionStatus: final });
-      return;
-    }
-    console.log('[push] step 6: permission granted');
+    if (final !== 'granted') return;
 
-    console.log('[push] step 7: resolving EAS projectId from app.json');
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       (Constants as any).easConfig?.projectId;
-    console.log('[push] step 7: projectId =', projectId);
-    if (!projectId) {
-      console.log('[push] step 7: no projectId, bailing');
-      await postRegistrationMarker('no-project-id');
-      return;
-    }
+    if (!projectId) return;
 
-    console.log('[push] step 8: calling getExpoPushTokenAsync');
     const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenResult.data;
-    console.log('[push] step 8: token =', token ? `${token.slice(0, 30)}...` : 'null');
-    if (!token) {
-      console.log('[push] step 8: empty token, bailing');
-      await postRegistrationMarker('empty-token');
-      return;
-    }
+    if (!token) return;
 
-    // Always POST when we have a token. Dropping the cached-token optimization
-    // because it was unsafe: the previous version wrote the cache before the
-    // POST, so a failed POST left the device permanently marked "registered"
-    // while the backend had nothing — no automatic recovery on subsequent
-    // launches. The backend write is idempotent (redis.set), so re-posting
-    // every launch costs one cheap round trip and guarantees convergence.
-    console.log('[push] step 9: POSTing token to /api/signals?type=preferences');
+    // Always POST — backend write is idempotent (redis.set), so the cost of
+    // skipping the cache-gated dedup is one round trip per launch in exchange
+    // for automatic recovery if a previous POST silently failed. Cache only
+    // after the server confirms receipt so a failure leaves the next launch
+    // free to retry.
     const res = await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: PUSH_USER_ID, expoPushToken: token }),
     });
-    console.log('[push] step 9: backend POST complete, HTTP', res.status);
+    if (!res.ok) return;
 
-    if (!res.ok) {
-      // Cache stays untouched on failure so the next launch retries.
-      await postRegistrationMarker('token-post-failed', { httpStatus: res.status });
-      return;
-    }
-
-    // Server confirmed receipt — safe to mirror locally for observability.
-    // Nothing in this function reads the cache to gate behavior anymore.
     await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
-    await postRegistrationMarker('token-stored', { httpStatus: res.status });
-  } catch (error) {
-    // Thrown error — funnel through the same marker so the backend has a
-    // single ledger of what happened on the last attempt.
-    console.log('[push] caught error in registration:', error);
-    await postRegistrationMarker('threw', { lastRegistrationError: String(error) });
+  } catch {
+    // Best-effort — never block app startup on push registration.
   }
 }
 
