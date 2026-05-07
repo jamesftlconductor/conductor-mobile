@@ -154,6 +154,7 @@ export default function TakeoffScreen() {
   const [segments, setSegments] = useState<BriefSegment[]>([]);
   const [transparency, setTransparency] = useState<string | null>(null);
   const [showTransparency, setShowTransparency] = useState(false);
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [greeting, setGreeting] = useState('');
@@ -195,6 +196,10 @@ export default function TakeoffScreen() {
   }
 
   async function generateBrief() {
+    // Each brief generation is its own session for feedback purposes — wipe
+    // any previous thumbs choice so the buttons return to their resting
+    // 40%/40% state on reload.
+    setFeedback(null);
     try {
       const userId = 'james_totalhome_gmail_com'; // temporary hardcode — will come from OAuth
       const { endpoint } = getBriefMode(new Date().getHours());
@@ -226,6 +231,24 @@ export default function TakeoffScreen() {
       // best-effort — still navigate
     }
     router.push('/(tabs)/hover');
+  }
+
+  function handleFeedback(rating: 'up' | 'down') {
+    // Local state updates immediately so the UI feels instant. The POST is
+    // fire-and-forget — backend write failures stay silent because the user
+    // already saw their tap acknowledged.
+    setFeedback(rating);
+    const briefType = mode.endpoint === 'brief' ? 'takeoff' : 'clearance';
+    fetch('https://conductor-ivory.vercel.app/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: 'james_totalhome_gmail_com',
+        briefType,
+        rating,
+        briefDate: new Date().toISOString(),
+      }),
+    }).catch(() => {});
   }
 
   function handleConnect() {
@@ -309,6 +332,31 @@ export default function TakeoffScreen() {
           </Text>
         </View>
       )}
+
+      {!loading ? (
+        <View style={styles.feedbackRow}>
+          <TouchableOpacity
+            style={[
+              styles.feedbackBtn,
+              { opacity: feedback === null ? 0.4 : feedback === 'up' ? 1 : 0.2 },
+            ]}
+            onPress={() => handleFeedback('up')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.feedbackEmoji}>👍</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.feedbackBtn,
+              { opacity: feedback === null ? 0.4 : feedback === 'down' ? 1 : 0.2 },
+            ]}
+            onPress={() => handleFeedback('down')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.feedbackEmoji}>👎</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {!loading && transparency ? (
         <TouchableOpacity
@@ -401,8 +449,25 @@ const styles = StyleSheet.create({
     marginTop: 48,
     textTransform: 'uppercase',
   },
-  transparencyLink: {
+  feedbackRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
     marginTop: 32,
+  },
+  feedbackBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedbackEmoji: {
+    fontSize: 22,
+    lineHeight: 26,
+  },
+  transparencyLink: {
+    marginTop: 16,
     paddingVertical: 8,
     alignItems: 'center',
   },
