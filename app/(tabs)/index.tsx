@@ -58,12 +58,40 @@ async function syncHealthIfStale() {
   }
 }
 
+// Diagnostic marker — non-throwing, fire-and-forget. Posts a single key into
+// the user's preferences (server-side shallow-merges) so the backend reflects
+// the last step the function reached even if it returned early at a gate
+// rather than throwing. Safe to call from any branch.
+async function postRegistrationMarker(
+  step: string,
+  extra?: Record<string, unknown>,
+) {
+  try {
+    await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: PUSH_USER_ID,
+        preferences: {
+          lastRegistrationStep: step,
+          lastRegistrationAt: new Date().toISOString(),
+          ...(extra || {}),
+        },
+      }),
+    });
+  } catch {
+    // Diagnostic must never crash the app.
+  }
+}
+
 async function registerForPushNotifications() {
   try {
     console.log('[push] step 1: registration start');
+    await postRegistrationMarker('start');
 
     if (!Device.isDevice) {
       console.log('[push] step 2: not a physical device, bailing');
+      await postRegistrationMarker('not-physical-device');
       return;
     }
     console.log('[push] step 2: physical device confirmed');
@@ -92,6 +120,7 @@ async function registerForPushNotifications() {
     }
     if (final !== 'granted') {
       console.log('[push] step 6: permission not granted, bailing');
+      await postRegistrationMarker('permission-denied', { permissionStatus: final });
       return;
     }
     console.log('[push] step 6: permission granted');
@@ -103,6 +132,7 @@ async function registerForPushNotifications() {
     console.log('[push] step 7: projectId =', projectId);
     if (!projectId) {
       console.log('[push] step 7: no projectId, bailing');
+      await postRegistrationMarker('no-project-id');
       return;
     }
 
@@ -112,6 +142,7 @@ async function registerForPushNotifications() {
     console.log('[push] step 8: token =', token ? `${token.slice(0, 30)}...` : 'null');
     if (!token) {
       console.log('[push] step 8: empty token, bailing');
+      await postRegistrationMarker('empty-token');
       return;
     }
 
@@ -127,24 +158,16 @@ async function registerForPushNotifications() {
         body: JSON.stringify({ userId: PUSH_USER_ID, expoPushToken: token }),
       });
       console.log('[push] step 10: backend POST complete, HTTP', res.status);
+      await postRegistrationMarker('token-stored', { httpStatus: res.status });
     } else {
       console.log('[push] step 10: token unchanged, skipping backend POST');
+      await postRegistrationMarker('token-unchanged');
     }
   } catch (error) {
-    // Diagnostic catch — surface the failure to the backend so we can see
-    // exactly what threw without needing USB debugging. Stashed under the
-    // preferences object so it doesn't disturb expoPushToken/healthData.
+    // Thrown error — funnel through the same marker so the backend has a
+    // single ledger of what happened on the last attempt.
     console.log('[push] caught error in registration:', error);
-    try {
-      await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: 'james_totalhome_gmail_com',
-          preferences: { lastRegistrationError: String(error) },
-        }),
-      });
-    } catch {}
+    await postRegistrationMarker('threw', { lastRegistrationError: String(error) });
   }
 }
 
