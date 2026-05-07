@@ -459,6 +459,12 @@ export default function SettingsScreen() {
           <ChevronRow label="View The Horizon" onPress={() => router.push('/horizon')} />
         )}
 
+        <SectionHeader
+          title="Intelligence"
+          subtext="What Conductor has learned"
+        />
+        <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
+
         <SectionHeader title="About" />
         <Row label="Conductor" subtext="Version 1.0.0" />
         <ChevronRow
