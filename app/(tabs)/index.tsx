@@ -4,7 +4,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
@@ -152,6 +152,8 @@ async function fetchBriefWithRetry(url: string) {
 export default function TakeoffScreen() {
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
+  const [transparency, setTransparency] = useState<string | null>(null);
+  const [showTransparency, setShowTransparency] = useState(false);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [greeting, setGreeting] = useState('');
@@ -204,10 +206,14 @@ export default function TakeoffScreen() {
       } else {
         setSegments([{ type: 'text', content: data.brief || '' }]);
       }
+      setTransparency(typeof data.transparency === 'string' && data.transparency.length > 0
+        ? data.transparency
+        : null);
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
       setSegments([{ type: 'text', content: fallback }]);
+      setTransparency(null);
     } finally {
       setLoading(false);
     }
@@ -304,7 +310,35 @@ export default function TakeoffScreen() {
         </View>
       )}
 
+      {!loading && transparency ? (
+        <TouchableOpacity
+          style={styles.transparencyLink}
+          onPress={() => setShowTransparency(true)}
+          activeOpacity={0.6}>
+          <Text style={styles.transparencyLinkText}>How Conductor thought about this</Text>
+        </TouchableOpacity>
+      ) : null}
+
       <Text style={[styles.timestamp, { color: theme.timestamp }]}>{date}</Text>
+
+      <Modal
+        visible={showTransparency}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowTransparency(false)}>
+        <Pressable style={styles.transparencyBackdrop} onPress={() => setShowTransparency(false)}>
+          <Pressable style={styles.transparencySheet} onPress={() => {}}>
+            <Text style={styles.transparencyHeader}>Conductor&apos;s Reasoning</Text>
+            <Text style={styles.transparencyText}>{transparency || ''}</Text>
+            <TouchableOpacity
+              style={styles.transparencyCloseBtn}
+              onPress={() => setShowTransparency(false)}
+              activeOpacity={0.7}>
+              <Text style={styles.transparencyCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
     </GestureDetector>
   );
@@ -366,6 +400,54 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 48,
     textTransform: 'uppercase',
+  },
+  transparencyLink: {
+    marginTop: 32,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  transparencyLinkText: {
+    color: '#5a5855',
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  transparencyBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  transparencySheet: {
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 36,
+  },
+  transparencyHeader: {
+    color: '#f0ede8',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+    marginBottom: 16,
+  },
+  transparencyText: {
+    color: '#8a8780',
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 24,
+    letterSpacing: 0.2,
+  },
+  transparencyCloseBtn: {
+    backgroundColor: '#f0ede8',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  transparencyCloseBtnText: {
+    color: '#0f0f0f',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   onboarding: {
     flex: 1,
