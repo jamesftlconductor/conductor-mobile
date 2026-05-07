@@ -40,44 +40,12 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-// Diagnostic marker — non-throwing, fire-and-forget. Same pattern the push
-// registration used: posts a single key into the user's preferences (server-
-// side shallow-merges), so the backend reflects the last step the function
-// reached even when it returns null silently. Hardcodes the userId because
-// this file doesn't carry that constant; matches PUSH_USER_ID in index.tsx.
-async function postHealthMarker(step: string, extra?: Record<string, unknown>) {
-  try {
-    await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: 'james_totalhome_gmail_com',
-        preferences: {
-          lastHealthStep: step,
-          lastHealthAt: new Date().toISOString(),
-          ...(extra || {}),
-        },
-      }),
-    });
-  } catch {
-    // Diagnostic must never crash the caller.
-  }
-}
-
 export async function fetchHealthSnapshot(): Promise<HealthSnapshot | null> {
-  await postHealthMarker('fetch-start');
-
-  if (Platform.OS !== 'ios') {
-    await postHealthMarker('fetch-not-ios');
-    return null;
-  }
+  if (Platform.OS !== 'ios') return null;
 
   try {
     const available = await isHealthDataAvailableAsync();
-    if (!available) {
-      await postHealthMarker('fetch-not-available');
-      return null;
-    }
+    if (!available) return null;
 
     // requestAuthorization is idempotent — Apple shows the prompt only on the
     // first request per type. After that this call resolves without UI.
@@ -141,24 +109,6 @@ export async function fetchHealthSnapshot(): Promise<HealthSnapshot | null> {
     ]);
 
     const [sleepRes, hrvRes, hrv7dRes, rhrRes, stepsRes, caloriesRes] = queryResults;
-
-    // Per-query diagnostic — zero samples across the board almost always means
-    // HealthKit read permissions weren't granted (Apple deliberately doesn't
-    // expose denial state for read access). Use these counts to disambiguate
-    // "permission denied" from "permission granted but no data" once the
-    // marker lands in Redis.
-    const len = (r: PromiseSettledResult<unknown>): number =>
-      r.status === 'fulfilled' && Array.isArray(r.value) ? (r.value as unknown[]).length : -1;
-    await postHealthMarker('fetch-queries-done', {
-      healthSampleCounts: {
-        sleep: len(sleepRes),
-        hrv: len(hrvRes),
-        hrv7d: len(hrv7dRes),
-        rhr: len(rhrRes),
-        stepsOk: stepsRes.status === 'fulfilled',
-        caloriesOk: caloriesRes.status === 'fulfilled',
-      },
-    });
 
     // Sleep — sum asleep stages for duration, sum inBed for efficiency denom.
     let sleepDurationMs = 0;
@@ -231,11 +181,9 @@ export async function fetchHealthSnapshot(): Promise<HealthSnapshot | null> {
       activeCalories,
       asOf: Date.now(),
     };
-  } catch (error) {
+  } catch {
     // Best-effort. Permission denial, simulator without health, network — all
-    // fall through here. Caller will see null and skip the upload. The marker
-    // surfaces the underlying error message so we can tell which it was.
-    await postHealthMarker('fetch-threw', { lastHealthError: String(error) });
+    // fall through here. Caller will see null and skip the upload.
     return null;
   }
 }
