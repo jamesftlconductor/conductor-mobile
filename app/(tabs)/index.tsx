@@ -33,28 +33,74 @@ const EXPO_PUSH_TOKEN_KEY = 'expoPushToken';
 const HEALTH_CONTEXT_KEY = 'healthContext';
 const PUSH_USER_ID = 'james_totalhome_gmail_com';
 
+// Diagnostic marker — sibling of postHealthMarker in HealthContext.ts. Same
+// preferences shape, same field names, server-side shallow-merges so the
+// markers don't trample real settings. Temporary — revert with the helper
+// once health flow is confirmed end-to-end.
+async function postHealthMarker(step: string, extra?: Record<string, unknown>) {
+  try {
+    await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: PUSH_USER_ID,
+        preferences: {
+          lastHealthStep: step,
+          lastHealthAt: new Date().toISOString(),
+          ...(extra || {}),
+        },
+      }),
+    });
+  } catch {}
+}
+
 async function syncHealthIfStale() {
   try {
+    await postHealthMarker('sync-start');
+
     const cachedRaw = await AsyncStorage.getItem(HEALTH_CONTEXT_KEY);
     const cached: HealthSnapshot | null = cachedRaw ? JSON.parse(cachedRaw) : null;
     // Refresh once per local calendar day. Comparing toDateString() handles
     // DST transitions and avoids tripping on millisecond boundaries.
     if (cached?.asOf && new Date(cached.asOf).toDateString() === new Date().toDateString()) {
+      await postHealthMarker('sync-cached-fresh', {
+        cachedAsOf: new Date(cached.asOf).toISOString(),
+      });
       return;
     }
 
     const snapshot = await fetchHealthSnapshot();
-    if (!snapshot) return;
+    if (!snapshot) {
+      await postHealthMarker('sync-snapshot-null');
+      return;
+    }
 
     await AsyncStorage.setItem(HEALTH_CONTEXT_KEY, JSON.stringify(snapshot));
 
-    await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
+    const res = await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: PUSH_USER_ID, healthData: snapshot }),
     });
-  } catch {
-    // Best-effort — never block app startup on health sync.
+
+    if (!res.ok) {
+      await postHealthMarker('sync-post-failed', { httpStatus: res.status });
+      return;
+    }
+
+    await postHealthMarker('sync-posted', {
+      httpStatus: res.status,
+      snapshotShape: {
+        sleepDuration: snapshot.sleep?.duration,
+        hrvCurrent: snapshot.hrv?.current,
+        hrvBaseline7d: snapshot.hrv?.baseline7d,
+        restingHR: snapshot.restingHR,
+        steps: snapshot.steps,
+        activeCalories: snapshot.activeCalories,
+      },
+    });
+  } catch (error) {
+    await postHealthMarker('sync-threw', { lastHealthError: String(error) });
   }
 }
 
