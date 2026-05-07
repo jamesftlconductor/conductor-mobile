@@ -1191,9 +1191,13 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   wheelIndicator: {
+    // Short vertical tick marking the snap zone — sits across the wheel's
+    // emoji/label area only, doesn't extend into the Missed Cues link below.
+    // Roughly half the previous full-divider span; reads as a tick rather
+    // than a column.
     position: 'absolute',
-    top: 12,
-    bottom: 8,
+    top: 22,
+    height: 32,
     width: 1,
     backgroundColor: 'rgba(240, 237, 232, 0.18)',
   },
