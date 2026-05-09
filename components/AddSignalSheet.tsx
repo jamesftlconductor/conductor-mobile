@@ -109,13 +109,13 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
             style={styles.descriptionInput}
             value={description}
             onChangeText={setDescription}
-            placeholder="What is it?"
+            placeholder="Describe the signal..."
             placeholderTextColor={MUTED}
             multiline
             autoFocus
           />
 
-          <Text style={styles.label}>Type</Text>
+          <Text style={styles.label}>Signal type</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -140,7 +140,7 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
             style={styles.fieldInput}
             value={eta}
             onChangeText={setEta}
-            placeholder="When? (e.g. May 15, tomorrow, 3pm)"
+            placeholder="When does it arrive or happen?"
             placeholderTextColor={MUTED}
           />
 
@@ -148,7 +148,7 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
             style={styles.fieldInput}
             value={sender}
             onChangeText={setSender}
-            placeholder="From who? (optional)"
+            placeholder="Source or sender..."
             placeholderTextColor={MUTED}
           />
 
@@ -167,7 +167,7 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
               ]}
               onPress={handleAdd}
               disabled={!canSubmit}>
-              <Text style={styles.btnAddText}>Add</Text>
+              <Text style={styles.btnAddText}>Launch</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

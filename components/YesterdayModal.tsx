@@ -68,7 +68,7 @@ export default function YesterdayModal({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.headerRow}>
-            <Text style={styles.header}>Yesterday</Text>
+            <Text style={styles.header}>Yesterday&apos;s Programme</Text>
             {data?.date ? <Text style={styles.headerDate}>{data.date}</Text> : null}
           </View>
 
@@ -83,14 +83,14 @@ export default function YesterdayModal({
               <Text style={styles.sectionLabel}>Takeoff</Text>
               <Text style={styles.briefText}>
                 {data?.takeoff || (
-                  <Text style={styles.noBrief}>No brief recorded</Text>
+                  <Text style={styles.noBrief}>Nothing recorded for this session.</Text>
                 )}
               </Text>
 
               <Text style={[styles.sectionLabel, styles.sectionSpacer]}>Clearance</Text>
               <Text style={styles.briefText}>
                 {data?.clearance || (
-                  <Text style={styles.noBrief}>No brief recorded</Text>
+                  <Text style={styles.noBrief}>Nothing recorded for this session.</Text>
                 )}
               </Text>
             </ScrollView>
