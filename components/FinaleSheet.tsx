@@ -1,9 +1,12 @@
+import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -13,15 +16,30 @@ import { metaFor, Signal, TYPE_META } from './signalTypes';
 const BG = '#0f0f0f';
 const OFF_WHITE = '#f0ede8';
 const MUTED = '#5a5855';
+const BRASS = '#b8960c';
+const API_BASE = 'https://conductor-ivory.vercel.app/api';
+
+// Status cycle for the edit-mode tap-to-advance picker. Keep in sync
+// with the values produced by the import classifier; "Unknown" is the
+// fall-through option for signals where status genuinely isn't known.
+const STATUS_CYCLE = [
+  'In Transit',
+  'Out for Delivery',
+  'Delivered',
+  'Delayed',
+  'Unknown',
+];
 
 type SingleProps = {
   mode: 'single';
   visible: boolean;
   signal: Signal;
   resolving?: boolean;
+  userId?: string;
   onClose: () => void;
   onRest: (s: Signal) => void;
   onHold: (s: Signal) => void;
+  onUpdate?: (updated: Signal) => void;
 };
 
 type CategoryProps = {
@@ -38,48 +56,7 @@ type FinaleSheetProps = SingleProps | CategoryProps;
 
 export function FinaleSheet(props: FinaleSheetProps) {
   if (props.mode === 'single') {
-    const { visible, signal, resolving, onClose, onRest, onHold } = props;
-    const meta = metaFor(signal);
-    return (
-      <Modal
-        visible={visible}
-        animationType="slide"
-        transparent
-        onRequestClose={onClose}>
-        <Pressable style={styles.modalBackdrop} onPress={onClose}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetHeader}>Finale</Text>
-            <Text style={styles.sheetEmoji}>{meta.emoji}</Text>
-            <Text style={styles.sheetDescription}>
-              {signal.description || 'Unknown signal'}
-            </Text>
-            <View style={styles.metaBlock}>
-              {!!signal.sender && (
-                <Text style={styles.metaLine}>From {signal.sender}</Text>
-              )}
-              {!!signal.status && (
-                <Text style={styles.metaLine}>Status {signal.status}</Text>
-              )}
-              <Text style={styles.metaLine}>ETA {signal.eta || 'Unknown'}</Text>
-            </View>
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={[styles.btn, styles.btnSecondary]}
-                onPress={() => onHold(signal)}>
-                <Text style={styles.btnSecondaryText}>Hold</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, resolving && { opacity: 0.5 }]}
-                onPress={() => onRest(signal)}
-                disabled={resolving}>
-                <Text style={styles.btnPrimaryText}>Rest</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    );
+    return <SingleSheet {...props} />;
   }
 
   const { visible, categoryTypeKey, signals, bottomInset = 0, onClose, onRest } = props;
@@ -149,6 +126,200 @@ export function FinaleSheet(props: FinaleSheetProps) {
   );
 }
 
+// Single-mode is its own component so it can hold edit-mode state via
+// hooks without breaking the discriminated-union shape of the public
+// FinaleSheet props.
+function SingleSheet({
+  visible,
+  signal,
+  resolving,
+  userId,
+  onClose,
+  onRest,
+  onHold,
+  onUpdate,
+}: SingleProps) {
+  const meta = metaFor(signal);
+  const [editing, setEditing] = useState(false);
+  const [editedDescription, setEditedDescription] = useState(signal.description || '');
+  const [editedEta, setEditedEta] = useState(signal.eta || '');
+  const [editedStatus, setEditedStatus] = useState(signal.status || 'Unknown');
+  const [saving, setSaving] = useState(false);
+  const dimOpacity = useRef(new Animated.Value(1)).current;
+
+  // Reset edit state when a different signal opens — without this, an
+  // unsaved edit on signal A would leak into signal B if the user
+  // closed A and tapped B.
+  useEffect(() => {
+    setEditing(false);
+    setEditedDescription(signal.description || '');
+    setEditedEta(signal.eta || '');
+    setEditedStatus(signal.status || 'Unknown');
+  }, [signal.id]);
+
+  const cycleStatus = () => {
+    const i = STATUS_CYCLE.indexOf(editedStatus);
+    const next = STATUS_CYCLE[(i + 1) % STATUS_CYCLE.length];
+    setEditedStatus(next);
+  };
+
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    const updated: Signal = {
+      ...signal,
+      description: editedDescription,
+      eta: editedEta || null,
+      status: editedStatus,
+    };
+    // Best-effort PATCH. The backend currently validates `state` and
+    // rejects without it, so this call may 400 until /api/signals.js
+    // accepts description/eta/status fields. Local state still updates
+    // so the user sees their edit immediately.
+    try {
+      await fetch(`${API_BASE}/signals`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: signal.id,
+          userId,
+          description: editedDescription,
+          eta: editedEta || null,
+          status: editedStatus,
+        }),
+      });
+    } catch (err) {
+      console.warn('Signal edit save failed:', err);
+    }
+    onUpdate?.(updated);
+    setSaving(false);
+    setEditing(false);
+    // Subtle dim/return on the now-displayed description to acknowledge
+    // the save without a flashy toast.
+    Animated.sequence([
+      Animated.timing(dimOpacity, {
+        toValue: 0.4,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(dimOpacity, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleCancel = () => {
+    setEditedDescription(signal.description || '');
+    setEditedEta(signal.eta || '');
+    setEditedStatus(signal.status || 'Unknown');
+    setEditing(false);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={() => {}}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeaderWrap}>
+            <Text style={styles.sheetHeader}>Finale</Text>
+            {!editing && (
+              <TouchableOpacity
+                style={styles.editLinkPosition}
+                onPress={() => setEditing(true)}>
+                <Text style={styles.editLink}>EDIT</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={styles.sheetEmoji}>{meta.emoji}</Text>
+
+          {!editing ? (
+            <>
+              <Animated.Text
+                style={[styles.sheetDescription, { opacity: dimOpacity }]}>
+                {signal.description || 'Unknown signal'}
+              </Animated.Text>
+              <View style={styles.metaBlock}>
+                {!!signal.sender && (
+                  <Text style={styles.metaLine}>From {signal.sender}</Text>
+                )}
+                {!!signal.status && (
+                  <Text style={styles.metaLine}>Status {signal.status}</Text>
+                )}
+                <Text style={styles.metaLine}>ETA {signal.eta || 'Unknown'}</Text>
+              </View>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={() => onHold(signal)}>
+                  <Text style={styles.btnSecondaryText}>Hold</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary, resolving && { opacity: 0.5 }]}
+                  onPress={() => onRest(signal)}
+                  disabled={resolving}>
+                  <Text style={styles.btnPrimaryText}>Rest</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <TextInput
+                style={styles.editDescription}
+                value={editedDescription}
+                onChangeText={setEditedDescription}
+                placeholder="Description"
+                placeholderTextColor={MUTED}
+                multiline
+              />
+              <View style={styles.metaBlock}>
+                {!!signal.sender && (
+                  <Text style={styles.metaLine}>From {signal.sender}</Text>
+                )}
+                <TouchableOpacity
+                  onPress={cycleStatus}
+                  style={styles.editMetaRow}>
+                  <Text style={styles.editLabel}>Status</Text>
+                  <Text style={styles.editValue}>{editedStatus}</Text>
+                </TouchableOpacity>
+                <View style={styles.editMetaRow}>
+                  <Text style={styles.editLabel}>ETA</Text>
+                  <TextInput
+                    style={styles.editEtaInput}
+                    value={editedEta}
+                    onChangeText={setEditedEta}
+                    placeholder="Add date..."
+                    placeholderTextColor={MUTED}
+                  />
+                </View>
+              </View>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSecondary]}
+                  onPress={handleCancel}
+                  disabled={saving}>
+                  <Text style={styles.btnSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSave, saving && { opacity: 0.5 }]}
+                  onPress={handleSave}
+                  disabled={saving}>
+                  <Text style={styles.btnSaveText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   modalBackdrop: {
     flex: 1,
@@ -171,6 +342,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     marginBottom: 16,
   },
+  sheetHeaderWrap: {
+    position: 'relative',
+    marginBottom: 12,
+    justifyContent: 'center',
+  },
   sheetHeader: {
     color: MUTED,
     fontSize: 11,
@@ -178,7 +354,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     textTransform: 'uppercase',
-    marginBottom: 12,
+  },
+  editLinkPosition: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  editLink: {
+    color: MUTED,
+    fontSize: 11,
+    letterSpacing: 1,
+    fontWeight: '500',
   },
   sheetEmoji: {
     fontSize: 40,
@@ -195,6 +384,21 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     letterSpacing: 0.2,
   },
+  editDescription: {
+    color: OFF_WHITE,
+    fontSize: 18,
+    fontWeight: '300',
+    lineHeight: 26,
+    textAlign: 'center',
+    marginBottom: 20,
+    letterSpacing: 0.2,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 8,
+    minHeight: 40,
+  },
   metaBlock: {
     marginBottom: 24,
     gap: 6,
@@ -204,6 +408,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.3,
     textAlign: 'center',
+  },
+  editMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editLabel: {
+    color: MUTED,
+    fontSize: 13,
+    letterSpacing: 0.3,
+  },
+  editValue: {
+    color: OFF_WHITE,
+    fontSize: 13,
+    letterSpacing: 0.3,
+    textDecorationLine: 'underline',
+    textDecorationColor: MUTED,
+  },
+  editEtaInput: {
+    color: OFF_WHITE,
+    fontSize: 13,
+    letterSpacing: 0.3,
+    minWidth: 140,
+    textAlign: 'left',
+    paddingVertical: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.15)',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -231,6 +463,15 @@ const styles = StyleSheet.create({
     color: OFF_WHITE,
     fontSize: 15,
     fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+  btnSave: {
+    backgroundColor: BRASS,
+  },
+  btnSaveText: {
+    color: BG,
+    fontSize: 15,
+    fontWeight: '600',
     letterSpacing: 0.3,
   },
   filterBackdrop: {

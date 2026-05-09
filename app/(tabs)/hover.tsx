@@ -950,6 +950,18 @@ export default function HoverScreen() {
     );
   }
 
+  // Optimistic in-place update from FinaleSheet edit mode. The PATCH
+  // itself is fired inside the sheet; we just keep our local copy in
+  // sync so the list and the open sheet both reflect the new fields.
+  function handleSignalUpdate(updated: Signal) {
+    setSignals((prev) =>
+      prev.map((s) => (String(s.id) === String(updated.id) ? { ...s, ...updated } : s))
+    );
+    setSelected((cur) =>
+      cur && String(cur.id) === String(updated.id) ? { ...cur, ...updated } : cur
+    );
+  }
+
   function handleLegendTap(typeKey: string) {
     setFilterTypeKey((prev) => (prev === typeKey ? null : typeKey));
   }
@@ -1147,9 +1159,11 @@ export default function HoverScreen() {
             visible={!!selected}
             signal={selected}
             resolving={resolving}
+            userId={USER_ID}
             onClose={handleClose}
             onRest={handleRest}
             onHold={handleHold}
+            onUpdate={handleSignalUpdate}
           />
         )}
 
