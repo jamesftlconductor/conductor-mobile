@@ -342,9 +342,8 @@ export default function TakeoffScreen() {
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       {/* Fixed top-right cluster: date over the Yesterday link. Sits outside
           the ScrollView so it doesn't scroll away with the brief. Positioned
-          below the Minimap (which is itself absolute at top:60, right:20,
-          40px circle) — without this offset the date would render behind
-          the Minimap circle. */}
+          at top:60 to align with the Minimap (now at top-left) on the same
+          horizontal band. */}
       <View pointerEvents="box-none" style={styles.topRightCluster}>
         <Text style={styles.topDate}>{date}</Text>
         <TouchableOpacity
@@ -483,14 +482,11 @@ const styles = StyleSheet.create({
   },
   topRightCluster: {
     // Floats over the ScrollView so the date stays put while the brief
-    // scrolls. Positioned just below the Minimap (which is itself
-    // absolute at top:60, right:20, 40px circle) — top:108 = 60 + 40 + 8
-    // margin so the date clears the Minimap rather than rendering behind
-    // it. Spec wants "same vertical position as the greeting" but the
-    // Minimap occupies that y-band on the right side, so this is the
-    // closest visible-and-tidy position.
+    // scrolls. Sits at top:60 — the Minimap moved to top-left in
+    // components/Minimap.tsx so the right side is now clear and the
+    // date can sit at the same horizontal band as the Minimap.
     position: 'absolute',
-    top: 108,
+    top: 60,
     right: 20,
     alignItems: 'flex-end',
     zIndex: 10,

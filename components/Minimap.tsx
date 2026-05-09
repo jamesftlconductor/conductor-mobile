@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   touchWrap: {
     position: 'absolute',
     top: 60,
-    right: 20,
+    left: 20,
     zIndex: 10,
   },
   circle: {
