@@ -247,7 +247,7 @@ export default function CompassScreen() {
                   <View style={styles.legend}>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: SAGE }]} />
-                      <Text style={styles.legendText}>resolved</Text>
+                      <Text style={styles.legendText}>rested</Text>
                     </View>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: ORANGE }]} />
@@ -255,7 +255,7 @@ export default function CompassScreen() {
                     </View>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: RED }]} />
-                      <Text style={styles.legendText}>expired</Text>
+                      <Text style={styles.legendText}>lapsed</Text>
                     </View>
                   </View>
                 </>
