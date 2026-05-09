@@ -206,7 +206,7 @@ export default function CompassScreen() {
       {!loading && data && data.householdAge >= 7 && (
         <>
           {/* CARD 1 — HOUSEHOLD PULSE */}
-          <Card label="Household pulse">
+          <Card label="The Pulse">
             <Text style={styles.cardHeadline}>
               {data.totalResolved} signal{data.totalResolved === 1 ? '' : 's'} resolved since{' '}
               {firstSeenDate(data.daysSinceFirst)}
@@ -217,7 +217,7 @@ export default function CompassScreen() {
           </Card>
 
           {/* CARD 2 — TOP SIGNAL SOURCES */}
-          <Card label="Where your signals come from">
+          <Card label="Signal Sources">
             {(() => {
               const top = data.topSenders.slice(0, 5);
               const max = Math.max(...top.map((s) => s.count), 1);
@@ -231,7 +231,7 @@ export default function CompassScreen() {
           </Card>
 
           {/* CARD 3 — SIGNAL TYPE BREAKDOWN */}
-          <Card label="How your household handles signals">
+          <Card label="The Mix">
             {(() => {
               const types = Object.entries(data.typeBreakdown);
               if (types.length === 0) {
@@ -264,7 +264,7 @@ export default function CompassScreen() {
           </Card>
 
           {/* CARD 4 — PEAK DAYS */}
-          <Card label="When things happen">
+          <Card label="The Rhythm">
             <Text style={styles.cardHeadline}>
               Your household is most active on {data.peakDays[0]?.day || '—'}
             </Text>
@@ -275,7 +275,7 @@ export default function CompassScreen() {
           </Card>
 
           {/* CARD 5 — RESOLUTION SPEED */}
-          <Card label="How quickly your household acts">
+          <Card label="The Pace">
             <Text style={styles.cardHeadline}>
               Signals typically rest within {formatHours(data.averageResolutionTime)}
             </Text>
