@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -100,10 +102,13 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
       animationType="slide"
       transparent
       onRequestClose={onClose}>
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetHeader}>Add Signal</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.kbWrap}>
+        <Pressable style={styles.modalBackdrop} onPress={onClose}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetHeader}>Add Signal</Text>
 
           <TextInput
             style={styles.descriptionInput}
@@ -170,13 +175,20 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
               <Text style={styles.btnAddText}>Launch</Text>
             </TouchableOpacity>
           </View>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  // KeyboardAvoidingView wraps the modal contents so the focused
+  // TextInput pushes the sheet up when the keyboard slides in (iOS
+  // only — Android handles via windowSoftInputMode in the manifest).
+  kbWrap: {
+    flex: 1,
+  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',

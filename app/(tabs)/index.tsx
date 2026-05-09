@@ -340,20 +340,6 @@ export default function TakeoffScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      {/* Fixed top-right cluster: date over the Yesterday link. Sits outside
-          the ScrollView so it doesn't scroll away with the brief. Positioned
-          at top:60 to align with the Minimap (now at top-left) on the same
-          horizontal band. */}
-      <View pointerEvents="box-none" style={styles.topRightCluster}>
-        <Text style={styles.topDate}>{date}</Text>
-        <TouchableOpacity
-          onPress={() => setShowYesterday(true)}
-          activeOpacity={0.6}
-          style={styles.topYesterdayLink}>
-          <Text style={styles.topYesterdayLinkText}>Yesterday&apos;s Programme →</Text>
-        </TouchableOpacity>
-      </View>
-
       <GestureDetector gesture={swipeGesture}>
         <ScrollView
           style={styles.scrollFlex}
@@ -364,7 +350,15 @@ export default function TakeoffScreen() {
             <Text style={[styles.title, { color: theme.title }]}>{mode.title}</Text>
           </View>
 
+          <Text style={styles.inFlowDate}>{date}</Text>
+
           <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+
+          <TouchableOpacity
+            onPress={() => setShowYesterday(true)}
+            activeOpacity={0.6}>
+            <Text style={styles.inFlowYesterday}>Yesterday&apos;s Programme →</Text>
+          </TouchableOpacity>
 
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -435,7 +429,7 @@ export default function TakeoffScreen() {
 
           {!loading && transparency ? (
             <TouchableOpacity
-              style={styles.transparencyLinkBottomLeft}
+              style={styles.transparencyLinkCentered}
               onPress={() => setShowTransparency(true)}
               activeOpacity={0.6}>
               <Text style={styles.transparencyLinkText}>How Conductor thought about this</Text>
@@ -480,29 +474,28 @@ const styles = StyleSheet.create({
   scrollFlex: {
     flex: 1,
   },
-  topRightCluster: {
-    // Floats over the ScrollView so the date stays put while the brief
-    // scrolls. Sits at top:60 — the Minimap moved to top-left in
-    // components/Minimap.tsx so the right side is now clear and the
-    // date can sit at the same horizontal band as the Minimap.
-    position: 'absolute',
-    top: 60,
-    right: 20,
-    alignItems: 'flex-end',
-    zIndex: 10,
-  },
-  topDate: {
+  // Date sits in normal flow above the divider, right-aligned within
+  // the content's horizontal padding. Hardcoded to the muted grey
+  // because the older theme.timestamp pull rendered it darker on
+  // Clearance than the spec wanted.
+  inFlowDate: {
     color: '#5a5855',
     fontSize: 12,
     letterSpacing: 0.3,
+    textAlign: 'right',
+    marginBottom: 8,
   },
-  topYesterdayLink: {
-    paddingVertical: 4,
-  },
-  topYesterdayLinkText: {
+  // Yesterday's Programme link sits in normal flow just below the
+  // divider, right-aligned to mirror the date above it. Tap target
+  // is the wrapping TouchableOpacity; the Text style only handles
+  // visual placement.
+  inFlowYesterday: {
     color: '#5a5855',
     fontSize: 11,
     letterSpacing: 0.5,
+    textAlign: 'right',
+    marginTop: 8,
+    marginBottom: 16,
   },
   content: {
     padding: 32,
@@ -527,7 +520,10 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    marginBottom: 32,
+    // No marginBottom — the in-flow Yesterday's Programme link sits
+    // directly below the divider with its own marginTop:8 +
+    // marginBottom:16, which together produce the gap to the brief.
+    marginBottom: 0,
   },
   briefContainer: {
     flex: 1,
@@ -553,7 +549,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 12,
   },
   feedbackSigPrompt: {
     color: '#5a5855',
@@ -573,15 +569,15 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     lineHeight: 20,
   },
-  transparencyLinkBottomLeft: {
-    alignSelf: 'flex-start',
-    marginTop: 16,
+  transparencyLinkCentered: {
+    marginTop: 24,
     paddingVertical: 4,
   },
   transparencyLinkText: {
     color: '#5a5855',
     fontSize: 11,
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
   transparencyBackdrop: {
     flex: 1,
