@@ -465,7 +465,7 @@ export default function SettingsScreen() {
         )}
 
         <SectionHeader
-          title="Intelligence"
+          title="Awareness"
           subtext="What Conductor has learned"
         />
         <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
