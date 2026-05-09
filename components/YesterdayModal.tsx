@@ -97,7 +97,7 @@ export default function YesterdayModal({
           )}
 
           <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={styles.closeBtnText}>Close</Text>
+            <Text style={styles.closeBtnText}>Shut</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

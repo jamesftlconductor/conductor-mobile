@@ -157,7 +157,7 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
               style={[styles.btn, styles.btnSecondary]}
               onPress={onClose}
               disabled={submitting}>
-              <Text style={styles.btnSecondaryText}>Cancel</Text>
+              <Text style={styles.btnSecondaryText}>Avert</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
