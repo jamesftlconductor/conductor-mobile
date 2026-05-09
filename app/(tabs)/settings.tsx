@@ -26,6 +26,11 @@ const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
+// Shared so the three failure paths in handleInvite (network, non-2xx,
+// missing token in response) all surface identical copy. Was duplicated
+// inline in three places before.
+const INVITE_FAILED_MESSAGE = "Couldn't generate an invite. Try again later.";
+
 type CategoryKey =
   | 'finance'
   | 'travel'
@@ -257,12 +262,12 @@ async function handleInviteMember() {
   try {
     const r = await fetch(`${API_BASE}/invite/generate?userId=${USER_ID}`);
     if (!r.ok) {
-      Alert.alert('Invite a member', "Couldn't generate an invite. Try again later.");
+      Alert.alert('Invite a member', INVITE_FAILED_MESSAGE);
       return;
     }
     const data = await r.json();
     if (!data?.inviteUrl) {
-      Alert.alert('Invite a member', "Couldn't generate an invite. Try again later.");
+      Alert.alert('Invite a member', INVITE_FAILED_MESSAGE);
       return;
     }
     await Share.share({
@@ -270,7 +275,7 @@ async function handleInviteMember() {
       url: data.inviteUrl,
     });
   } catch {
-    Alert.alert('Invite a member', "Couldn't generate an invite. Try again later.");
+    Alert.alert('Invite a member', INVITE_FAILED_MESSAGE);
   }
 }
 
@@ -500,7 +505,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.doneBtn} onPress={commitTimeEdit}>
-              <Text style={styles.doneBtnText}>Done</Text>
+              <Text style={styles.doneBtnText}>Over</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>

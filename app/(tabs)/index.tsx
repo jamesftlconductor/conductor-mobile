@@ -301,7 +301,7 @@ export default function TakeoffScreen() {
           Connect your Gmail and Google Calendar. Conductor reads your signals and delivers a calm morning brief — what's arriving, what's scheduled, what matters today.
         </Text>
         <TouchableOpacity style={styles.connectButton} onPress={handleConnect}>
-          <Text style={styles.connectButtonText}>Connect with Google</Text>
+          <Text style={styles.connectButtonText}>Connect your household</Text>
         </TouchableOpacity>
         <Text style={styles.onboardingPrivacy}>
           We only read what you choose to share. Your emails stay private.
@@ -463,7 +463,7 @@ export default function TakeoffScreen() {
               style={styles.transparencyCloseBtn}
               onPress={() => setShowTransparency(false)}
               activeOpacity={0.7}>
-              <Text style={styles.transparencyCloseBtnText}>Close</Text>
+              <Text style={styles.transparencyCloseBtnText}>Shut</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>

@@ -84,7 +84,7 @@ export function FinaleSheet(props: FinaleSheetProps) {
               )}
             </View>
             <TouchableOpacity onPress={onClose}>
-              <Text style={styles.clearFilterText}>Clear filter</Text>
+              <Text style={styles.clearFilterText}>Reset</Text>
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -232,7 +232,7 @@ function SingleSheet({
               <TouchableOpacity
                 style={styles.editLinkPosition}
                 onPress={() => setEditing(true)}>
-                <Text style={styles.editLink}>EDIT</Text>
+                <Text style={styles.editLink}>ADJUST</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -303,13 +303,13 @@ function SingleSheet({
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={handleCancel}
                   disabled={saving}>
-                  <Text style={styles.btnSecondaryText}>Cancel</Text>
+                  <Text style={styles.btnSecondaryText}>Avert</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSave, saving && { opacity: 0.5 }]}
                   onPress={handleSave}
                   disabled={saving}>
-                  <Text style={styles.btnSaveText}>Save</Text>
+                  <Text style={styles.btnSaveText}>Remember</Text>
                 </TouchableOpacity>
               </View>
             </>

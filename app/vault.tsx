@@ -232,14 +232,14 @@ function AddModal({
 
           <View style={styles.modalActions}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+              <Text style={styles.cancelBtnText}>Avert</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.saveBtn, !description.trim() && styles.saveBtnDisabled]}
               onPress={submit}
               disabled={!description.trim()}
               activeOpacity={0.7}>
-              <Text style={styles.saveBtnText}>Save</Text>
+              <Text style={styles.saveBtnText}>Remember</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -334,7 +334,7 @@ export default function VaultScreen() {
           style={styles.addBtn}
           onPress={() => setShowAdd(true)}
           activeOpacity={0.7}>
-          <Text style={styles.addBtnText}>+ Add</Text>
+          <Text style={styles.addBtnText}>+ Signal</Text>
         </TouchableOpacity>
       </View>
 
@@ -411,7 +411,7 @@ export default function VaultScreen() {
         style={styles.backLink}
         onPress={() => router.back()}
         activeOpacity={0.6}>
-        <Text style={styles.backLinkText}>Back</Text>
+        <Text style={styles.backLinkText}>Return</Text>
       </TouchableOpacity>
 
       <AddModal visible={showAdd} onClose={() => setShowAdd(false)} onAdd={handleAdd} />

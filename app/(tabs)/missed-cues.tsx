@@ -158,7 +158,7 @@ export default function MissedCuesScreen() {
         style={styles.backLink}
         onPress={() => router.back()}
         activeOpacity={0.6}>
-        <Text style={styles.backLinkText}>Back</Text>
+        <Text style={styles.backLinkText}>Return</Text>
       </TouchableOpacity>
     </ScrollView>
   );
