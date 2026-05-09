@@ -17,6 +17,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line } from 'react-native-svg';
 
+import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
 import {
   LEGEND_ORDER,
@@ -331,6 +332,7 @@ function RotatingRing({
   dimmedTypeKey,
   highlightedTypeKey,
   expandedRing,
+  freshlyAddedIds,
   onSignalPress,
 }: {
   ring: RingDef;
@@ -341,6 +343,7 @@ function RotatingRing({
   dimmedTypeKey: string | null;
   highlightedTypeKey: string | null;
   expandedRing: RingKey | null;
+  freshlyAddedIds: Set<string>;
   onSignalPress: (s: Signal) => void;
 }) {
   const rotation = useRef(new Animated.Value(0)).current;
@@ -479,6 +482,7 @@ function RotatingRing({
             paused={pausedSignalId === String(s.id)}
             dim={isDottedDimmed}
             highlight={isHighlighted}
+            freshlyAdded={freshlyAddedIds.has(String(s.id))}
             onPress={() => onSignalPress(s)}
           />
         );
@@ -495,6 +499,7 @@ function SignalDot({
   paused,
   dim,
   highlight,
+  freshlyAdded,
   onPress,
 }: {
   meta: TypeMeta;
@@ -504,11 +509,13 @@ function SignalDot({
   paused: boolean;
   dim: boolean;
   highlight: boolean;
+  freshlyAdded?: boolean;
   onPress: () => void;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const pausedRef = useRef(paused);
   const highlightRef = useRef(highlight);
+  const isFirstPulseRef = useRef(!!freshlyAdded);
 
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { highlightRef.current = highlight; }, [highlight]);
@@ -523,7 +530,16 @@ function SignalDot({
         setTimeout(() => tick(toValue), 80);
         return;
       }
-      const peak = highlightRef.current ? 1.45 : 1.25;
+      // First pulse is brighter when the signal was just added — gives
+      // the user a "this is new" cue. After the first peak fades back
+      // to 1, we fall into the steady-state pulse.
+      let peak: number;
+      if (isFirstPulseRef.current && toValue !== 1) {
+        peak = 1.85;
+        isFirstPulseRef.current = false;
+      } else {
+        peak = highlightRef.current ? 1.45 : 1.25;
+      }
       const target = toValue === 1 ? 1 : peak;
       currentAnim = Animated.timing(scale, {
         toValue: target,
@@ -781,6 +797,8 @@ export default function HoverScreen() {
   const [filterTypeKey, setFilterTypeKey] = useState<string | null>(null);
   const [expandedRing, setExpandedRing] = useState<RingKey | null>(null);
   const [showYesterday, setShowYesterday] = useState(false);
+  const [showAddSignal, setShowAddSignal] = useState(false);
+  const [freshlyAddedIds, setFreshlyAddedIds] = useState<Set<string>>(() => new Set());
   const signalsRef = useRef<Signal[]>([]);
   const expandedRingRef = useRef<RingKey | null>(null);
 
@@ -962,6 +980,28 @@ export default function HoverScreen() {
     );
   }
 
+  // Optimistic insert from AddSignalSheet. The POST itself is fired
+  // inside the sheet; we add the returned signal to local state so the
+  // dot lands on the radar immediately. We also flag the id as
+  // freshly-added for ~3s so SignalDot's first-pulse renders brighter.
+  function handleSignalAdded(added: Signal) {
+    setSignals((prev) => [added, ...prev]);
+    const idStr = String(added.id);
+    setFreshlyAddedIds((prev) => {
+      const next = new Set(prev);
+      next.add(idStr);
+      return next;
+    });
+    setTimeout(() => {
+      setFreshlyAddedIds((prev) => {
+        if (!prev.has(idStr)) return prev;
+        const next = new Set(prev);
+        next.delete(idStr);
+        return next;
+      });
+    }, 3000);
+  }
+
   function handleLegendTap(typeKey: string) {
     setFilterTypeKey((prev) => (prev === typeKey ? null : typeKey));
   }
@@ -1043,6 +1083,7 @@ export default function HoverScreen() {
           dimmedTypeKey={filterTypeKey}
           highlightedTypeKey={filterTypeKey}
           expandedRing={expandedRing}
+          freshlyAddedIds={freshlyAddedIds}
           onSignalPress={setSelected}
         />
         <RotatingRing
@@ -1054,6 +1095,7 @@ export default function HoverScreen() {
           dimmedTypeKey={filterTypeKey}
           highlightedTypeKey={filterTypeKey}
           expandedRing={expandedRing}
+          freshlyAddedIds={freshlyAddedIds}
           onSignalPress={setSelected}
         />
         <RotatingRing
@@ -1065,6 +1107,7 @@ export default function HoverScreen() {
           dimmedTypeKey={filterTypeKey}
           highlightedTypeKey={filterTypeKey}
           expandedRing={expandedRing}
+          freshlyAddedIds={freshlyAddedIds}
           onSignalPress={setSelected}
         />
 
@@ -1145,6 +1188,24 @@ export default function HoverScreen() {
           opacity={legendOpacity}
           onTapType={handleLegendTap}
           onYesterday={() => setShowYesterday(true)}
+        />
+
+        <TouchableOpacity
+          style={[
+            styles.addButton,
+            { bottom: insets.bottom + 64, right: 20 },
+          ]}
+          onPress={() => setShowAddSignal(true)}
+          activeOpacity={0.75}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={styles.addButtonText}>+</Text>
+        </TouchableOpacity>
+
+        <AddSignalSheet
+          visible={showAddSignal}
+          userId={USER_ID}
+          onClose={() => setShowAddSignal(false)}
+          onAdded={handleSignalAdded}
         />
 
         <YesterdayModal
@@ -1241,6 +1302,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     opacity: 0.85,
+  },
+  addButton: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: BRASS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  addButtonText: {
+    color: OFF_WHITE,
+    fontSize: 20,
+    fontWeight: '500',
+    lineHeight: 22,
   },
   signalHit: {
     position: 'absolute',
