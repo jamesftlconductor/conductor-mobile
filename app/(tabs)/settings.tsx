@@ -427,7 +427,7 @@ export default function SettingsScreen() {
         />
 
         <SectionHeader
-          title="Always Included"
+          title="Always On"
           subtext="These appear in every brief when relevant"
         />
         <ToggleRow label="Health context" value={settings.healthEnabled} onChange={setHealth} />
@@ -438,7 +438,7 @@ export default function SettingsScreen() {
         />
 
         <SectionHeader
-          title="High Importance"
+          title="What Matters Most"
           subtext="Flag categories to prioritize in your brief"
         />
         {CATEGORIES.map((c) => (
@@ -451,7 +451,7 @@ export default function SettingsScreen() {
         ))}
 
         <SectionHeader
-          title="Horizon Awareness"
+          title="On the Horizon"
           subtext="One surprising signal from the bigger picture"
         />
         <ToggleRow label="Enabled" value={settings.horizonEnabled} onChange={setHorizon} />
@@ -470,7 +470,7 @@ export default function SettingsScreen() {
         />
         <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
 
-        <SectionHeader title="About" />
+        <SectionHeader title="Conductor" />
         <Row label="Conductor" subtext="Version 1.0.0" />
         <ChevronRow
           label="How Conductor thinks"

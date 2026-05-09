@@ -347,7 +347,7 @@ export default function VaultScreen() {
       {!loading && items.length === 0 && (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>
-            Conductor hasn&apos;t found any deadlines yet. They surface as your history is scanned.
+            The Vault is empty. Renewals and deadlines land here as Conductor finds them.
           </Text>
         </View>
       )}

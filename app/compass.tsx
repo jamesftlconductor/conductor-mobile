@@ -194,7 +194,7 @@ export default function CompassScreen() {
       {!loading && data && data.householdAge < 7 && (
         <View style={styles.earlyWrap}>
           <Text style={styles.earlyTitle}>
-            Compass gets smarter with time. Check back after a week of signals.
+            Compass is still listening. Patterns sharpen after a week of signals.
           </Text>
           <Text style={styles.earlyEmoji}>🧭</Text>
           <Text style={styles.earlyDays}>
@@ -222,7 +222,7 @@ export default function CompassScreen() {
               const top = data.topSenders.slice(0, 5);
               const max = Math.max(...top.map((s) => s.count), 1);
               if (top.length === 0) {
-                return <Text style={styles.cardEmpty}>No senders recorded yet.</Text>;
+                return <Text style={styles.cardEmpty}>Nothing to chart yet.</Text>;
               }
               return top.map((s) => (
                 <SenderRow key={s.sender} sender={s.sender} count={s.count} max={max} />
@@ -235,7 +235,7 @@ export default function CompassScreen() {
             {(() => {
               const types = Object.entries(data.typeBreakdown);
               if (types.length === 0) {
-                return <Text style={styles.cardEmpty}>No type data yet.</Text>;
+                return <Text style={styles.cardEmpty}>The Mix is still forming.</Text>;
               }
               const totals = types.map(([, v]) => v.resolved + v.held + v.expired);
               const max = Math.max(...totals, 1);
