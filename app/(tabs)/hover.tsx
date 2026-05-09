@@ -596,7 +596,14 @@ const REPEAT_COUNT = 500;
 type WheelItem =
   | { kind: 'type'; key: string }
   | { kind: 'divider' }
-  | { kind: 'nav'; key: string; label: string; emoji: string; route?: string; action?: 'yesterday' };
+  | {
+      kind: 'nav';
+      key: string;
+      label: string;
+      emoji: string;
+      route?: string;
+      action?: 'yesterday' | 'addSignal';
+    };
 
 const NAV_ITEMS: WheelItem[] = [
   { kind: 'nav', key: 'home', label: 'Ground', emoji: '🏠', route: '/(tabs)/' },
@@ -608,6 +615,10 @@ const NAV_ITEMS: WheelItem[] = [
   { kind: 'nav', key: 'horizon', label: 'Horizon', emoji: '🔭', route: '/horizon' },
   { kind: 'nav', key: 'compass', label: 'Compass', emoji: '🧭', route: '/compass' },
   { kind: 'nav', key: 'settings', label: 'Settings', emoji: '⚙️', route: '/(tabs)/settings' },
+  // Add Signal lives in the wheel after the route shortcuts. "+" is plain
+  // ASCII (not an emoji glyph) so it accepts color tinting — the renderer
+  // brass-tints just this glyph to match the navLabel below.
+  { kind: 'nav', key: 'addSignal', label: 'Signal', emoji: '+', action: 'addSignal' },
 ];
 
 const WHEEL_BASE: WheelItem[] = [
@@ -623,6 +634,7 @@ function InfiniteLedger({
   opacity,
   onTapType,
   onYesterday,
+  onAddSignal,
 }: {
   bottomInset: number;
   width: number;
@@ -630,6 +642,7 @@ function InfiniteLedger({
   opacity: Animated.AnimatedInterpolation<number> | Animated.Value;
   onTapType: (typeKey: string) => void;
   onYesterday: () => void;
+  onAddSignal: () => void;
 }) {
   // 500x repeated data; start at the center. Practically infinite in either
   // direction, so no boundary detection / jump needed.
@@ -682,15 +695,23 @@ function InfiniteLedger({
             );
           }
           if (item.kind === 'nav') {
+            // Brass-tint just the "+" glyph for the addSignal item — every
+            // other nav uses an emoji glyph that ignores color tinting, so
+            // navLabel below carries the brass for them. "+" is plain ASCII
+            // and accepts color, so it gets the explicit override here.
+            const isAddSignal = item.action === 'addSignal';
             return (
               <TouchableOpacity
                 onPress={() => {
                   if (item.action === 'yesterday') onYesterday();
+                  else if (item.action === 'addSignal') onAddSignal();
                   else if (item.route) router.push(item.route as never);
                 }}
                 activeOpacity={0.6}
                 style={styles.wheelItem}>
-                <Text style={styles.wheelEmoji}>{item.emoji}</Text>
+                <Text style={[styles.wheelEmoji, isAddSignal && { color: BRASS }]}>
+                  {item.emoji}
+                </Text>
                 <Text style={[styles.wheelLabel, styles.navLabel]}>
                   {item.label.toLowerCase()}
                 </Text>
@@ -1188,18 +1209,8 @@ export default function HoverScreen() {
           opacity={legendOpacity}
           onTapType={handleLegendTap}
           onYesterday={() => setShowYesterday(true)}
+          onAddSignal={() => setShowAddSignal(true)}
         />
-
-        <TouchableOpacity
-          style={[
-            styles.addButton,
-            { bottom: insets.bottom + 64, right: 20 },
-          ]}
-          onPress={() => setShowAddSignal(true)}
-          activeOpacity={0.75}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Text style={styles.addButtonText}>+</Text>
-        </TouchableOpacity>
 
         <AddSignalSheet
           visible={showAddSignal}
@@ -1302,26 +1313,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     opacity: 0.85,
-  },
-  addButton: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: BRASS,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  addButtonText: {
-    color: OFF_WHITE,
-    fontSize: 20,
-    fontWeight: '500',
-    lineHeight: 22,
   },
   signalHit: {
     position: 'absolute',
