@@ -341,9 +341,12 @@ export default function TakeoffScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       {/* Fixed top-right cluster: date over the Yesterday link. Sits outside
-          the ScrollView so it doesn't scroll away with the brief. */}
+          the ScrollView so it doesn't scroll away with the brief. Positioned
+          below the Minimap (which is itself absolute at top:60, right:20,
+          40px circle) — without this offset the date would render behind
+          the Minimap circle. */}
       <View pointerEvents="box-none" style={styles.topRightCluster}>
-        <Text style={[styles.topDate, { color: theme.timestamp }]}>{date}</Text>
+        <Text style={styles.topDate}>{date}</Text>
         <TouchableOpacity
           onPress={() => setShowYesterday(true)}
           activeOpacity={0.6}
@@ -480,16 +483,20 @@ const styles = StyleSheet.create({
   },
   topRightCluster: {
     // Floats over the ScrollView so the date stays put while the brief
-    // scrolls. paddingTop matches contentContainerStyle.paddingTop so it
-    // sits in the same vertical band as the greeting block, but right-
-    // anchored at 20px from the edge per spec.
+    // scrolls. Positioned just below the Minimap (which is itself
+    // absolute at top:60, right:20, 40px circle) — top:108 = 60 + 40 + 8
+    // margin so the date clears the Minimap rather than rendering behind
+    // it. Spec wants "same vertical position as the greeting" but the
+    // Minimap occupies that y-band on the right side, so this is the
+    // closest visible-and-tidy position.
     position: 'absolute',
-    top: 80,
+    top: 108,
     right: 20,
     alignItems: 'flex-end',
     zIndex: 10,
   },
   topDate: {
+    color: '#5a5855',
     fontSize: 12,
     letterSpacing: 0.3,
   },
@@ -578,7 +585,7 @@ const styles = StyleSheet.create({
   transparencyLinkText: {
     color: '#5a5855',
     fontSize: 11,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   transparencyBackdrop: {
     flex: 1,
