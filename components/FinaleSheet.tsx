@@ -91,7 +91,7 @@ export function FinaleSheet(props: FinaleSheetProps) {
             style={styles.filterList}
             contentContainerStyle={{ paddingBottom: 32 + bottomInset }}>
             {signals.length === 0 ? (
-              <Text style={styles.filterEmpty}>Nothing here right now.</Text>
+              <Text style={styles.filterEmpty}>This category is quiet.</Text>
             ) : (
               signals.map((s) => {
                 const meta = metaFor(s);

@@ -255,7 +255,7 @@ function ChevronRow({
 }
 
 function comingSoon(label: string) {
-  Alert.alert(label, 'Coming soon.');
+  Alert.alert(label, 'Still coming.');
 }
 
 async function handleInviteMember() {
@@ -454,7 +454,7 @@ export default function SettingsScreen() {
           title="On the Horizon"
           subtext="One surprising signal from the bigger picture"
         />
-        <ToggleRow label="Enabled" value={settings.horizonEnabled} onChange={setHorizon} />
+        <ToggleRow label="Watching" value={settings.horizonEnabled} onChange={setHorizon} />
         <ChevronRow
           label="Frequency"
           rightText={settings.horizonFrequency}
