@@ -167,6 +167,11 @@ export default function TakeoffScreen() {
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [greeting, setGreeting] = useState('');
+  // userName comes from the brief API response (`data.user`). The
+  // 'there' default mirrors what brief.js falls back to server-side
+  // when the user profile lookup fails; the render layer treats it
+  // as "no name yet, render the bare greeting."
+  const [userName, setUserName] = useState('there');
   const [date, setDate] = useState('');
   const [mode, setMode] = useState(getBriefMode(new Date().getHours()));
   const [showYesterday, setShowYesterday] = useState(false);
@@ -238,6 +243,9 @@ export default function TakeoffScreen() {
       const userId = 'james_totalhome_gmail_com'; // temporary hardcode — will come from OAuth
       const res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/${endpoint}?userId=${userId}`);
       const data = await res.json();
+      if (typeof data.user === 'string' && data.user.length > 0) {
+        setUserName(data.user);
+      }
       setBrief(data.brief);
       if (Array.isArray(data.segments) && data.segments.length > 0) {
         setSegments(data.segments);
@@ -346,7 +354,9 @@ export default function TakeoffScreen() {
           contentContainerStyle={styles.content}>
           <Minimap />
           <View style={styles.header}>
-            <Text style={[styles.greeting, { color: theme.greeting }]}>{greeting}.</Text>
+            <Text style={[styles.greeting, { color: theme.greeting }]}>
+              {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
+            </Text>
             <Text style={[styles.title, { color: theme.title }]}>{mode.title}</Text>
           </View>
 
