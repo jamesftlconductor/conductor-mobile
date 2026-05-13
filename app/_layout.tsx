@@ -22,6 +22,7 @@ export default function RootLayout() {
           <Stack.Screen name="horizon" options={{ headerShown: false }} />
           <Stack.Screen name="vault" options={{ headerShown: false }} />
           <Stack.Screen name="compass" options={{ headerShown: false }} />
+          <Stack.Screen name="crew" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

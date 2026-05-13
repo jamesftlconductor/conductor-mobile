@@ -404,6 +404,7 @@ export default function SettingsScreen() {
             </View>
           }
         />
+        <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
         <Row
           label="Connected accounts"
           right={

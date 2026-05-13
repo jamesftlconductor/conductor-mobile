@@ -614,6 +614,7 @@ const NAV_ITEMS: WheelItem[] = [
   { kind: 'nav', key: 'cues', label: 'Cues', emoji: '⚠️', route: '/(tabs)/missed-cues' },
   { kind: 'nav', key: 'horizon', label: 'Horizon', emoji: '🔭', route: '/horizon' },
   { kind: 'nav', key: 'compass', label: 'Compass', emoji: '🧭', route: '/compass' },
+  { kind: 'nav', key: 'crew', label: 'Crew', emoji: '👨‍👩‍👧', route: '/crew' },
   { kind: 'nav', key: 'settings', label: 'Settings', emoji: '⚙️', route: '/(tabs)/settings' },
   // Add Signal lives in the wheel after the route shortcuts. "+" is plain
   // ASCII (not an emoji glyph) so it accepts color tinting — the renderer
