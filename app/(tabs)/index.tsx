@@ -4,8 +4,8 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
@@ -163,6 +163,12 @@ export default function TakeoffScreen() {
   const [segments, setSegments] = useState<BriefSegment[]>([]);
   const [transparency, setTransparency] = useState<string | null>(null);
   const [showTransparency, setShowTransparency] = useState(false);
+  // The Read — overflow context Conductor deemed worth knowing but
+  // not worth leading with. Collapsed by default; expand fades the
+  // prose in via Animated.timing on opacity.
+  const [theRead, setTheRead] = useState<string | null>(null);
+  const [theReadExpanded, setTheReadExpanded] = useState(false);
+  const theReadOpacity = useRef(new Animated.Value(0)).current;
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
@@ -230,8 +236,13 @@ export default function TakeoffScreen() {
   async function generateBrief() {
     // Each brief generation is its own session for feedback purposes — wipe
     // any previous thumbs choice so the buttons return to their resting
-    // state on reload.
+    // state on reload. Same for The Read — collapse it and clear any
+    // stale content so the new brief's overflow doesn't leak from the
+    // previous session.
     setFeedback(null);
+    setTheRead(null);
+    setTheReadExpanded(false);
+    theReadOpacity.setValue(0);
     const { endpoint } = getBriefMode(new Date().getHours());
     if (!endpoint) {
       // Overwatch mode — no brief to fetch. Just exit loading so the
@@ -255,6 +266,9 @@ export default function TakeoffScreen() {
       setTransparency(typeof data.transparency === 'string' && data.transparency.length > 0
         ? data.transparency
         : null);
+      setTheRead(typeof data.theRead === 'string' && data.theRead.length > 0
+        ? data.theRead
+        : null);
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -272,6 +286,30 @@ export default function TakeoffScreen() {
       // best-effort — still navigate
     }
     router.push('/(tabs)/hover');
+  }
+
+  function toggleTheRead() {
+    // Expanding: mount the Animated.Text first (state flip), then
+    // ramp opacity 0→1. Collapsing: ramp opacity 1→0 first, THEN
+    // unmount via state flip on animation finish — so the prose
+    // fades out before vanishing from layout rather than snapping.
+    if (theReadExpanded) {
+      Animated.timing(theReadOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setTheReadExpanded(false);
+      });
+    } else {
+      setTheReadExpanded(true);
+      theReadOpacity.setValue(0);
+      Animated.timing(theReadOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
   }
 
   function handleFeedback(rating: 'up' | 'down') {
@@ -399,6 +437,34 @@ export default function TakeoffScreen() {
               </Text>
             </View>
           )}
+
+          {!loading && theRead ? (
+            // The Read — overflow context Conductor deemed worth knowing
+            // but not worth leading with. Brass separator line, small
+            // muted trigger label, Animated.Text below that fades in on
+            // expand and fades out before unmounting on collapse.
+            <View style={styles.theReadWrap}>
+              <View style={styles.theReadBrassLine} />
+              <TouchableOpacity
+                onPress={toggleTheRead}
+                activeOpacity={0.6}
+                style={styles.theReadTrigger}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.theReadTriggerText}>
+                  The Read  {theReadExpanded ? '−' : '+'}
+                </Text>
+              </TouchableOpacity>
+              {theReadExpanded ? (
+                <Animated.Text
+                  style={[
+                    styles.theReadText,
+                    { color: theme.brief, opacity: theReadOpacity },
+                  ]}>
+                  {theRead}
+                </Animated.Text>
+              ) : null}
+            </View>
+          ) : null}
 
           {!loading ? (
             // Signature feedback — right-aligned, single-line, reads like
@@ -554,6 +620,35 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     fontWeight: '300',
     letterSpacing: 0.2,
+  },
+  theReadWrap: {
+    marginTop: 24,
+  },
+  theReadBrassLine: {
+    height: 1,
+    // Brass (#b8960c) at 20% opacity — a thin warm line that
+    // separates the brief proper from the overflow trigger.
+    backgroundColor: 'rgba(184, 150, 12, 0.2)',
+  },
+  theReadTrigger: {
+    alignSelf: 'flex-start',
+    marginTop: 16,
+    paddingVertical: 4,
+  },
+  theReadTriggerText: {
+    color: '#5a5855',
+    fontSize: 10,
+    letterSpacing: 2,
+  },
+  theReadText: {
+    // Matches the brief's prose style — same font, size, line height,
+    // weight, tracking. Color comes from theme.brief inline so it
+    // tracks the Takeoff vs Clearance palette correctly.
+    fontSize: 20,
+    lineHeight: 32,
+    fontWeight: '300',
+    letterSpacing: 0.2,
+    marginTop: 16,
   },
   feedbackSignature: {
     flexDirection: 'row',
