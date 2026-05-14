@@ -191,12 +191,6 @@ export default function HorizonScreen() {
         <Text style={styles.vaultLinkText}>View Vault →</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.backLink}
-        onPress={() => router.back()}
-        activeOpacity={0.6}>
-        <Text style={styles.backLinkText}>Return</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -303,10 +297,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-  backLink: {
-    paddingTop: 16,
-    alignItems: 'center',
-  },
   topBack: {
     alignSelf: 'flex-start',
     paddingVertical: 6,
@@ -317,12 +307,6 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 13,
     letterSpacing: 0.3,
-  },
-  backLinkText: {
-    color: MUTED,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
   },
   vaultLink: {
     paddingTop: 32,

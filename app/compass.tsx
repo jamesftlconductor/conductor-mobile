@@ -295,12 +295,6 @@ export default function CompassScreen() {
         </>
       )}
 
-      <TouchableOpacity
-        style={styles.backLink}
-        onPress={() => router.back()}
-        activeOpacity={0.6}>
-        <Text style={styles.backLinkText}>Return</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -512,16 +506,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  backLink: {
-    paddingTop: 32,
-    alignItems: 'center',
-  },
-  backLinkText: {
-    color: MUTED,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
   topBack: {
     alignSelf: 'flex-start',
     paddingVertical: 6,

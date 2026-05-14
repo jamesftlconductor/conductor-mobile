@@ -145,12 +145,6 @@ export default function CrewScreen() {
         </>
       )}
 
-      <TouchableOpacity
-        style={styles.backLink}
-        onPress={() => router.back()}
-        activeOpacity={0.6}>
-        <Text style={styles.backLinkText}>Return</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -365,16 +359,6 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.04)',
-  },
-  backLink: {
-    marginTop: 32,
-    alignSelf: 'center',
-    paddingVertical: 8,
-  },
-  backLinkText: {
-    color: MUTED,
-    fontSize: 13,
-    letterSpacing: 1,
   },
   topBack: {
     alignSelf: 'flex-start',

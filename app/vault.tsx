@@ -467,13 +467,6 @@ export default function VaultScreen() {
           </View>
         ))}
 
-      <TouchableOpacity
-        style={styles.backLink}
-        onPress={() => router.back()}
-        activeOpacity={0.6}>
-        <Text style={styles.backLinkText}>Return</Text>
-      </TouchableOpacity>
-
       <AddModal visible={showAdd} onClose={() => setShowAdd(false)} onAdd={handleAdd} />
     </ScrollView>
   );
@@ -650,16 +643,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-  },
-  backLink: {
-    paddingTop: 32,
-    alignItems: 'center',
-  },
-  backLinkText: {
-    color: MUTED,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
   },
   topBack: {
     alignSelf: 'flex-start',
