@@ -105,6 +105,13 @@ export default function CrewScreen() {
           }}
         />
       }>
+      <TouchableOpacity
+        onPress={() => router.back()}
+        activeOpacity={0.6}
+        style={styles.topBack}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Text style={styles.topBackText}>← Return</Text>
+      </TouchableOpacity>
       <Text style={styles.title}>Crew</Text>
       <Text style={styles.subtitle}>Who Conductor is watching over</Text>
 
@@ -368,5 +375,16 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 13,
     letterSpacing: 1,
+  },
+  topBack: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  topBackText: {
+    color: MUTED,
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
 });

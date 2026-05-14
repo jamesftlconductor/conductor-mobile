@@ -92,6 +92,13 @@ function InlineRadar({ size }: { size: number }) {
 }
 
 export default function OverwatchView({ onYesterday }: { onYesterday: () => void }) {
+  // Same en-US "Thursday, May 14" shape Ground uses for its header date.
+  const dateLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+
   // Phrase cycle: 8s for visible phrases (1s fade-in / 6s hold / 1s fade-out),
   // 10s of pure silence on every third cycle. Silence is part of the voice;
   // not every tick deserves a sentence.
@@ -155,6 +162,7 @@ export default function OverwatchView({ onYesterday }: { onYesterday: () => void
     <View style={styles.container}>
       <View style={styles.center}>
         <InlineRadar size={120} />
+        <Text style={styles.dateLine}>{dateLabel}</Text>
         <Animated.Text style={[styles.phrase, { opacity: phraseFade }]} numberOfLines={2}>
           {PHRASES[phraseIndex]}
         </Animated.Text>
@@ -183,6 +191,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     transform: [{ translateY: -40 }],
+  },
+  dateLine: {
+    color: MUTED,
+    fontSize: 12,
+    letterSpacing: 0.3,
+    textAlign: 'center',
+    marginTop: 24,
   },
   phrase: {
     color: SUBTLE,

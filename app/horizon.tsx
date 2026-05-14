@@ -116,6 +116,13 @@ export default function HorizonScreen() {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={MUTED} />
       }>
+      <TouchableOpacity
+        onPress={() => router.back()}
+        activeOpacity={0.6}
+        style={styles.topBack}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Text style={styles.topBackText}>← Return</Text>
+      </TouchableOpacity>
       <Text style={styles.title}>The Horizon</Text>
       <Text style={styles.subtitle}>What Conductor is watching ahead</Text>
 
@@ -299,6 +306,17 @@ const styles = StyleSheet.create({
   backLink: {
     paddingTop: 16,
     alignItems: 'center',
+  },
+  topBack: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  topBackText: {
+    color: MUTED,
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
   backLinkText: {
     color: MUTED,

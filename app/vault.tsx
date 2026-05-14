@@ -2,7 +2,9 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,8 +12,14 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
+
+// LayoutAnimation on Android requires explicit opt-in. iOS is on by default.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -38,6 +46,7 @@ type VaultItem = {
   amount?: string | null;
   consequence?: string | null;
   confidence?: 'high' | 'medium' | 'low';
+  policyNumber?: string | null;
   source?: string;
   foundAt?: number;
 };
@@ -253,6 +262,18 @@ export default function VaultScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  // Only one item expanded at a time — tapping another collapses the prior.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  function toggleExpand(id: string) {
+    LayoutAnimation.configureNext({
+      duration: 200,
+      update: { type: 'easeInEaseOut' },
+      create: { type: 'easeInEaseOut', property: 'opacity' },
+      delete: { type: 'easeInEaseOut', property: 'opacity' },
+    });
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
 
   async function load() {
     try {
@@ -325,6 +346,13 @@ export default function VaultScreen() {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={MUTED} />
       }>
+      <TouchableOpacity
+        onPress={() => router.back()}
+        activeOpacity={0.6}
+        style={styles.topBack}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Text style={styles.topBackText}>← Return</Text>
+      </TouchableOpacity>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Vault</Text>
@@ -359,48 +387,80 @@ export default function VaultScreen() {
             {section.items.map((item) => {
               const renewal = renewalSummary(item);
               const emoji = CATEGORY_EMOJI[item.category] || CATEGORY_EMOJI.other;
+              const isExpanded = expandedId === item.id;
+              const confLabel = item.confidence
+                ? item.confidence[0].toUpperCase() + item.confidence.slice(1) + ' confidence'
+                : null;
               return (
-                <View key={item.id} style={styles.row}>
-                  <View style={styles.rowLeft}>
-                    <Text style={styles.emoji}>{emoji}</Text>
-                  </View>
-                  <View style={styles.rowMain}>
-                    <View style={styles.descRow}>
-                      <Text style={styles.description} numberOfLines={2}>
-                        {item.description}
-                      </Text>
-                      <View
-                        style={[
-                          styles.confidenceDot,
-                          { backgroundColor: confidenceColor(item.confidence) },
-                        ]}
-                      />
+                <View key={item.id} style={styles.itemContainer}>
+                  <View style={styles.row}>
+                    <View style={styles.rowLeft}>
+                      <Text style={styles.emoji}>{emoji}</Text>
                     </View>
-                    {!!item.provider && (
-                      <Text style={styles.provider} numberOfLines={1}>
-                        {item.provider}
-                      </Text>
-                    )}
-                    <View style={styles.metaRow}>
-                      <Text style={[styles.renewal, { color: renewal.color }]}>
-                        {renewal.label}
-                      </Text>
-                      {!!item.amount && (
-                        <Text style={styles.amount}> · {item.amount}</Text>
+                    <TouchableOpacity
+                      style={styles.rowMain}
+                      onPress={() => toggleExpand(item.id)}
+                      activeOpacity={0.8}>
+                      <View style={styles.descRow}>
+                        <Text style={styles.description} numberOfLines={2}>
+                          {item.description}
+                        </Text>
+                        <View
+                          style={[
+                            styles.confidenceDot,
+                            { backgroundColor: confidenceColor(item.confidence) },
+                          ]}
+                        />
+                      </View>
+                      {!!item.provider && (
+                        <Text style={styles.provider} numberOfLines={1}>
+                          {item.provider}
+                        </Text>
+                      )}
+                      <View style={styles.metaRow}>
+                        <Text style={[styles.renewal, { color: renewal.color }]}>
+                          {renewal.label}
+                        </Text>
+                        {!!item.amount && (
+                          <Text style={styles.amount}> · {item.amount}</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.handledBtn}
+                      onPress={() => handleHandled(item.id)}
+                      activeOpacity={0.7}>
+                      <Text style={styles.handledBtnText}>Handled</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {isExpanded && (
+                    <View style={styles.expandedSection}>
+                      {!!item.consequence && (
+                        <Text style={styles.expandedConsequence}>
+                          {item.consequence}
+                        </Text>
+                      )}
+                      {!!item.policyNumber && (
+                        <Text style={styles.expandedPolicy}>
+                          Policy #{item.policyNumber}
+                        </Text>
+                      )}
+                      {!!confLabel && (
+                        <View style={styles.expandedConfRow}>
+                          <View
+                            style={[
+                              styles.confidenceDot,
+                              { backgroundColor: confidenceColor(item.confidence) },
+                            ]}
+                          />
+                          <Text style={styles.expandedConfText}>{confLabel}</Text>
+                        </View>
+                      )}
+                      {item.source === 'gmail' && (
+                        <Text style={styles.expandedSource}>Found in Gmail</Text>
                       )}
                     </View>
-                    {!!item.consequence && (
-                      <Text style={styles.consequence} numberOfLines={1}>
-                        {item.consequence}
-                      </Text>
-                    )}
-                  </View>
-                  <TouchableOpacity
-                    style={styles.handledBtn}
-                    onPress={() => handleHandled(item.id)}
-                    activeOpacity={0.7}>
-                    <Text style={styles.handledBtnText}>Handled</Text>
-                  </TouchableOpacity>
+                  )}
                 </View>
               );
             })}
@@ -539,6 +599,44 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     letterSpacing: 0.2,
   },
+  itemContainer: {
+    // No own background — borders/padding live on the inner row so the
+    // expanded section reads as belonging to the same card.
+  },
+  expandedSection: {
+    paddingHorizontal: 40,
+    paddingBottom: 14,
+    marginTop: -4,
+    gap: 6,
+  },
+  expandedConsequence: {
+    color: MUTED,
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 17,
+    letterSpacing: 0.2,
+  },
+  expandedPolicy: {
+    color: MUTED,
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  expandedConfRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  expandedConfText: {
+    color: MUTED,
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  expandedSource: {
+    color: MUTED,
+    fontSize: 11,
+    letterSpacing: 0.3,
+    fontStyle: 'italic',
+  },
   handledBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -562,6 +660,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+  topBack: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  topBackText: {
+    color: MUTED,
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
 
   // Add modal

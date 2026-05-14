@@ -378,15 +378,19 @@ function RotatingRing({
       : 1;
     const targetOpacity = isDimmed ? 0.6 : 1;
 
+    // Snappier spring on expansion — higher tension + matching friction
+    // lands the ring at its target around 200ms with a clean settle and
+    // no visible bounce. Opacity fade on other-ring dim follows in 150ms
+    // so signal repositioning reads as one unified motion.
     Animated.spring(scaleAnim, {
       toValue: targetScale,
-      friction: 7,
-      tension: 70,
+      friction: 14,
+      tension: 200,
       useNativeDriver: true,
     }).start();
     Animated.timing(opacityAnim, {
       toValue: targetOpacity,
-      duration: 300,
+      duration: 150,
       easing: Easing.inOut(Easing.ease),
       useNativeDriver: true,
     }).start();

@@ -359,9 +359,23 @@ export default function TakeoffScreen() {
   // Overwatch — overnight idle surface (10pm–7am). Renders alongside the
   // YesterdayModal so the same modal can be opened from the bottom link.
   if (mode.title === 'Overwatch') {
+    // Swipe right (+X) → Hover; swipe left (−X) → Settings. 50px threshold.
+    const overwatchSwipe = Gesture.Pan()
+      .activeOffsetX([-30, 30])
+      .failOffsetY([-20, 20])
+      .runOnJS(true)
+      .onEnd((e) => {
+        if (Math.abs(e.translationY) >= 80) return;
+        if (e.translationX > 50) router.push('/(tabs)/hover');
+        else if (e.translationX < -50) router.push('/(tabs)/settings');
+      });
     return (
       <>
-        <OverwatchView onYesterday={() => setShowYesterday(true)} />
+        <GestureDetector gesture={overwatchSwipe}>
+          <View style={{ flex: 1 }}>
+            <OverwatchView onYesterday={() => setShowYesterday(true)} />
+          </View>
+        </GestureDetector>
         <YesterdayModal
           visible={showYesterday}
           userId="james_totalhome_gmail_com"
