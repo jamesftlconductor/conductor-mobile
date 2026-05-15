@@ -145,7 +145,55 @@ function SingleSheet({
   const [editedEta, setEditedEta] = useState(signal.eta || '');
   const [editedStatus, setEditedStatus] = useState(signal.status || 'Unknown');
   const [saving, setSaving] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
   const dimOpacity = useRef(new Animated.Value(1)).current;
+
+  // Suggestion engine: fetch a one-sentence contextual next-step from
+  // /api/suggest when the sheet opens for a new signal. Backend caches
+  // by signalId with a 12h TTL, so re-taps within the window are
+  // instant. Silent failure — on any error we just don't render the
+  // suggestion block, keeping the sheet visually intact.
+  useEffect(() => {
+    if (!visible || !signal.id) {
+      setSuggestion(null);
+      setSuggestionLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSuggestion(null);
+    setSuggestionLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/suggest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            signalId: signal.id,
+            signalType: signal.type || 'unknown',
+            description: signal.description || '',
+            sender: signal.sender || '',
+            status: signal.status || '',
+            eta: signal.eta || '',
+          }),
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (data && typeof data.suggestion === 'string' && data.suggestion.length > 0) {
+          setSuggestion(data.suggestion);
+        }
+      } catch {
+        // silent — leave suggestion null
+      } finally {
+        if (!cancelled) setSuggestionLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, signal.id, signal.type, signal.description, signal.sender, signal.status, signal.eta, userId]);
 
   // Reset edit state when a different signal opens — without this, an
   // unsaved edit on signal A would leak into signal B if the user
@@ -253,6 +301,16 @@ function SingleSheet({
                 )}
                 <Text style={styles.metaLine}>ETA {signal.eta || 'Unknown'}</Text>
               </View>
+
+              {(suggestionLoading || suggestion) && (
+                <View style={styles.suggestionBlock}>
+                  <Text style={styles.suggestionLabel}>NEXT STEP</Text>
+                  <Text style={styles.suggestionText}>
+                    {suggestion || '…'}
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.buttonRow}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
@@ -408,6 +466,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.3,
     textAlign: 'center',
+  },
+  suggestionBlock: {
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  suggestionLabel: {
+    color: MUTED,
+    fontSize: 10,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  suggestionText: {
+    color: BRASS,
+    fontSize: 13,
+    fontStyle: 'italic',
+    lineHeight: 18,
+    letterSpacing: 0.2,
   },
   editMetaRow: {
     flexDirection: 'row',

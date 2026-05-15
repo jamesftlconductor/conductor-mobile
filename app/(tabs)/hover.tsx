@@ -871,6 +871,40 @@ export default function HoverScreen() {
     }).start();
   }, [expandedRing, headerOpacity, legendOpacity]);
 
+  // Tracks signal IDs we've already attempted to prefetch a suggestion
+  // for. Prefetch happens on every loadSignals tick but skips anything
+  // we've already poked at — keeps the per-minute network noise to
+  // genuinely-new signals while the user has Hover open.
+  const prefetchedRef = useRef<Set<string>>(new Set());
+
+  function prefetchSuggestionsBackground(active: Signal[]) {
+    // Rank by ETA ascending; the 3 nearest signals are the ones most
+    // likely to be tapped next. Skip already-prefetched IDs and signals
+    // with no parseable ETA.
+    const ranked = active
+      .filter((s) => s.eta && !prefetchedRef.current.has(String(s.id)))
+      .map((s) => ({ s, ms: Date.parse(String(s.eta)) }))
+      .filter((x) => !isNaN(x.ms))
+      .sort((a, b) => a.ms - b.ms)
+      .slice(0, 3);
+    for (const { s } of ranked) {
+      prefetchedRef.current.add(String(s.id));
+      fetch(`${API_BASE}/suggest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: USER_ID,
+          signalId: s.id,
+          signalType: s.type || 'unknown',
+          description: s.description || '',
+          sender: s.sender || '',
+          status: s.status || '',
+          eta: s.eta || '',
+        }),
+      }).catch(() => {});
+    }
+  }
+
   async function loadSignals(): Promise<Signal[]> {
     try {
       const res = await fetch(`${API_BASE}/signals?userId=${USER_ID}`);
@@ -879,6 +913,7 @@ export default function HoverScreen() {
         (s: Signal) => !s.state || s.state === 'incoming' || s.state === 'active'
       );
       setSignals(active);
+      prefetchSuggestionsBackground(active);
       return active;
     } catch {
       return [];
