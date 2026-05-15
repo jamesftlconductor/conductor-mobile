@@ -2,10 +2,14 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
+  Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -47,7 +51,28 @@ type Pet = {
   anniversary?: string | null;
 };
 
-type CrewMember = Child | Pet;
+type Member = {
+  memberType: 'member';
+  userId: string;
+  name?: string | null;
+  fullName?: string | null;
+  picture?: string | null;
+  email?: string | null;
+  joinedAt?: string | null;
+  birthday?: string | null;
+  anniversary?: string | null;
+};
+
+type Extended = {
+  memberType: 'extended';
+  name?: string | null;
+  relationship?: string | null;
+  associatedChildren?: string[];
+  birthday?: string | null;
+  anniversary?: string | null;
+};
+
+type CrewMember = Child | Pet | Member | Extended;
 
 function isWithinNext14Days(dateStr?: string): boolean {
   if (!dateStr) return false;
@@ -123,10 +148,16 @@ function CelebrationRow({
   );
 }
 
+type EditTarget =
+  | { kind: 'member'; targetUserId: string; name: string; birthday: string; anniversary: string }
+  | { kind: 'other'; memberType: string; name: string; birthday: string; anniversary: string };
+
 export default function CrewScreen() {
   const [crew, setCrew] = useState<CrewMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editing, setEditing] = useState<EditTarget | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -146,9 +177,54 @@ export default function CrewScreen() {
     load();
   }, [load]);
 
+  async function saveEdit() {
+    if (!editing) return;
+    // Strict MM-DD validation; treat empty input as null (clears the field).
+    const norm = (v: string) => {
+      const t = v.trim();
+      if (!t) return null;
+      if (!/^\d{2}-\d{2}$/.test(t)) return undefined; // signal validation failure
+      return t;
+    };
+    const birthdayVal = norm(editing.birthday);
+    const anniversaryVal = norm(editing.anniversary);
+    if (birthdayVal === undefined || anniversaryVal === undefined) {
+      // Don't dispatch invalid input — leave modal open for correction.
+      return;
+    }
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        userId: USER_ID,
+        birthday: birthdayVal,
+        anniversary: anniversaryVal,
+      };
+      if (editing.kind === 'member') {
+        body.targetUserId = editing.targetUserId;
+      } else {
+        body.memberType = editing.memberType;
+        body.name = editing.name;
+      }
+      const res = await fetch(`${API_BASE}/signals?type=crew`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setEditing(null);
+        await load();
+      }
+    } catch {
+      // best-effort — modal stays open so the user can retry
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const members = crew.filter((m): m is Member => m.memberType === 'member');
   const children = crew.filter((m): m is Child => m.memberType === 'child');
   const pets = crew.filter((m): m is Pet => m.memberType === 'pet');
-  const isEmpty = !loading && children.length === 0 && pets.length === 0;
+  const isEmpty = !loading && members.length === 0 && children.length === 0 && pets.length === 0;
 
   return (
     <ScrollView
@@ -186,9 +262,32 @@ export default function CrewScreen() {
         </Text>
       )}
 
+      {members.length > 0 && (
+        <>
+          <Text style={styles.sectionHeader}>Household</Text>
+          {members.map((m) => (
+            <MemberCard
+              key={`member-${m.userId}`}
+              member={m}
+              onEdit={() =>
+                setEditing({
+                  kind: 'member',
+                  targetUserId: m.userId,
+                  name: m.name || m.fullName || 'Member',
+                  birthday: m.birthday || '',
+                  anniversary: m.anniversary || '',
+                })
+              }
+            />
+          ))}
+        </>
+      )}
+
       {children.length > 0 && (
         <>
-          <Text style={styles.sectionHeader}>Children</Text>
+          <Text style={[styles.sectionHeader, members.length > 0 && { marginTop: 32 }]}>
+            Children
+          </Text>
           {children.map((c, i) => (
             <ChildCard key={`child-${i}`} child={c} />
           ))}
@@ -204,7 +303,112 @@ export default function CrewScreen() {
         </>
       )}
 
+      <Modal
+        visible={!!editing}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setEditing(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setEditing(null)}>
+          <Pressable style={styles.modalSheet} onPress={() => {}}>
+            <Text style={styles.modalTitle}>
+              {editing ? `Edit ${editing.name}` : 'Edit'}
+            </Text>
+            <Text style={styles.modalLabel}>Birthday (MM-DD)</Text>
+            <TextInput
+              value={editing?.birthday || ''}
+              onChangeText={(t) =>
+                setEditing((prev) => (prev ? { ...prev, birthday: t } : prev))
+              }
+              placeholder="05-22"
+              placeholderTextColor={MUTED}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="numbers-and-punctuation"
+              maxLength={5}
+              style={styles.modalInput}
+            />
+            <Text style={[styles.modalLabel, { marginTop: 16 }]}>Anniversary (MM-DD)</Text>
+            <TextInput
+              value={editing?.anniversary || ''}
+              onChangeText={(t) =>
+                setEditing((prev) => (prev ? { ...prev, anniversary: t } : prev))
+              }
+              placeholder="06-08"
+              placeholderTextColor={MUTED}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="numbers-and-punctuation"
+              maxLength={5}
+              style={styles.modalInput}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={() => setEditing(null)}
+                disabled={saving}
+                style={styles.modalCancel}
+                activeOpacity={0.6}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={saveEdit}
+                disabled={saving}
+                style={styles.modalSave}
+                activeOpacity={0.7}>
+                <Text style={styles.modalSaveText}>{saving ? 'Saving…' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
+  );
+}
+
+function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) {
+  const display = member.name || member.fullName || 'Member';
+  const initials = (display || '?')
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .filter(Boolean)
+    .join('');
+  const joinedLabel = (() => {
+    if (!member.joinedAt) return 'Connected';
+    const ms = Date.parse(member.joinedAt);
+    if (isNaN(ms)) return 'Connected';
+    const dateStr = new Date(ms).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    return `Connected · ${dateStr}`;
+  })();
+  return (
+    <View style={styles.card}>
+      <View style={styles.memberHeader}>
+        {member.picture ? (
+          <Image source={{ uri: member.picture }} style={styles.memberAvatar} />
+        ) : (
+          <View style={[styles.memberAvatar, styles.memberAvatarFallback]}>
+            <Text style={styles.memberInitials}>{initials || '?'}</Text>
+          </View>
+        )}
+        <View style={styles.memberHeaderBody}>
+          <Text style={styles.cardName}>{display}</Text>
+          <Text style={styles.memberConnected}>{joinedLabel}</Text>
+        </View>
+        <TouchableOpacity onPress={onEdit} activeOpacity={0.6} style={styles.editLink}>
+          <Text style={styles.editLinkText}>Edit</Text>
+        </TouchableOpacity>
+      </View>
+
+      {member.birthday ? (
+        <CelebrationRow emoji="🎂" label="Birthday" mmDd={member.birthday} />
+      ) : null}
+      {member.anniversary ? (
+        <CelebrationRow emoji="💍" label="Anniversary" mmDd={member.anniversary} />
+      ) : null}
+    </View>
   );
 }
 
@@ -396,6 +600,108 @@ const styles = StyleSheet.create({
   cardAge: {
     color: MUTED,
     fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  memberHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  memberAvatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberInitials: {
+    color: OFF_WHITE,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  memberHeaderBody: {
+    flex: 1,
+  },
+  memberConnected: {
+    color: MUTED,
+    fontSize: 12,
+    marginTop: 2,
+    letterSpacing: 0.2,
+  },
+  editLink: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  editLinkText: {
+    color: BRASS,
+    fontSize: 13,
+    letterSpacing: 0.3,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalSheet: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  modalTitle: {
+    color: OFF_WHITE,
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    marginBottom: 16,
+  },
+  modalLabel: {
+    color: MUTED,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  modalInput: {
+    color: OFF_WHITE,
+    fontSize: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+    paddingVertical: 6,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 24,
+  },
+  modalCancel: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  modalCancelText: {
+    color: MUTED,
+    fontSize: 14,
+    letterSpacing: 0.3,
+  },
+  modalSave: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BRASS,
+  },
+  modalSaveText: {
+    color: BRASS,
+    fontSize: 14,
+    fontWeight: '600',
     letterSpacing: 0.3,
   },
   row: {
