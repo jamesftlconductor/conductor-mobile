@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
@@ -5,6 +6,12 @@ import Svg, { Circle } from 'react-native-svg';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
+
+// Mirrors Hover's view-mode toggle. Reads from the same AsyncStorage key
+// so the minimap on Ground stays visually in sync with whatever filter
+// Hover is currently applying.
+const VIEW_MODE_KEY = 'hoverViewMode';
+type ViewMode = 'family' | 'personal';
 
 const NAVY = '#0a0f1e';
 const OFF_WHITE = '#f0ede8';
@@ -209,6 +216,7 @@ function PulsingDot({
 
 export function Minimap() {
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('family');
   const tapScale = useRef(new Animated.Value(1)).current;
 
   async function loadSignals() {
@@ -224,17 +232,36 @@ export function Minimap() {
     }
   }
 
+  // Re-read viewMode on every refresh tick so a toggle on Hover propagates
+  // to the next minimap repaint within at most the polling interval.
+  // Setting it as part of loadSignals keeps the two reads coupled.
+  async function loadViewMode() {
+    try {
+      const v = await AsyncStorage.getItem(VIEW_MODE_KEY);
+      if (v === 'personal' || v === 'family') setViewMode(v);
+    } catch {
+      // silent
+    }
+  }
+
   useEffect(() => {
     loadSignals();
-    const id = setInterval(loadSignals, 60000);
+    loadViewMode();
+    const id = setInterval(() => {
+      loadSignals();
+      loadViewMode();
+    }, 60000);
     return () => clearInterval(id);
   }, []);
 
   const grouped = useMemo(() => {
     const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
-    for (const s of signals) out[ringForSignal(s)].push(s);
+    for (const s of signals) {
+      if (viewMode === 'personal' && s.userId && s.userId !== USER_ID) continue;
+      out[ringForSignal(s)].push(s);
+    }
     return out;
-  }, [signals]);
+  }, [signals, viewMode]);
 
   const innerSignals = grouped.inner;
   const glowColor = innerSignals.length > 0 ? colorFor(innerSignals[0]) : null;

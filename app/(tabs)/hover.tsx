@@ -810,10 +810,23 @@ function Ripple({
   );
 }
 
+// Family vs personal view: family shows every household signal; personal
+// filters to signal.userId === USER_ID or unowned (no userId). Toggle
+// persists in AsyncStorage so the choice survives app restarts. Minimap
+// on Ground reads the same key to stay in sync with Hover.
+const VIEW_MODE_KEY = 'hoverViewMode';
+type ViewMode = 'family' | 'personal';
+
+const FIRST_NAME = (() => {
+  const raw = USER_ID.split('_')[0] || '';
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
+})();
+
 export default function HoverScreen() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('family');
   const [selected, setSelected] = useState<Signal | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveAnims, setResolveAnims] = useState<ResolveAnim[]>([]);
@@ -878,6 +891,20 @@ export default function HoverScreen() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    AsyncStorage.getItem(VIEW_MODE_KEY)
+      .then((v) => {
+        if (v === 'personal' || v === 'family') setViewMode(v);
+      })
+      .catch(() => {});
+  }, []);
+
+  function toggleViewMode() {
+    const next: ViewMode = viewMode === 'family' ? 'personal' : 'family';
+    setViewMode(next);
+    AsyncStorage.setItem(VIEW_MODE_KEY, next).catch(() => {});
+  }
+
   // Auto-open Finale every time the screen gains focus and a pendingSignalId
   // is in AsyncStorage. Hover is mounted as a tab, so a one-shot mount effect
   // would only fire once — focus effect re-checks on every navigation.
@@ -911,10 +938,14 @@ export default function HoverScreen() {
     const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
     for (const s of signals) {
       if (animatingIds.has(String(s.id))) continue;
+      // Personal view: drop signals owned by someone other than this user.
+      // Unowned (userId null/missing) signals appear in both modes — they
+      // belong to the household, not a specific member.
+      if (viewMode === 'personal' && s.userId && s.userId !== USER_ID) continue;
       out[ringForSignal(s)].push(s);
     }
     return out;
-  }, [signals, resolveAnims]);
+  }, [signals, resolveAnims, viewMode]);
 
   function startRest(signal: Signal) {
     const ring = ringForSignal(signal);
@@ -1093,8 +1124,24 @@ export default function HoverScreen() {
         <Animated.View
           pointerEvents="none"
           style={[styles.topHeader, { top: insets.top + 8, opacity: headerOpacity }]}>
-          <Text style={styles.topHeaderText}>Management in Motion</Text>
+          <Text style={styles.topHeaderText}>
+            {viewMode === 'family' ? 'Management in Motion' : `${FIRST_NAME}.`}
+          </Text>
         </Animated.View>
+
+        <TouchableOpacity
+          onPress={toggleViewMode}
+          activeOpacity={0.7}
+          style={[styles.viewToggle, { top: insets.top + 8 }]}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text
+            style={[
+              styles.viewToggleEmoji,
+              { color: viewMode === 'family' ? '#b8960c' : '#5a5855' },
+            ]}>
+            {viewMode === 'family' ? '👨‍👩‍👧' : '👤'}
+          </Text>
+        </TouchableOpacity>
 
         {expandedRing !== null && <ReferenceCircle cx={cx} cy={cy} />}
         {expandedRing !== null && <ExpandedRingMarkers ring={expandedRing} cx={cx} cy={cy} />}
@@ -1281,6 +1328,15 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     textTransform: 'uppercase',
     fontWeight: '500',
+  },
+  viewToggle: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 6,
+    padding: 4,
+  },
+  viewToggleEmoji: {
+    fontSize: 22,
   },
   centerC: {
     position: 'absolute',

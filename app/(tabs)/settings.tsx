@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -59,6 +60,7 @@ type Settings = {
   categoryEnabled: Record<CategoryKey, boolean>;
   horizonEnabled: boolean;
   horizonFrequency: HorizonFrequency;
+  workCalendarName: string;  // Empty string = unset
 };
 
 const DEFAULTS: Settings = {
@@ -76,6 +78,7 @@ const DEFAULTS: Settings = {
   },
   horizonEnabled: true,
   horizonFrequency: 'Weekly',
+  workCalendarName: '',
 };
 
 function format12Hour(hhmm: string) {
@@ -105,6 +108,7 @@ async function persistAndSync(settings: Settings) {
     ['childcareEnabled', String(settings.childcareEnabled)],
     ['horizonEnabled', String(settings.horizonEnabled)],
     ['horizonFrequency', settings.horizonFrequency],
+    ['workCalendarName', settings.workCalendarName],
     ...CATEGORIES.map(
       (c) => [c.storeKey, String(settings.categoryEnabled[c.key])] as [string, string]
     ),
@@ -126,6 +130,7 @@ async function persistAndSync(settings: Settings) {
         horizonFrequency: settings.horizonFrequency,
         flaggedCategories: buildFlaggedCategories(settings.categoryEnabled),
         categoryEnabled: settings.categoryEnabled,
+        workCalendarName: settings.workCalendarName.trim(),
       },
     }),
   }).catch(() => {});
@@ -139,6 +144,7 @@ async function loadSettings(): Promise<Settings> {
     'childcareEnabled',
     'horizonEnabled',
     'horizonFrequency',
+    'workCalendarName',
     ...CATEGORIES.map((c) => c.storeKey),
   ];
   try {
@@ -156,6 +162,7 @@ async function loadSettings(): Promise<Settings> {
         (HORIZON_FREQUENCIES as readonly string[]).includes(map.horizonFrequency || '')
           ? (map.horizonFrequency as HorizonFrequency)
           : DEFAULTS.horizonFrequency,
+      workCalendarName: map.workCalendarName || DEFAULTS.workCalendarName,
       categoryEnabled: CATEGORIES.reduce((acc, c) => {
         acc[c.key] = bool(c.storeKey, DEFAULTS.categoryEnabled[c.key]);
         return acc;
@@ -340,6 +347,7 @@ export default function SettingsScreen() {
   function setHealth(v: boolean) { update({ ...settings, healthEnabled: v }); }
   function setChildcare(v: boolean) { update({ ...settings, childcareEnabled: v }); }
   function setHorizon(v: boolean) { update({ ...settings, horizonEnabled: v }); }
+  function setWorkCalendarName(v: string) { update({ ...settings, workCalendarName: v }); }
   function setCategory(k: CategoryKey, v: boolean) {
     update({ ...settings, categoryEnabled: { ...settings.categoryEnabled, [k]: v } });
   }
@@ -470,6 +478,21 @@ export default function SettingsScreen() {
           subtext="What Conductor has learned"
         />
         <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
+        <View style={styles.workCalRow}>
+          <Text style={styles.workCalLabel}>Work Calendar</Text>
+          <TextInput
+            value={settings.workCalendarName}
+            onChangeText={setWorkCalendarName}
+            placeholder="Calendar name (e.g. Work, Office)"
+            placeholderTextColor={MUTED}
+            autoCapitalize="words"
+            autoCorrect={false}
+            style={styles.workCalInput}
+          />
+          <Text style={styles.workCalHelper}>
+            Helps Conductor detect scheduling conflicts
+          </Text>
+        </View>
 
         <SectionHeader title="Conductor" />
         <Row label="Conductor" subtext="Version 1.0.0" />
@@ -547,6 +570,30 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 12,
     marginTop: 6,
+    letterSpacing: 0.2,
+  },
+  workCalRow: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: SOFT_BORDER,
+  },
+  workCalLabel: {
+    color: OFF_WHITE,
+    fontSize: 15,
+    marginBottom: 6,
+  },
+  workCalInput: {
+    color: OFF_WHITE,
+    fontSize: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: SOFT_BORDER,
+  },
+  workCalHelper: {
+    color: MUTED,
+    fontSize: 12,
+    marginTop: 8,
     letterSpacing: 0.2,
   },
   row: {
