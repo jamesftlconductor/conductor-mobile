@@ -32,6 +32,8 @@ type Child = {
   activities?: Activity[];
   school?: School | null;
   upcomingEvents?: UpcomingEvent[];
+  birthday?: string | null;
+  anniversary?: string | null;
 };
 
 type Pet = {
@@ -41,6 +43,8 @@ type Pet = {
   breed?: string | null;
   vet?: Vet | null;
   upcomingEvents?: UpcomingEvent[];
+  birthday?: string | null;
+  anniversary?: string | null;
 };
 
 type CrewMember = Child | Pet;
@@ -62,6 +66,61 @@ function formatEventDate(dateStr?: string): string {
     month: 'short',
     day: 'numeric',
   });
+}
+
+// MM-DD anchored helpers — birthdays and anniversaries are stored
+// without a year, so we compute days until the NEXT occurrence
+// (wrapping to next year if the date has already passed this year).
+function daysUntilMMDD(mmDd?: string | null): number | null {
+  if (!mmDd || !/^\d{2}-\d{2}$/.test(mmDd)) return null;
+  const [mm, dd] = mmDd.split('-').map(Number);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let candidate = new Date(now.getFullYear(), mm - 1, dd);
+  if (candidate.getTime() < today.getTime()) {
+    candidate = new Date(now.getFullYear() + 1, mm - 1, dd);
+  }
+  return Math.round((candidate.getTime() - today.getTime()) / DAY_MS);
+}
+
+function formatMMDD(mmDd?: string | null): string {
+  if (!mmDd || !/^\d{2}-\d{2}$/.test(mmDd)) return mmDd || '';
+  const [mm, dd] = mmDd.split('-').map(Number);
+  return new Date(2000, mm - 1, dd).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function CelebrationRow({
+  emoji,
+  label,
+  mmDd,
+}: {
+  emoji: string;
+  label: string;
+  mmDd: string;
+}) {
+  const days = daysUntilMMDD(mmDd);
+  const isUpcoming = days != null && days <= 30;
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowEmoji}>{emoji}</Text>
+      <View style={styles.rowBody}>
+        <Text style={[styles.rowText, isUpcoming && styles.rowTextBrass]}>
+          {label}: {formatMMDD(mmDd)}
+        </Text>
+        {days === 0 ? (
+          <Text style={styles.rowMetaBrass}>Today</Text>
+        ) : days === 1 ? (
+          <Text style={[styles.rowMeta, styles.rowMetaBrass]}>Tomorrow</Text>
+        ) : isUpcoming ? (
+          <Text style={[styles.rowMeta, styles.rowMetaBrass]}>in {days} days</Text>
+        ) : null}
+      </View>
+    </View>
+  );
 }
 
 export default function CrewScreen() {
@@ -185,6 +244,13 @@ function ChildCard({ child }: { child: Child }) {
         </View>
       ) : null}
 
+      {child.birthday ? (
+        <CelebrationRow emoji="🎂" label="Birthday" mmDd={child.birthday} />
+      ) : null}
+      {child.anniversary ? (
+        <CelebrationRow emoji="💍" label="Anniversary" mmDd={child.anniversary} />
+      ) : null}
+
       {events.length > 0 ? (
         <View style={styles.eventsBlock}>
           {events.map((e, i) => {
@@ -231,6 +297,13 @@ function PetCard({ pet }: { pet: Pet }) {
             {pet.vet.phone ? <Text style={styles.rowMeta}>{pet.vet.phone}</Text> : null}
           </View>
         </View>
+      ) : null}
+
+      {pet.birthday ? (
+        <CelebrationRow emoji="🎂" label="Birthday" mmDd={pet.birthday} />
+      ) : null}
+      {pet.anniversary ? (
+        <CelebrationRow emoji="💍" label="Anniversary" mmDd={pet.anniversary} />
       ) : null}
 
       {events.length > 0 ? (
@@ -344,6 +417,9 @@ const styles = StyleSheet.create({
     color: OFF_WHITE,
     fontSize: 14,
     lineHeight: 20,
+  },
+  rowTextBrass: {
+    color: BRASS,
   },
   rowMeta: {
     color: MUTED,
