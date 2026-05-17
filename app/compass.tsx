@@ -157,18 +157,35 @@ function Card({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
+type StreakData = {
+  currentStreak: number;
+  longestStreak: number;
+  lastResolutionDate: string | null;
+  totalResolved: number;
+  streakStartDate: string | null;
+};
+
 export default function CompassScreen() {
   const [data, setData] = useState<CompassData | null>(null);
+  const [streak, setStreak] = useState<StreakData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=compass&userId=${USER_ID}`);
-        if (!res.ok) return;
-        const d = await res.json();
-        if (!cancelled) setData(d);
+        const [compassRes, streakRes] = await Promise.all([
+          fetch(`${API_BASE}/signals?type=compass&userId=${USER_ID}`),
+          fetch(`${API_BASE}/signals?type=streak&userId=${USER_ID}`),
+        ]);
+        if (compassRes.ok) {
+          const d = await compassRes.json();
+          if (!cancelled) setData(d);
+        }
+        if (streakRes.ok) {
+          const s = await streakRes.json();
+          if (!cancelled && s && s.streak) setStreak(s.streak as StreakData);
+        }
       } catch {
         // best-effort
       } finally {
@@ -207,6 +224,33 @@ export default function CompassScreen() {
           <Text style={styles.earlyDays}>
             {data.householdAge} day{data.householdAge === 1 ? '' : 's'} since first signal
           </Text>
+        </View>
+      )}
+
+      {/* STREAK CARD — always visible once a streak fetch returns,
+          regardless of householdAge. The empty-state copy shows for
+          new households so the card never just renders 0 silently. */}
+      {!loading && streak && (
+        <View style={styles.streakCard}>
+          <Text style={styles.streakNumber}>{streak.currentStreak}</Text>
+          <Text style={styles.streakUnit}>
+            day{streak.currentStreak === 1 ? '' : 's'} running
+          </Text>
+          <View style={styles.streakDivider} />
+          {streak.currentStreak > 0 ? (
+            <>
+              <Text style={styles.streakLine}>Nothing has slipped.</Text>
+              <Text style={styles.streakMeta}>
+                Longest: {streak.longestStreak} day{streak.longestStreak === 1 ? '' : 's'}
+              </Text>
+              <Text style={styles.streakMeta}>
+                Total resolved: {streak.totalResolved} signal
+                {streak.totalResolved === 1 ? '' : 's'}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.streakEmpty}>Start a streak — Rest a signal today.</Text>
+          )}
         </View>
       )}
 
@@ -319,6 +363,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 80,
+  },
+
+  streakCard: {
+    alignItems: 'center',
+    paddingTop: 26,
+    paddingBottom: 22,
+    paddingHorizontal: 20,
+    marginBottom: 18,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(184, 150, 12, 0.35)',
+    backgroundColor: 'rgba(184, 150, 12, 0.03)',
+  },
+  streakNumber: {
+    color: BRASS,
+    fontSize: 48,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    lineHeight: 56,
+  },
+  streakUnit: {
+    color: MUTED,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  streakDivider: {
+    width: 40,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(184, 150, 12, 0.4)',
+    marginVertical: 14,
+  },
+  streakLine: {
+    color: OFF_WHITE,
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  streakMeta: {
+    color: MUTED,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  streakEmpty: {
+    color: MUTED,
+    fontSize: 13,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingHorizontal: 12,
   },
 
   earlyWrap: {
