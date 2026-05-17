@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Pressable,
@@ -13,6 +14,39 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+// Dynamic import — expo-image-picker is a native module, only
+// available after a fresh EAS build. Until then pickAndUploadPhoto
+// alerts gracefully. This preserves the OTA path for everything
+// else in the file.
+async function pickImageBase64(): Promise<string | null> {
+  try {
+    const mod: any = await (Function('return import("expo-image-picker")') as any)();
+    const ImagePicker = mod?.default ?? mod;
+    if (!ImagePicker?.launchImageLibraryAsync) throw new Error('picker missing');
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync?.();
+    if (perm && perm.status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo library access to upload.');
+      return null;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions?.Images ?? 'Images',
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.6,
+      base64: true,
+    });
+    if (result?.canceled) return null;
+    const asset = result?.assets?.[0];
+    return asset?.base64 ? `data:image/jpeg;base64,${asset.base64}` : null;
+  } catch (err: any) {
+    Alert.alert(
+      'Coming soon',
+      'Photo uploads will work after the next app build (expo-image-picker is a native module).'
+    );
+    return null;
+  }
+}
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -28,8 +62,23 @@ type Activity = { name?: string; schedule?: string; location?: string };
 type School = { name?: string; pickupTime?: string };
 type Vet = { name?: string; phone?: string };
 type UpcomingEvent = { description?: string; date?: string };
+type Prescription = { name?: string; pharmacy?: string; phone?: string; refillIntervalDays?: number; lastFilled?: string };
+type Doctor = { name?: string; specialty?: string; phone?: string; clinic?: string };
 
-type Child = {
+// Bio fields shared across child / pet / member / extended. Added
+// in this batch so PATCH ?type=crew can land arbitrary updates per
+// member.
+type BioFields = {
+  photoUrl?: string | null;
+  notes?: string | null;
+  prescriptions?: Prescription[];
+  doctors?: Doctor[];
+  signalTypes?: string[];
+  senderPatterns?: string[];
+  lastGrooming?: string | null;
+};
+
+type Child = BioFields & {
   memberType: 'child';
   name?: string | null;
   age?: number | null;
@@ -40,7 +89,7 @@ type Child = {
   anniversary?: string | null;
 };
 
-type Pet = {
+type Pet = BioFields & {
   memberType: 'pet';
   name?: string | null;
   type?: 'dog' | 'cat' | 'other' | null;
@@ -51,7 +100,7 @@ type Pet = {
   anniversary?: string | null;
 };
 
-type Member = {
+type Member = BioFields & {
   memberType: 'member';
   userId: string;
   name?: string | null;
@@ -63,7 +112,7 @@ type Member = {
   anniversary?: string | null;
 };
 
-type Extended = {
+type Extended = BioFields & {
   memberType: 'extended';
   name?: string | null;
   relationship?: string | null;
@@ -73,6 +122,125 @@ type Extended = {
 };
 
 type CrewMember = Child | Pet | Member | Extended;
+
+// Initials fallback when no photo + no Google picture is available.
+function initialsFor(name?: string | null): string {
+  if (!name) return '?';
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+async function patchCrewField(
+  memberName: string,
+  memberType: string | undefined,
+  updates: Record<string, any>
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/signals?type=crew`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: USER_ID, memberName, memberType, updates }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function uploadCrewPhoto(
+  memberName: string,
+  memberType: string | undefined,
+  base64: string
+): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE}/signals?type=crew-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: USER_ID,
+        crewMemberName: memberName,
+        memberType,
+        photo: base64,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      Alert.alert('Photo upload failed', data?.error || 'Please try again.');
+      return null;
+    }
+    const data = await res.json();
+    return typeof data?.photoUrl === 'string' ? data.photoUrl : null;
+  } catch (err: any) {
+    Alert.alert('Network error', err?.message || String(err));
+    return null;
+  }
+}
+
+function PhotoCircle({
+  photoUrl,
+  fallbackPicture,
+  name,
+  onPress,
+}: {
+  photoUrl?: string | null;
+  fallbackPicture?: string | null;
+  name?: string | null;
+  onPress: () => void;
+}) {
+  const src = photoUrl || fallbackPicture || null;
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={styles.photoCircle}
+      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+      {src ? (
+        <Image source={{ uri: src }} style={styles.photoCircleImage} />
+      ) : (
+        <Text style={styles.photoCircleInitials}>{initialsFor(name)}</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+// Auto-save TextInput — commits the trimmed value on blur if it
+// differs from the loaded value. Used for the per-member notes
+// field at the bottom of every card.
+function NotesEditor({
+  memberName,
+  memberType,
+  initial,
+}: {
+  memberName: string;
+  memberType?: string;
+  initial?: string | null;
+}) {
+  const [value, setValue] = useState<string>(initial || '');
+  const [saved, setSaved] = useState<string>(initial || '');
+  return (
+    <View style={styles.notesWrap}>
+      <Text style={styles.bioSectionHeader}>NOTES</Text>
+      <TextInput
+        value={value}
+        onChangeText={setValue}
+        onBlur={async () => {
+          const next = value.trim();
+          if (next === saved.trim()) return;
+          const ok = await patchCrewField(memberName, memberType, {
+            notes: next.length > 0 ? next : null,
+          });
+          if (ok) setSaved(next);
+        }}
+        placeholder={`Add notes about ${memberName}…`}
+        placeholderTextColor={MUTED}
+        multiline
+        style={styles.notesInput}
+      />
+    </View>
+  );
+}
 
 function isWithinNext14Days(dateStr?: string): boolean {
   if (!dateStr) return false;
@@ -366,12 +534,6 @@ export default function CrewScreen() {
 
 function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) {
   const display = member.name || member.fullName || 'Member';
-  const initials = (display || '?')
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .filter(Boolean)
-    .join('');
   const joinedLabel = (() => {
     if (!member.joinedAt) return 'Connected';
     const ms = Date.parse(member.joinedAt);
@@ -383,16 +545,23 @@ function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) 
     });
     return `Connected · ${dateStr}`;
   })();
+  const [photoUrl, setPhotoUrl] = useState<string | null>(member.photoUrl || null);
+  async function onPhotoTap() {
+    const b64 = await pickImageBase64();
+    if (!b64) return;
+    setPhotoUrl(b64);
+    const final = await uploadCrewPhoto(display, 'member', b64);
+    if (final) setPhotoUrl(final);
+  }
   return (
     <View style={styles.card}>
       <View style={styles.memberHeader}>
-        {member.picture ? (
-          <Image source={{ uri: member.picture }} style={styles.memberAvatar} />
-        ) : (
-          <View style={[styles.memberAvatar, styles.memberAvatarFallback]}>
-            <Text style={styles.memberInitials}>{initials || '?'}</Text>
-          </View>
-        )}
+        <PhotoCircle
+          photoUrl={photoUrl}
+          fallbackPicture={member.picture}
+          name={display}
+          onPress={onPhotoTap}
+        />
         <View style={styles.memberHeaderBody}>
           <Text style={styles.cardName}>{display}</Text>
           <Text style={styles.memberConnected}>{joinedLabel}</Text>
@@ -408,6 +577,8 @@ function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) 
       {member.anniversary ? (
         <CelebrationRow emoji="💍" label="Anniversary" mmDd={member.anniversary} />
       ) : null}
+
+      <NotesEditor memberName={display} memberType="member" initial={member.notes} />
     </View>
   );
 }
@@ -416,13 +587,24 @@ function ChildCard({ child }: { child: Child }) {
   const name = child.name || 'Child';
   const activities = (child.activities || []).filter((a) => a && a.name);
   const events = (child.upcomingEvents || []).filter((e) => e && e.description);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(child.photoUrl || null);
+  async function onPhotoTap() {
+    const b64 = await pickImageBase64();
+    if (!b64) return;
+    setPhotoUrl(b64); // optimistic
+    const final = await uploadCrewPhoto(name, 'child', b64);
+    if (final) setPhotoUrl(final);
+  }
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardName}>{name}</Text>
-        {typeof child.age === 'number' ? (
-          <Text style={styles.cardAge}>age {child.age}</Text>
-        ) : null}
+        <PhotoCircle photoUrl={photoUrl} name={name} onPress={onPhotoTap} />
+        <View style={styles.cardNameWrap}>
+          <Text style={styles.cardName}>{name}</Text>
+          {typeof child.age === 'number' ? (
+            <Text style={styles.cardAge}>age {child.age}</Text>
+          ) : null}
+        </View>
       </View>
 
       {activities.map((a, i) => (
@@ -475,6 +657,7 @@ function ChildCard({ child }: { child: Child }) {
           })}
         </View>
       ) : null}
+      <NotesEditor memberName={name} memberType="child" initial={child.notes} />
     </View>
   );
 }
@@ -486,11 +669,22 @@ function PetCard({ pet }: { pet: Pet }) {
       ? `${pet.type}, ${pet.breed}`
       : pet.type || pet.breed || '';
   const events = (pet.upcomingEvents || []).filter((e) => e && e.description);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(pet.photoUrl || null);
+  async function onPhotoTap() {
+    const b64 = await pickImageBase64();
+    if (!b64) return;
+    setPhotoUrl(b64);
+    const final = await uploadCrewPhoto(name, 'pet', b64);
+    if (final) setPhotoUrl(final);
+  }
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardName}>🐾 {name}</Text>
-        {typeLabel ? <Text style={styles.cardAge}>{typeLabel}</Text> : null}
+        <PhotoCircle photoUrl={photoUrl} name={name} onPress={onPhotoTap} />
+        <View style={styles.cardNameWrap}>
+          <Text style={styles.cardName}>🐾 {name}</Text>
+          {typeLabel ? <Text style={styles.cardAge}>{typeLabel}</Text> : null}
+        </View>
       </View>
 
       {pet.vet && pet.vet.name ? (
@@ -530,6 +724,7 @@ function PetCard({ pet }: { pet: Pet }) {
           })}
         </View>
       ) : null}
+      <NotesEditor memberName={name} memberType="pet" initial={pet.notes} />
     </View>
   );
 }
@@ -587,9 +782,46 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  cardNameWrap: { flex: 1 },
+  photoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: BRASS,
+    backgroundColor: '#2a2a2a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  photoCircleImage: { width: '100%', height: '100%' },
+  photoCircleInitials: {
+    color: BRASS,
+    fontSize: 22,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  notesWrap: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  notesInput: {
+    color: OFF_WHITE,
+    fontSize: 13,
+    minHeight: 60,
+    paddingTop: 8,
+  },
+  bioSectionHeader: {
+    color: MUTED,
+    fontSize: 9,
+    letterSpacing: 2,
+    marginBottom: 4,
   },
   cardName: {
     color: OFF_WHITE,
