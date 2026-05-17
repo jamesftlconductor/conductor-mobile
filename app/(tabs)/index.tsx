@@ -429,6 +429,22 @@ export default function TakeoffScreen() {
   const [quickActed, setQuickActed] = useState<
     Record<string, 'done' | 'snoozed' | 'dismissed'>
   >({});
+  // Took Care Of band — items Conductor auto-resolved or expired
+  // in the last 48h. Collapsed by default. Per-item dismissals are
+  // persisted to AsyncStorage so a return-to-Ground doesn't undo
+  // them.
+  const [autoResolutions, setAutoResolutions] = useState<
+    {
+      signalId: string | number;
+      description: string;
+      sender: string | null;
+      action: string;
+      resolvedAt: string;
+      wasAutomatic: boolean;
+    }[]
+  >([]);
+  const [autoResExpanded, setAutoResExpanded] = useState(false);
+  const [dismissedAutoRes, setDismissedAutoRes] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   // Ask Conductor — single-shot Q&A. Always fresh call (server-side
   // 30min cache covers the duplicate-question case). State carries the
@@ -574,6 +590,26 @@ export default function TakeoffScreen() {
       setTransparency(null);
     } finally {
       setLoading(false);
+    }
+
+    // Fire-and-forget — populates the Took Care Of band after the
+    // main brief renders so the brief isn't blocked on this fetch.
+    fetch(
+      'https://conductor-ivory.vercel.app/api/signals?type=autoResolutions&userId=james_totalhome_gmail_com'
+    )
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d?.items)) setAutoResolutions(d.items);
+      })
+      .catch(() => {});
+    try {
+      const dismissedRaw = await AsyncStorage.getItem('autoRes:dismissed');
+      if (dismissedRaw) {
+        const arr = JSON.parse(dismissedRaw);
+        if (Array.isArray(arr)) setDismissedAutoRes(new Set(arr));
+      }
+    } catch {
+      // best-effort
     }
   }
 
@@ -955,6 +991,75 @@ export default function TakeoffScreen() {
               )}
             </View>
           ) : null}
+
+          {!loading && (() => {
+            // Took Care Of band — items Conductor auto-resolved or
+            // expired in the last 48h, minus per-item dismissals.
+            const visible = autoResolutions.filter(
+              (i) => !dismissedAutoRes.has(String(i.signalId))
+            );
+            if (visible.length === 0) return null;
+            const actionLabel = (a: string) =>
+              a === 'expired' ? 'passed ✓' : 'handled ✓';
+            return (
+              <View style={styles.autoResWrap}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
+                    LayoutAnimation.configureNext({
+                      duration: 200,
+                      create: { type: 'easeInEaseOut', property: 'opacity' },
+                      update: { type: 'easeInEaseOut' },
+                    });
+                    setAutoResExpanded((v) => !v);
+                  }}
+                  activeOpacity={0.6}
+                  style={styles.autoResHeader}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.autoResHeaderText}>
+                    Conductor took care of {visible.length} thing
+                    {visible.length === 1 ? '' : 's'} ✓ {autoResExpanded ? '−' : '+'}
+                  </Text>
+                </TouchableOpacity>
+                {autoResExpanded && (
+                  <View style={styles.autoResList}>
+                    {visible.slice(0, 8).map((item) => (
+                      <View key={String(item.signalId)} style={styles.autoResRow}>
+                        <Text style={styles.autoResDesc} numberOfLines={2}>
+                          {item.description || 'Signal'}
+                        </Text>
+                        <Text style={styles.autoResLabel}>
+                          {actionLabel(item.action)}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const next = new Set(dismissedAutoRes);
+                            next.add(String(item.signalId));
+                            setDismissedAutoRes(next);
+                            AsyncStorage.setItem('autoRes:dismissed', JSON.stringify([...next])).catch(() => {});
+                          }}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                          <Text style={styles.autoResDismiss}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <TouchableOpacity
+                      onPress={() => {
+                        const all = new Set([
+                          ...dismissedAutoRes,
+                          ...visible.map((i) => String(i.signalId)),
+                        ]);
+                        setDismissedAutoRes(all);
+                        AsyncStorage.setItem('autoRes:dismissed', JSON.stringify([...all])).catch(() => {});
+                      }}
+                      style={styles.autoResDismissAllBtn}>
+                      <Text style={styles.autoResDismissAllText}>Dismiss all</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          })()}
 
           {!loading && weekInReview ? (
             // Week in Review — Clearance-only Sunday reflection paragraph.
@@ -1377,6 +1482,54 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(184, 150, 12, 0.2)',
     marginBottom: 16,
+  },
+  autoResWrap: {
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  autoResHeader: {
+    alignItems: 'flex-end',
+    paddingVertical: 4,
+  },
+  autoResHeaderText: {
+    color: '#5a5855',
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  autoResList: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  autoResRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    gap: 10,
+  },
+  autoResDesc: {
+    flex: 1,
+    color: '#a8a5a0',
+    fontSize: 13,
+  },
+  autoResLabel: {
+    color: '#5a5855',
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
+  autoResDismiss: {
+    color: '#5a5855',
+    fontSize: 14,
+    paddingHorizontal: 4,
+  },
+  autoResDismissAllBtn: {
+    alignSelf: 'flex-end',
+    paddingVertical: 6,
+  },
+  autoResDismissAllText: {
+    color: '#5a5855',
+    fontSize: 10,
   },
   handoffWrap: {
     alignItems: 'flex-end',
