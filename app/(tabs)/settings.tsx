@@ -313,6 +313,20 @@ export default function SettingsScreen() {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
   const [apiKeyCopied, setApiKeyCopied] = useState(false);
+  // Household location — polled on focus so the row reflects whatever
+  // detection or manual edit landed since the last visit. Stored shape
+  // matches the backend response: city/state/marketRegion plus
+  // lat/lon/timezone.
+  const [location, setLocation] = useState<{
+    city?: string;
+    state?: string;
+    marketRegion?: string;
+    source?: string;
+  } | null>(null);
+  const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [locationCityDraft, setLocationCityDraft] = useState('');
+  const [locationStateDraft, setLocationStateDraft] = useState('');
+  const [locationSaving, setLocationSaving] = useState(false);
   // Local draft for the work-calendar TextInput. Commits to settings (and
   // POSTs to backend) only onBlur, never per-keystroke — eliminates a race
   // condition where a partial mid-edit value could be the last POST to
@@ -367,6 +381,16 @@ export default function SettingsScreen() {
         .then((d) => {
           if (cancelled || !d) return;
           setOuraConnected(d.connected === true);
+        })
+        .catch(() => {});
+      // Household location — first hit also runs IP-based auto-detection
+      // server-side, so subsequent renders show a real city even if the
+      // user has never manually set it.
+      fetch(`${API_BASE}/signals?type=location&userId=${USER_ID}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled || !d?.location) return;
+          setLocation(d.location);
         })
         .catch(() => {});
       return () => {
@@ -424,6 +448,35 @@ export default function SettingsScreen() {
       // by-reopen affordance via the loading text.
     } finally {
       setApiKeyLoading(false);
+    }
+  }
+
+  function openLocationEditor() {
+    setLocationCityDraft(location?.city || '');
+    setLocationStateDraft(location?.state || '');
+    setLocationModalVisible(true);
+  }
+
+  async function saveLocation() {
+    const city = locationCityDraft.trim();
+    const state = locationStateDraft.trim().toUpperCase();
+    if (!city || !state) return;
+    setLocationSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/signals?type=location`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID, city, state }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.location) setLocation(data.location);
+      }
+    } catch {
+      // best-effort
+    } finally {
+      setLocationSaving(false);
+      setLocationModalVisible(false);
     }
   }
 
@@ -531,6 +584,16 @@ export default function SettingsScreen() {
           }
         />
         <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
+        <Row
+          label="Location"
+          subtext={
+            location?.city
+              ? `${location.city}, ${location.state || ''}${location.source === 'manual' ? '' : ' · auto-detected'}`
+              : 'Detecting…'
+          }
+          onPress={openLocationEditor}
+          right={<ChevronRight size={18} color={MUTED} />}
+        />
         <ChevronRow
           label="The Programme"
           // Cast: expo-router's typed-routes generator hasn't regenerated
@@ -738,6 +801,57 @@ export default function SettingsScreen() {
               onPress={() => setApiKeyModalVisible(false)}
               style={styles.apiKeyDoneBtn}>
               <Text style={styles.apiKeyDoneBtnText}>Done</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={locationModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setLocationModalVisible(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setLocationModalVisible(false)}>
+          <Pressable style={styles.apiKeySheet} onPress={() => {}}>
+            <Text style={styles.apiKeySheetTitle}>Location</Text>
+            <Text style={styles.apiKeySubtext}>
+              Conductor uses your location for weather, market rates, and
+              local service providers.
+            </Text>
+            <View style={{ gap: 8 }}>
+              <TextInput
+                value={locationCityDraft}
+                onChangeText={setLocationCityDraft}
+                placeholder="City"
+                placeholderTextColor={MUTED}
+                style={styles.locationInput}
+                autoCapitalize="words"
+              />
+              <TextInput
+                value={locationStateDraft}
+                onChangeText={setLocationStateDraft}
+                placeholder="State (e.g. FL, NY)"
+                placeholderTextColor={MUTED}
+                style={styles.locationInput}
+                autoCapitalize="characters"
+                maxLength={2}
+              />
+            </View>
+            <TouchableOpacity
+              onPress={saveLocation}
+              disabled={locationSaving || locationCityDraft.trim().length === 0 || locationStateDraft.trim().length === 0}
+              style={[
+                styles.apiKeyCopyBtn,
+                (locationSaving || locationCityDraft.trim().length === 0 || locationStateDraft.trim().length === 0) && { opacity: 0.4 },
+              ]}>
+              <Text style={styles.apiKeyCopyBtnText}>
+                {locationSaving ? 'Saving…' : 'Save'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setLocationModalVisible(false)}
+              style={styles.apiKeyDoneBtn}>
+              <Text style={styles.apiKeyDoneBtnText}>Cancel</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -1022,5 +1136,13 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 13,
     letterSpacing: 0.3,
+  },
+  locationInput: {
+    color: OFF_WHITE,
+    fontSize: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 8,
   },
 });
