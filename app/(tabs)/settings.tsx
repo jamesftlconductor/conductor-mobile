@@ -610,6 +610,10 @@ export default function SettingsScreen() {
           // pick it up on the next `expo start`/build.
           onPress={() => router.push('/programme' as never)}
         />
+        <ChevronRow
+          label="The Network"
+          onPress={() => router.push('/network' as never)}
+        />
         <Row
           label="Connected accounts"
           right={
