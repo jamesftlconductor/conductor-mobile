@@ -402,6 +402,9 @@ export default function TakeoffScreen() {
   // returns null on non-Sunday and on empty memory weeks; the mobile
   // section is conditional on truthy.
   const [weekInReview, setWeekInReview] = useState<string | null>(null);
+  // Month in Review — only populated on the last day of an ET month
+  // (clearance only). Rendered below Week in Review when present.
+  const [monthInReview, setMonthInReview] = useState<string | null>(null);
   const theReadOpacity = useRef(new Animated.Value(0)).current;
   // The Pulse — synthesis layer output: one warm sentence summarizing the
   // day's signal load + health + weather as a single editorial cue, plus
@@ -577,6 +580,9 @@ export default function TakeoffScreen() {
         : null);
       setWeekInReview(typeof data.weekInReview === 'string' && data.weekInReview.length > 0
         ? data.weekInReview
+        : null);
+      setMonthInReview(typeof data.monthInReview === 'string' && data.monthInReview.length > 0
+        ? data.monthInReview
         : null);
       setPulse(typeof data.pulse === 'string' && data.pulse.length > 0
         ? data.pulse
@@ -1180,6 +1186,19 @@ export default function TakeoffScreen() {
               <Text style={styles.weekInReviewLabel}>THIS WEEK</Text>
               <Text style={[styles.weekInReviewText, { color: theme.brief }]}>
                 {weekInReview}
+              </Text>
+            </View>
+          ) : null}
+
+          {!loading && monthInReview ? (
+            // Month in Review — only present on the last day of an
+            // ET month, clearance-mode only. Same brass-divider
+            // pattern as Week in Review, distinct THIS MONTH label.
+            <View style={styles.weekInReviewWrap}>
+              <View style={styles.weekInReviewBrassLine} />
+              <Text style={styles.weekInReviewLabel}>THIS MONTH</Text>
+              <Text style={[styles.weekInReviewText, { color: theme.brief }]}>
+                {monthInReview}
               </Text>
             </View>
           ) : null}
