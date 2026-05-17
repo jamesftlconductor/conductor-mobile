@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
@@ -344,6 +345,11 @@ export default function CrewScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Re-fetch on screen focus so signed photo URLs stay fresh — they
+  // expire 1h after generation. Tab-switching back to Crew always
+  // pulls a new batch.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function saveEdit() {
     if (!editing) return;
