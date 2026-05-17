@@ -112,7 +112,7 @@ export default function OnboardingScreen() {
     }).start();
 
     const navTimer = setTimeout(() => {
-      if (!cancelled) router.replace('/(tabs)');
+      if (!cancelled) router.replace('/onboard-reveal' as never);
     }, FADE_MS + READY_HOLD_MS);
 
     return () => {
