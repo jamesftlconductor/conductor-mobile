@@ -359,6 +359,10 @@ export default function TakeoffScreen() {
   // prose in via Animated.timing on opacity.
   const [theRead, setTheRead] = useState<string | null>(null);
   const [theReadExpanded, setTheReadExpanded] = useState(false);
+  // Week in Review — only present in Clearance mode on Sundays. Server
+  // returns null on non-Sunday and on empty memory weeks; the mobile
+  // section is conditional on truthy.
+  const [weekInReview, setWeekInReview] = useState<string | null>(null);
   const theReadOpacity = useRef(new Animated.Value(0)).current;
   // The Pulse — synthesis layer output: one warm sentence summarizing the
   // day's signal load + health + weather as a single editorial cue, plus
@@ -440,6 +444,7 @@ export default function TakeoffScreen() {
     setFeedback(null);
     setTheRead(null);
     setTheReadExpanded(false);
+    setWeekInReview(null);
     theReadOpacity.setValue(0);
     setPulse(null);
     setPulseFlags([]);
@@ -470,6 +475,9 @@ export default function TakeoffScreen() {
         : null);
       setTheRead(typeof data.theRead === 'string' && data.theRead.length > 0
         ? data.theRead
+        : null);
+      setWeekInReview(typeof data.weekInReview === 'string' && data.weekInReview.length > 0
+        ? data.weekInReview
         : null);
       setPulse(typeof data.pulse === 'string' && data.pulse.length > 0
         ? data.pulse
@@ -699,6 +707,20 @@ export default function TakeoffScreen() {
               </Text>
             </View>
           )}
+
+          {!loading && weekInReview ? (
+            // Week in Review — Clearance-only Sunday reflection paragraph.
+            // Server returns null on non-Sunday and on empty memory weeks,
+            // so this block only renders when there's genuinely something
+            // worth reading.
+            <View style={styles.weekInReviewWrap}>
+              <View style={styles.weekInReviewBrassLine} />
+              <Text style={styles.weekInReviewLabel}>THIS WEEK</Text>
+              <Text style={[styles.weekInReviewText, { color: theme.brief }]}>
+                {weekInReview}
+              </Text>
+            </View>
+          ) : null}
 
           {!loading && theRead ? (
             // The Read — overflow context Conductor deemed worth knowing
@@ -932,6 +954,28 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     fontWeight: '300',
     letterSpacing: 0.2,
+  },
+  // Week in Review — Clearance-only Sunday reflection. Brass-edged top
+  // line separates the paragraph from the main brief; small uppercase
+  // "THIS WEEK" label sits above the prose.
+  weekInReviewWrap: {
+    marginTop: 24,
+  },
+  weekInReviewBrassLine: {
+    height: 1,
+    backgroundColor: 'rgba(184, 150, 12, 0.2)',
+    marginBottom: 16,
+  },
+  weekInReviewLabel: {
+    color: '#5a5855',
+    fontSize: 9,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  weekInReviewText: {
+    fontSize: 14,
+    lineHeight: 22,
   },
   theReadWrap: {
     marginTop: 24,

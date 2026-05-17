@@ -62,6 +62,7 @@ type Settings = {
   horizonEnabled: boolean;
   horizonFrequency: HorizonFrequency;
   workCalendarName: string;  // Empty string = unset
+  middayEnabled: boolean;    // Opt-in midday check-in push
 };
 
 const DEFAULTS: Settings = {
@@ -80,6 +81,7 @@ const DEFAULTS: Settings = {
   horizonEnabled: true,
   horizonFrequency: 'Weekly',
   workCalendarName: '',
+  middayEnabled: false,
 };
 
 function format12Hour(hhmm: string) {
@@ -110,6 +112,7 @@ async function persistAndSync(settings: Settings) {
     ['horizonEnabled', String(settings.horizonEnabled)],
     ['horizonFrequency', settings.horizonFrequency],
     ['workCalendarName', settings.workCalendarName],
+    ['middayEnabled', String(settings.middayEnabled)],
     ...CATEGORIES.map(
       (c) => [c.storeKey, String(settings.categoryEnabled[c.key])] as [string, string]
     ),
@@ -132,6 +135,7 @@ async function persistAndSync(settings: Settings) {
         flaggedCategories: buildFlaggedCategories(settings.categoryEnabled),
         categoryEnabled: settings.categoryEnabled,
         workCalendarName: settings.workCalendarName.trim(),
+        middayEnabled: settings.middayEnabled,
       },
     }),
   }).catch(() => {});
@@ -146,6 +150,7 @@ async function loadSettings(): Promise<Settings> {
     'horizonEnabled',
     'horizonFrequency',
     'workCalendarName',
+    'middayEnabled',
     ...CATEGORIES.map((c) => c.storeKey),
   ];
   try {
@@ -164,6 +169,7 @@ async function loadSettings(): Promise<Settings> {
           ? (map.horizonFrequency as HorizonFrequency)
           : DEFAULTS.horizonFrequency,
       workCalendarName: map.workCalendarName || DEFAULTS.workCalendarName,
+      middayEnabled: bool('middayEnabled', DEFAULTS.middayEnabled),
       categoryEnabled: CATEGORIES.reduce((acc, c) => {
         acc[c.key] = bool(c.storeKey, DEFAULTS.categoryEnabled[c.key]);
         return acc;
@@ -358,6 +364,7 @@ export default function SettingsScreen() {
   function setHealth(v: boolean) { update({ ...settings, healthEnabled: v }); }
   function setChildcare(v: boolean) { update({ ...settings, childcareEnabled: v }); }
   function setHorizon(v: boolean) { update({ ...settings, horizonEnabled: v }); }
+  function setMidday(v: boolean) { update({ ...settings, middayEnabled: v }); }
   function commitWorkCalendarName() {
     const trimmed = workCalDraft.trim();
     if (trimmed === (settings.workCalendarName || '').trim()) return;
@@ -469,6 +476,12 @@ export default function SettingsScreen() {
           label="Clearance"
           rightText={format12Hour(settings.clearanceTime)}
           onPress={() => openTimeEditor('clearanceTime', 'Clearance')}
+        />
+        <ToggleRow
+          label="Midday Check-in"
+          subtext="A brief update at 1pm"
+          value={settings.middayEnabled}
+          onChange={setMidday}
         />
 
         <SectionHeader
