@@ -12,6 +12,7 @@ import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthCon
 import { Minimap } from '@/components/Minimap';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
+import { Tooltip } from '@/components/Tooltip';
 
 // LayoutAnimation needs an opt-in on Android; iOS supports it by default.
 // Enabling at module-load is the official pattern — re-calling per-toggle
@@ -476,6 +477,11 @@ export default function TakeoffScreen() {
   const [quickActed, setQuickActed] = useState<
     Record<string, 'done' | 'snoozed' | 'dismissed'>
   >({});
+  // One-time tutorial flags. Loaded from AsyncStorage on mount and
+  // gated per-feature so each tooltip appears exactly once per
+  // device. Setting a flag never un-sets — these are first-run hints.
+  const [showSignalTapTip, setShowSignalTapTip] = useState(false);
+  const [showPulseTip, setShowPulseTip] = useState(false);
   // Took Care Of band — items Conductor auto-resolved or expired
   // in the last 48h. Collapsed by default. Per-item dismissals are
   // persisted to AsyncStorage so a return-to-Ground doesn't undo
@@ -680,6 +686,28 @@ export default function TakeoffScreen() {
           : null
       );
       setHandoffAcked(false);
+
+      // One-time tooltips — only flip on once. Signal-tap tooltip
+      // shows when the brief actually has chip segments to point at;
+      // Pulse tooltip shows when pulse is present + auto-dismisses
+      // after 4s on first viewing.
+      try {
+        const seenTap = await AsyncStorage.getItem('tutorial_signal_tap');
+        const segArr = Array.isArray(data.segments) ? data.segments : [];
+        if (!seenTap && segArr.some((s: any) => s?.type === 'signal')) {
+          setShowSignalTapTip(true);
+        }
+      } catch { /* ignore */ }
+      try {
+        const seenPulse = await AsyncStorage.getItem('tutorial_pulse');
+        if (!seenPulse && typeof data.pulse === 'string' && data.pulse.length > 0) {
+          setShowPulseTip(true);
+          setTimeout(() => {
+            setShowPulseTip(false);
+            AsyncStorage.setItem('tutorial_pulse', 'done').catch(() => {});
+          }, 4000);
+        }
+      } catch { /* ignore */ }
 
       // Conductor question — load + filter against today's
       // dismissed-questions list so the user doesn't see the same
@@ -930,6 +958,17 @@ export default function TakeoffScreen() {
               style={styles.pulseWrap}>
               <Text style={styles.pulseLabel}>THE PULSE</Text>
               <Text style={styles.pulseText}>{pulse}</Text>
+              {showPulseTip ? (
+                <View style={styles.tooltipInline} pointerEvents="box-none">
+                  <Tooltip
+                    visible={showPulseTip}
+                    message="Tap to see what Conductor is synthesizing today."
+                    arrow="up"
+                    showButton={false}
+                    onDismiss={() => setShowPulseTip(false)}
+                  />
+                </View>
+              ) : null}
               {pulseExpanded && pulseData ? (
                 <View style={styles.pulseCard}>
                   <PulseHealthSection health={pulseData.health} />
@@ -1069,6 +1108,19 @@ export default function TakeoffScreen() {
                   return <Text key={i}>{seg.content}</Text>;
                 })}
               </Text>
+              {showSignalTapTip ? (
+                <View style={styles.tooltipInline} pointerEvents="box-none">
+                  <Tooltip
+                    visible={showSignalTapTip}
+                    message="Tap any highlighted phrase to see details and take action."
+                    arrow="up"
+                    onDismiss={() => {
+                      setShowSignalTapTip(false);
+                      AsyncStorage.setItem('tutorial_signal_tap', 'done').catch(() => {});
+                    }}
+                  />
+                </View>
+              ) : null}
             </View>
           )}
 
@@ -1948,6 +2000,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.5,
     textAlign: 'center',
+  },
+  tooltipInline: {
+    marginTop: 8,
+    alignItems: 'center',
   },
   quickActionBackdrop: {
     flex: 1,

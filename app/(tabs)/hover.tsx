@@ -28,6 +28,7 @@ import {
   typeKeyFor,
 } from '@/components/signalTypes';
 import YesterdayModal from '@/components/YesterdayModal';
+import { Tooltip } from '@/components/Tooltip';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -875,6 +876,15 @@ export default function HoverScreen() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [showRingsTip, setShowRingsTip] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const seen = await AsyncStorage.getItem('tutorial_hover_rings');
+        if (!seen) setShowRingsTip(true);
+      } catch { /* ignore */ }
+    })();
+  }, []);
   const [viewMode, setViewMode] = useState<ViewMode>('family');
   const [selected, setSelected] = useState<Signal | null>(null);
   const [resolving, setResolving] = useState(false);
@@ -1353,6 +1363,18 @@ export default function HoverScreen() {
           userId={USER_ID}
           onClose={() => setShowAddSignal(false)}
           onAdded={handleSignalAdded}
+        />
+
+        <Tooltip
+          visible={showRingsTip}
+          message="Three rings show urgency — inner ring needs your attention today."
+          arrow="up"
+          top={cy + 90}
+          left={cx - 160}
+          onDismiss={() => {
+            setShowRingsTip(false);
+            AsyncStorage.setItem('tutorial_hover_rings', 'done').catch(() => {});
+          }}
         />
 
         <YesterdayModal

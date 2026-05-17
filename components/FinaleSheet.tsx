@@ -13,7 +13,9 @@ import {
   View,
 } from 'react-native';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { metaFor, Signal, TYPE_META } from './signalTypes';
+import { Tooltip } from './Tooltip';
 
 const BG = '#0f0f0f';
 const OFF_WHITE = '#f0ede8';
@@ -146,6 +148,21 @@ function SingleSheet({
   const [editing, setEditing] = useState(false);
   const [editedDescription, setEditedDescription] = useState(signal.description || '');
   const [editedEta, setEditedEta] = useState(signal.eta || '');
+  const [showFinaleTip, setShowFinaleTip] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    (async () => {
+      try {
+        const seen = await AsyncStorage.getItem('tutorial_finale');
+        if (!seen) setShowFinaleTip(true);
+      } catch { /* ignore */ }
+    })();
+  }, [visible]);
+  function dismissFinaleTip() {
+    if (!showFinaleTip) return;
+    setShowFinaleTip(false);
+    AsyncStorage.setItem('tutorial_finale', 'done').catch(() => {});
+  }
   const [editedStatus, setEditedStatus] = useState(signal.status || 'Unknown');
   const [saving, setSaving] = useState(false);
   const [suggestion, setSuggestion] = useState<string | null>(null);
@@ -329,15 +346,27 @@ function SingleSheet({
                 </View>
               )}
 
+              {showFinaleTip ? (
+                <View style={styles.finaleTipWrap} pointerEvents="box-none">
+                  <Tooltip
+                    visible={showFinaleTip}
+                    message="Rest when it's handled. Hold when you're aware but not ready."
+                    arrow="down"
+                    showButton={false}
+                    onDismiss={dismissFinaleTip}
+                  />
+                </View>
+              ) : null}
+
               <View style={styles.buttonRow}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
-                  onPress={() => onHold(signal)}>
+                  onPress={() => { dismissFinaleTip(); onHold(signal); }}>
                   <Text style={styles.btnSecondaryText}>Hold</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary, resolving && { opacity: 0.5 }]}
-                  onPress={() => onRest(signal)}
+                  onPress={() => { dismissFinaleTip(); onRest(signal); }}
                   disabled={resolving}>
                   <Text style={styles.btnPrimaryText}>Rest</Text>
                 </TouchableOpacity>
@@ -635,6 +664,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.3,
     textAlign: 'center',
+  },
+  finaleTipWrap: {
+    alignItems: 'center',
+    marginBottom: 6,
+    paddingHorizontal: 20,
   },
   attributionRow: {
     marginTop: 12,
