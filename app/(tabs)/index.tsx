@@ -1043,18 +1043,24 @@ export default function TakeoffScreen() {
                         </TouchableOpacity>
                       </View>
                     ))}
-                    <TouchableOpacity
-                      onPress={() => {
-                        const all = new Set([
-                          ...dismissedAutoRes,
-                          ...visible.map((i) => String(i.signalId)),
-                        ]);
-                        setDismissedAutoRes(all);
-                        AsyncStorage.setItem('autoRes:dismissed', JSON.stringify([...all])).catch(() => {});
-                      }}
-                      style={styles.autoResDismissAllBtn}>
-                      <Text style={styles.autoResDismissAllText}>Dismiss all</Text>
-                    </TouchableOpacity>
+                    <View style={styles.autoResFooter}>
+                      <TouchableOpacity
+                        onPress={() => router.push('/journal' as never)}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                        <Text style={styles.autoResViewAllText}>View all →</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const all = new Set([
+                            ...dismissedAutoRes,
+                            ...visible.map((i) => String(i.signalId)),
+                          ]);
+                          setDismissedAutoRes(all);
+                          AsyncStorage.setItem('autoRes:dismissed', JSON.stringify([...all])).catch(() => {});
+                        }}>
+                        <Text style={styles.autoResDismissAllText}>Dismiss all</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
               </View>
@@ -1530,6 +1536,17 @@ const styles = StyleSheet.create({
   autoResDismissAllText: {
     color: '#5a5855',
     fontSize: 10,
+  },
+  autoResFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 6,
+  },
+  autoResViewAllText: {
+    color: '#b8960c',
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
   handoffWrap: {
     alignItems: 'flex-end',

@@ -272,6 +272,12 @@ export default function CompassScreen() {
             <Text style={styles.cardSub}>
               Your household has been on Conductor for {data.householdAge} days
             </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/journal' as never)}
+              style={styles.viewMemoryBtn}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Text style={styles.viewMemoryText}>View memory →</Text>
+            </TouchableOpacity>
           </Card>
 
           {/* CARD 2 — TOP SIGNAL SOURCES */}
@@ -623,6 +629,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
     marginBottom: 8,
+  },
+  viewMemoryBtn: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  viewMemoryText: {
+    color: BRASS,
+    fontSize: 12,
+    letterSpacing: 0.3,
   },
   topShareText: {
     color: BRASS,
