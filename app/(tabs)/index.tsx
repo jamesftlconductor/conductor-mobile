@@ -445,6 +445,10 @@ export default function TakeoffScreen() {
   // Month in Review — only populated on the last day of an ET month
   // (clearance only). Rendered below Week in Review when present.
   const [monthInReview, setMonthInReview] = useState<string | null>(null);
+  // Year in Review — clearance only, December 31 only. Treated as a
+  // major surface — thicker brass divider, slightly larger type,
+  // small "Saved to your household record" italic underneath.
+  const [yearInReview, setYearInReview] = useState<string | null>(null);
   const theReadOpacity = useRef(new Animated.Value(0)).current;
   // The Pulse — synthesis layer output: one warm sentence summarizing the
   // day's signal load + health + weather as a single editorial cue, plus
@@ -659,6 +663,9 @@ export default function TakeoffScreen() {
         : null);
       setMonthInReview(typeof data.monthInReview === 'string' && data.monthInReview.length > 0
         ? data.monthInReview
+        : null);
+      setYearInReview(typeof data.yearInReview === 'string' && data.yearInReview.length > 0
+        ? data.yearInReview
         : null);
       setPulse(typeof data.pulse === 'string' && data.pulse.length > 0
         ? data.pulse
@@ -1252,6 +1259,22 @@ export default function TakeoffScreen() {
             </View>
           ) : null}
 
+          {!loading && yearInReview ? (
+            // Year in Review — clearance only, December 31 only.
+            // Treated as the major surface: thicker brass divider,
+            // larger type, persistence note underneath.
+            <View style={styles.yearInReviewWrap}>
+              <View style={styles.yearInReviewBrassLine} />
+              <Text style={styles.yearInReviewLabel}>THIS YEAR</Text>
+              <Text style={[styles.yearInReviewText, { color: theme.brief }]}>
+                {yearInReview}
+              </Text>
+              <Text style={styles.yearInReviewFooter}>
+                Saved to your household record
+              </Text>
+            </View>
+          ) : null}
+
           {!loading && weekInReview ? (
             // Week in Review — Clearance-only Sunday reflection paragraph.
             // Server returns null on non-Sunday and on empty memory weeks,
@@ -1686,6 +1709,33 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(184, 150, 12, 0.2)',
     marginBottom: 16,
+  },
+  yearInReviewWrap: {
+    marginTop: 26,
+    marginBottom: 18,
+  },
+  yearInReviewBrassLine: {
+    height: 2,
+    backgroundColor: 'rgba(184, 150, 12, 0.4)',
+    marginBottom: 18,
+  },
+  yearInReviewLabel: {
+    color: '#b8960c',
+    fontSize: 10,
+    letterSpacing: 3,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  yearInReviewText: {
+    fontSize: 15,
+    lineHeight: 24,
+  },
+  yearInReviewFooter: {
+    color: '#5a5855',
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginTop: 14,
+    letterSpacing: 0.3,
   },
   conductorQWrap: {
     marginTop: 18,

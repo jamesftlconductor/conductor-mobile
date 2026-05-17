@@ -78,14 +78,25 @@ export default function JournalScreen() {
   const [days, setDays] = useState<Day[]>([]);
   const [streak, setStreak] = useState<StreakData>(null);
   const [loading, setLoading] = useState(true);
+  const [pastYears, setPastYears] = useState<number[]>([]);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [yearText, setYearText] = useState<string | null>(null);
+  const [yearLoading, setYearLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/signals?type=journal&userId=${USER_ID}&days=30`);
+      const [res, yrs] = await Promise.all([
+        fetch(`${API_BASE}/signals?type=journal&userId=${USER_ID}&days=30`),
+        fetch(`${API_BASE}/signals?type=yearInReview&userId=${USER_ID}`),
+      ]);
       if (res.ok) {
         const d = await res.json();
         setDays(Array.isArray(d?.days) ? d.days : []);
         setStreak(d?.streakData || null);
+      }
+      if (yrs.ok) {
+        const d = await yrs.json();
+        setPastYears(Array.isArray(d?.years) ? d.years : []);
       }
     } catch {
       // best-effort
@@ -93,6 +104,25 @@ export default function JournalScreen() {
       setLoading(false);
     }
   }, []);
+
+  async function openYear(y: number) {
+    setSelectedYear(y);
+    setYearText(null);
+    setYearLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/signals?type=yearInReview&userId=${USER_ID}&year=${y}`
+      );
+      if (res.ok) {
+        const d = await res.json();
+        setYearText(typeof d?.yearInReview === 'string' ? d.yearInReview : null);
+      }
+    } catch {
+      // best-effort
+    } finally {
+      setYearLoading(false);
+    }
+  }
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -162,6 +192,40 @@ export default function JournalScreen() {
           })}
         </View>
       ))}
+
+      {!loading && pastYears.length > 0 ? (
+        <View style={styles.pastYearsBlock}>
+          <Text style={styles.pastYearsLabel}>PAST YEARS</Text>
+          {pastYears.map((y) => (
+            <TouchableOpacity
+              key={y}
+              onPress={() => openYear(y)}
+              style={styles.pastYearRow}
+              activeOpacity={0.6}>
+              <Text style={styles.pastYearText}>{y} →</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+
+      {selectedYear ? (
+        <View style={styles.selectedYearWrap}>
+          <View style={styles.selectedYearDivider} />
+          <Text style={styles.selectedYearLabel}>{selectedYear}</Text>
+          {yearLoading ? (
+            <ActivityIndicator color={MUTED} style={{ marginTop: 18 }} />
+          ) : yearText ? (
+            <Text style={styles.selectedYearText}>{yearText}</Text>
+          ) : (
+            <Text style={styles.selectedYearEmpty}>
+              No record stored for this year.
+            </Text>
+          )}
+          <TouchableOpacity onPress={() => setSelectedYear(null)} style={styles.selectedYearClose}>
+            <Text style={styles.selectedYearCloseText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <View style={{ height: 60 }} />
     </ScrollView>
@@ -233,5 +297,59 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     minWidth: 50,
     textAlign: 'right',
+  },
+  pastYearsBlock: {
+    marginTop: 28,
+    paddingTop: 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(184, 150, 12, 0.18)',
+  },
+  pastYearsLabel: {
+    color: BRASS,
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  pastYearRow: {
+    paddingVertical: 8,
+  },
+  pastYearText: {
+    color: OFF_WHITE,
+    fontSize: 14,
+  },
+  selectedYearWrap: {
+    marginTop: 22,
+  },
+  selectedYearDivider: {
+    height: 2,
+    backgroundColor: 'rgba(184, 150, 12, 0.4)',
+    marginBottom: 16,
+  },
+  selectedYearLabel: {
+    color: BRASS,
+    fontSize: 11,
+    letterSpacing: 3,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  selectedYearText: {
+    color: OFF_WHITE,
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  selectedYearEmpty: {
+    color: MUTED,
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
+  selectedYearClose: {
+    marginTop: 14,
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+  },
+  selectedYearCloseText: {
+    color: MUTED,
+    fontSize: 12,
   },
 });
