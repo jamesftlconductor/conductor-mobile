@@ -25,6 +25,8 @@ export default function RootLayout() {
           <Stack.Screen name="crew" options={{ headerShown: false, gestureEnabled: true }} />
           <Stack.Screen name="programme" options={{ headerShown: false, gestureEnabled: true }} />
           <Stack.Screen name="signal-filters" options={{ headerShown: false, gestureEnabled: true }} />
+          <Stack.Screen name="providers" options={{ headerShown: false, gestureEnabled: true }} />
+          <Stack.Screen name="inventory" options={{ headerShown: false, gestureEnabled: true }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

@@ -595,6 +595,14 @@ export default function SettingsScreen() {
           right={<ChevronRight size={18} color={MUTED} />}
         />
         <ChevronRow
+          label="Service Providers"
+          onPress={() => router.push('/providers' as never)}
+        />
+        <ChevronRow
+          label="Home Inventory"
+          onPress={() => router.push('/inventory' as never)}
+        />
+        <ChevronRow
           label="The Programme"
           // Cast: expo-router's typed-routes generator hasn't regenerated
           // since app/programme.tsx was added. The push resolves correctly

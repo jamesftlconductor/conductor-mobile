@@ -419,6 +419,9 @@ export default function TakeoffScreen() {
   const [askAnswer, setAskAnswer] = useState<string | null>(null);
   const [askError, setAskError] = useState(false);
   const askInputRef = useRef<TextInput | null>(null);
+  // Suggestion chips appear below the input when it's focused — give
+  // users a starting point for common home-services questions.
+  const [askFocused, setAskFocused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [greeting, setGreeting] = useState('');
@@ -771,6 +774,8 @@ export default function TakeoffScreen() {
                   value={askQuestion}
                   onChangeText={setAskQuestion}
                   onSubmitEditing={submitAsk}
+                  onFocus={() => setAskFocused(true)}
+                  onBlur={() => setAskFocused(false)}
                   placeholder="Ask Conductor..."
                   placeholderTextColor="#5a5855"
                   returnKeyType="send"
@@ -792,6 +797,25 @@ export default function TakeoffScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
+              {askFocused && !askAnswer && !askLoading ? (
+                // Suggestion chips for common home-services questions —
+                // tap to pre-fill the input, focus stays so the user can
+                // edit or submit immediately.
+                <View style={styles.askChipsRow}>
+                  {['What should this cost?', 'Who have we used before?', 'Find a contractor near me'].map((q) => (
+                    <TouchableOpacity
+                      key={q}
+                      onPress={() => {
+                        setAskQuestion(q);
+                        askInputRef.current?.focus();
+                      }}
+                      activeOpacity={0.6}
+                      style={styles.askChip}>
+                      <Text style={styles.askChipText}>{q}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
               {askLoading ? (
                 <Text style={styles.askThinking}>Conductor is thinking...</Text>
               ) : null}
@@ -1058,6 +1082,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: 'italic',
     marginTop: 8,
+  },
+  // Suggestion chips — surface common starter questions when the input
+  // is focused. Horizontal scroll on narrow screens; muted brass
+  // outline gives just enough affordance without competing with the
+  // brief text above.
+  askChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  askChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(184, 150, 12, 0.4)',
+    borderRadius: 14,
+  },
+  askChipText: {
+    color: '#b8960c',
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
   askAnswerCard: {
     marginTop: 12,
