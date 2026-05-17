@@ -296,10 +296,16 @@ export default function SettingsScreen() {
   }>(null);
   const [missedCuesCount, setMissedCuesCount] = useState(0);
   const [vaultCount, setVaultCount] = useState(0);
+  // Local draft for the work-calendar TextInput. Commits to settings (and
+  // POSTs to backend) only onBlur, never per-keystroke — eliminates a race
+  // condition where a partial mid-edit value could be the last POST to
+  // land in Redis, and stops the firehose of per-keystroke POSTs.
+  const [workCalDraft, setWorkCalDraft] = useState('');
 
   useEffect(() => {
     loadSettings().then((s) => {
       setSettings(s);
+      setWorkCalDraft(s.workCalendarName);
       setLoaded(true);
     });
   }, []);
@@ -347,7 +353,16 @@ export default function SettingsScreen() {
   function setHealth(v: boolean) { update({ ...settings, healthEnabled: v }); }
   function setChildcare(v: boolean) { update({ ...settings, childcareEnabled: v }); }
   function setHorizon(v: boolean) { update({ ...settings, horizonEnabled: v }); }
-  function setWorkCalendarName(v: string) { update({ ...settings, workCalendarName: v }); }
+  function commitWorkCalendarName() {
+    const trimmed = workCalDraft.trim();
+    if (trimmed === (settings.workCalendarName || '').trim()) return;
+    console.log('[settings] workCalendarName commit:', JSON.stringify(trimmed));
+    // Normalize the local state to the trimmed form so the next blur cycle
+    // doesn't see a no-op as a real change (and the rendered value matches
+    // what's actually persisted).
+    setWorkCalDraft(trimmed);
+    update({ ...settings, workCalendarName: trimmed });
+  }
   function setCategory(k: CategoryKey, v: boolean) {
     update({ ...settings, categoryEnabled: { ...settings.categoryEnabled, [k]: v } });
   }
@@ -481,8 +496,11 @@ export default function SettingsScreen() {
         <View style={styles.workCalRow}>
           <Text style={styles.workCalLabel}>Work Calendar</Text>
           <TextInput
-            value={settings.workCalendarName}
-            onChangeText={setWorkCalendarName}
+            value={workCalDraft}
+            onChangeText={setWorkCalDraft}
+            onBlur={commitWorkCalendarName}
+            onSubmitEditing={commitWorkCalendarName}
+            returnKeyType="done"
             placeholder="Calendar name (e.g. Work, Office)"
             placeholderTextColor={MUTED}
             autoCapitalize="words"
