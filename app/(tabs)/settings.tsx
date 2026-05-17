@@ -745,6 +745,14 @@ export default function SettingsScreen() {
           right={<ChevronRight size={18} color={MUTED} />}
         />
         <ChevronRow
+          label="Share This Week"
+          onPress={() => router.push('/summary-card?period=week' as never)}
+        />
+        <ChevronRow
+          label="Share This Month"
+          onPress={() => router.push('/summary-card?period=month' as never)}
+        />
+        <ChevronRow
           label="How Conductor thinks"
           onPress={() => comingSoon('How Conductor thinks')}
         />

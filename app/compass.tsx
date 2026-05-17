@@ -199,13 +199,20 @@ export default function CompassScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <TouchableOpacity
-        onPress={() => router.back()}
-        activeOpacity={0.6}
-        style={styles.topBack}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Text style={styles.topBackText}>← Return</Text>
-      </TouchableOpacity>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.topBackText}>← Return</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => router.push('/summary-card?period=week' as never)}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.topShareText}>Share</Text>
+        </TouchableOpacity>
+      </View>
       <Text style={styles.title}>Compass</Text>
       <Text style={styles.subtitle}>What Conductor has learned about your household</Text>
 
@@ -608,5 +615,19 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 13,
     letterSpacing: 0.3,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  topShareText: {
+    color: BRASS,
+    fontSize: 13,
+    letterSpacing: 0.3,
+    fontWeight: '500',
   },
 });
