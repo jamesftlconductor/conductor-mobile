@@ -2,9 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { ChevronRight, Lock } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -301,6 +302,10 @@ export default function SettingsScreen() {
   // condition where a partial mid-edit value could be the last POST to
   // land in Redis, and stops the firehose of per-keystroke POSTs.
   const [workCalDraft, setWorkCalDraft] = useState('');
+  // "Saved" confirmation flag for the work-calendar input. Animated.Value
+  // holds the opacity so the affordance can fade in immediately, hold for
+  // 2s, then fade out smoothly.
+  const workCalSavedOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadSettings().then((s) => {
@@ -357,11 +362,19 @@ export default function SettingsScreen() {
     const trimmed = workCalDraft.trim();
     if (trimmed === (settings.workCalendarName || '').trim()) return;
     console.log('[settings] workCalendarName commit:', JSON.stringify(trimmed));
-    // Normalize the local state to the trimmed form so the next blur cycle
-    // doesn't see a no-op as a real change (and the rendered value matches
-    // what's actually persisted).
     setWorkCalDraft(trimmed);
     update({ ...settings, workCalendarName: trimmed });
+    // Flash the "Saved" confirmation. Snap to full opacity, hold ~2s, then
+    // fade out over 400ms so the disappearance reads as soft rather than
+    // abrupt. Native driver since we're only touching opacity.
+    workCalSavedOpacity.stopAnimation();
+    workCalSavedOpacity.setValue(1);
+    Animated.timing(workCalSavedOpacity, {
+      toValue: 0,
+      duration: 400,
+      delay: 2000,
+      useNativeDriver: true,
+    }).start();
   }
   function setCategory(k: CategoryKey, v: boolean) {
     update({ ...settings, categoryEnabled: { ...settings.categoryEnabled, [k]: v } });
@@ -428,6 +441,14 @@ export default function SettingsScreen() {
           }
         />
         <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
+        <ChevronRow
+          label="The Programme"
+          // Cast: expo-router's typed-routes generator hasn't regenerated
+          // since app/programme.tsx was added. The push resolves correctly
+          // at runtime via the file-system route; the typed lookup will
+          // pick it up on the next `expo start`/build.
+          onPress={() => router.push('/programme' as never)}
+        />
         <Row
           label="Connected accounts"
           right={
@@ -494,7 +515,14 @@ export default function SettingsScreen() {
         />
         <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
         <View style={styles.workCalRow}>
-          <Text style={styles.workCalLabel}>Work Calendar</Text>
+          <View style={styles.workCalHeaderRow}>
+            <Text style={styles.workCalLabel}>Work Calendar</Text>
+            <Animated.Text
+              style={[styles.workCalSaved, { opacity: workCalSavedOpacity }]}
+              pointerEvents="none">
+              Saved
+            </Animated.Text>
+          </View>
           <TextInput
             value={workCalDraft}
             onChangeText={setWorkCalDraft}
@@ -595,10 +623,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: SOFT_BORDER,
   },
+  workCalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
   workCalLabel: {
     color: OFF_WHITE,
     fontSize: 15,
-    marginBottom: 6,
+  },
+  workCalSaved: {
+    color: SAGE,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   workCalInput: {
     color: OFF_WHITE,
