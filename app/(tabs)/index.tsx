@@ -107,6 +107,44 @@ async function syncHealthIfStale() {
   }
 }
 
+// Notification categories — registered at launch so iOS knows what
+// action buttons to render when a SIGNAL_FOLLOWUP or PACKAGE_TRACKING
+// push lands. setNotificationCategoryAsync works over OTA — the
+// app.json infoPlist categories are belt-and-suspenders for when JS
+// hasn't booted yet (lockscreen action on first-ever launch after
+// install).
+async function registerNotificationCategories() {
+  try {
+    await Notifications.setNotificationCategoryAsync('SIGNAL_FOLLOWUP', [
+      {
+        identifier: 'REST',
+        buttonTitle: 'Done ✓',
+        options: { isDestructive: false, opensAppToForeground: false },
+      },
+      {
+        identifier: 'HOLD',
+        buttonTitle: 'Still open',
+        options: { isDestructive: false, opensAppToForeground: false },
+      },
+    ]);
+    await Notifications.setNotificationCategoryAsync('PACKAGE_TRACKING', [
+      {
+        identifier: 'REST',
+        buttonTitle: 'Got it ✓',
+        options: { isDestructive: false, opensAppToForeground: false },
+      },
+      {
+        identifier: 'TRACK',
+        buttonTitle: 'Track',
+        options: { isDestructive: false, opensAppToForeground: true },
+      },
+    ]);
+  } catch (err) {
+    // Best-effort — categories already exist or platform unsupported.
+    console.warn('[notifications] category registration:', err);
+  }
+}
+
 async function registerForPushNotifications() {
   try {
     if (!Device.isDevice) return;
@@ -117,6 +155,8 @@ async function registerForPushNotifications() {
         importance: Notifications.AndroidImportance.DEFAULT,
       });
     }
+
+    await registerNotificationCategories();
 
     const { status: existing } = await Notifications.getPermissionsAsync();
     let final = existing;
@@ -515,6 +555,42 @@ export default function TakeoffScreen() {
     checkConnection();
     registerForPushNotifications();
     syncHealthIfStale();
+
+    // Lock-screen action handler — REST/HOLD on SIGNAL_FOLLOWUP and
+    // REST/TRACK on PACKAGE_TRACKING. Payload data was set by the
+    // backend send paths so we can PATCH the signal without opening
+    // the app. TRACK falls through naturally because its iOS option
+    // opensAppToForeground=true (no JS work needed here).
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      try {
+        const actionId = response.actionIdentifier;
+        const data: any = response.notification.request.content.data || {};
+        const signalId = data.signalId;
+        const userId = data.userId || 'james_totalhome_gmail_com';
+        if (!signalId) return;
+        if (actionId === 'REST') {
+          fetch('https://conductor-ivory.vercel.app/api/signals', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: signalId, userId, state: 'resolved' }),
+          }).catch(() => {});
+        } else if (actionId === 'HOLD') {
+          fetch('https://conductor-ivory.vercel.app/api/signals', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: signalId,
+              userId,
+              state: 'active',
+              notedAt: new Date().toISOString(),
+            }),
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('[notifications] response handler:', err);
+      }
+    });
+    return () => { sub.remove(); };
   }, []);
 
   async function checkConnection() {

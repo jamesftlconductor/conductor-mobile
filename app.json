@@ -12,7 +12,23 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.jamesftl.conductormobile",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UNNotificationCategories": [
+          {
+            "identifier": "SIGNAL_FOLLOWUP",
+            "actions": [
+              { "identifier": "REST", "title": "Done ✓", "options": [] },
+              { "identifier": "HOLD", "title": "Still open", "options": [] }
+            ]
+          },
+          {
+            "identifier": "PACKAGE_TRACKING",
+            "actions": [
+              { "identifier": "REST", "title": "Got it ✓", "options": [] },
+              { "identifier": "TRACK", "title": "Track", "options": ["foreground"] }
+            ]
+          }
+        ]
       },
       "entitlements": {
         "com.apple.developer.healthkit": true
