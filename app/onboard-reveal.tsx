@@ -173,7 +173,17 @@ export default function OnboardRevealScreen() {
         ))}
       </View>
       {cardCount >= cards.length && (
-        <FadeInCta onPress={() => router.replace('/(tabs)')} />
+        <>
+          <FadeInCta onPress={() => router.replace('/(tabs)')} />
+          <TouchableOpacity
+            onPress={() => router.replace('/transition' as never)}
+            style={styles.transitionLink}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.transitionLinkText}>
+              Something big just happened? Tell Conductor →
+            </Text>
+          </TouchableOpacity>
+        </>
       )}
     </View>
   );
@@ -271,6 +281,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 24,
     backgroundColor: BRASS,
+  },
+  transitionLink: {
+    marginTop: 20,
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+  },
+  transitionLinkText: {
+    color: MUTED,
+    fontSize: 12,
+    fontStyle: 'italic',
+    letterSpacing: 0.2,
   },
   ctaText: { color: '#0f0f0f', fontSize: 15, fontWeight: '600', letterSpacing: 0.5 },
 });

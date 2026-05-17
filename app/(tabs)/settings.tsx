@@ -614,6 +614,10 @@ export default function SettingsScreen() {
           label="The Network"
           onPress={() => router.push('/network' as never)}
         />
+        <ChevronRow
+          label="Life Transitions"
+          onPress={() => router.push('/transition' as never)}
+        />
         <Row
           label="Connected accounts"
           right={
