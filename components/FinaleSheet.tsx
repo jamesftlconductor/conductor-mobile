@@ -302,6 +302,11 @@ function SingleSheet({
                   <Text style={styles.metaLine}>Status {signal.status}</Text>
                 )}
                 <Text style={styles.metaLine}>ETA {signal.eta || 'Unknown'}</Text>
+                {(signal as Signal & { recurring?: boolean; recurringInterval?: number }).recurring ? (
+                  <Text style={styles.recurringLine}>
+                    🔄  Recurring — every {(signal as Signal & { recurringInterval?: number }).recurringInterval ?? '?'} days
+                  </Text>
+                ) : null}
               </View>
 
               {(suggestionLoading || suggestion) && (
@@ -503,6 +508,13 @@ const styles = StyleSheet.create({
   metaBlock: {
     marginBottom: 24,
     gap: 6,
+  },
+  recurringLine: {
+    color: MUTED,
+    fontSize: 12,
+    letterSpacing: 0.3,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   metaLine: {
     color: MUTED,
