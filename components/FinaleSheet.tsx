@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -307,6 +308,16 @@ function SingleSheet({
                     🔄  Recurring — every {(signal as Signal & { recurringInterval?: number }).recurringInterval ?? '?'} days
                   </Text>
                 ) : null}
+                <CrewAttributionRow
+                  signal={signal}
+                  userId={userId}
+                  onAttributed={(name) => {
+                    // Stamp locally so the row reflects the change
+                    // without a parent refresh. Server already
+                    // persisted via the POST.
+                    (signal as Signal & { crewMemberId?: string | null }).crewMemberId = name;
+                  }}
+                />
               </View>
 
               {(suggestionLoading || suggestion) && (
@@ -426,6 +437,109 @@ function SingleSheet({
   );
 }
 
+// Crew attribution row in the Finale sheet. Renders either:
+//   - "Belongs to → {Name}" with a Change link (already attributed)
+//   - "Assign to crew member →" muted link (unattributed)
+// Tap opens a bottom sheet listing crew members + a Household option;
+// tap one to POST the attribution and update parent local state.
+function CrewAttributionRow({
+  signal,
+  userId,
+  onAttributed,
+}: {
+  signal: Signal & { crewMemberId?: string | null };
+  userId: string;
+  onAttributed: (name: string | null) => void;
+}) {
+  const [crew, setCrew] = useState<{ name: string; photoUrl?: string | null; memberType?: string }[]>([]);
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState<string | null>(signal.crewMemberId || null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!open) return;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=crew&userId=${userId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const list = Array.isArray(data?.crew)
+          ? data.crew
+              .filter((m: any) => m && m.name)
+              .map((m: any) => ({ name: m.name, photoUrl: m.photoUrl, memberType: m.memberType }))
+          : [];
+        setCrew(list);
+      } catch {
+        // best-effort
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, userId]);
+
+  async function assign(name: string | null) {
+    setCurrent(name);
+    setOpen(false);
+    onAttributed(name);
+    try {
+      await fetch(`${API_BASE}/signals?type=crew-attribution`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, signalId: signal.id, crewMemberName: name }),
+      });
+    } catch {
+      // ignore — next sheet open will reflect server truth
+    }
+  }
+
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => setOpen(true)}
+        style={styles.attributionRow}
+        activeOpacity={0.6}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+        <Text style={styles.attributionLabel}>Belongs to →</Text>
+        <Text style={current ? styles.attributionName : styles.attributionAssign}>
+          {current || 'Assign to crew member'}
+        </Text>
+      </TouchableOpacity>
+
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.attributionBackdrop} onPress={() => setOpen(false)}>
+          <Pressable style={styles.attributionSheet} onPress={() => {}}>
+            <Text style={styles.attributionSheetTitle}>Assign signal to</Text>
+            <TouchableOpacity
+              onPress={() => assign(null)}
+              style={styles.attributionMemberRow}>
+              <View style={styles.attributionPhotoFallback}>
+                <Text style={styles.attributionPhotoInitials}>🏠</Text>
+              </View>
+              <Text style={styles.attributionMemberName}>Household (unassigned)</Text>
+            </TouchableOpacity>
+            {crew.map((m) => (
+              <TouchableOpacity
+                key={m.name}
+                onPress={() => assign(m.name)}
+                style={styles.attributionMemberRow}>
+                {m.photoUrl ? (
+                  <Image source={{ uri: m.photoUrl }} style={styles.attributionPhoto} />
+                ) : (
+                  <View style={styles.attributionPhotoFallback}>
+                    <Text style={styles.attributionPhotoInitials}>
+                      {m.name.slice(0, 1).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.attributionMemberName}>{m.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   modalBackdrop: {
     flex: 1,
@@ -521,6 +635,80 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.3,
     textAlign: 'center',
+  },
+  attributionRow: {
+    marginTop: 12,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  attributionLabel: {
+    color: MUTED,
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  attributionName: {
+    color: BRASS,
+    fontSize: 13,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  attributionAssign: {
+    color: MUTED,
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  attributionBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  attributionSheet: {
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingTop: 22,
+    paddingBottom: 36,
+    paddingHorizontal: 18,
+  },
+  attributionSheetTitle: {
+    color: '#f0ede8',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    marginBottom: 16,
+  },
+  attributionMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 12,
+  },
+  attributionPhoto: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BRASS,
+  },
+  attributionPhotoFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2a2a2a',
+    borderWidth: 1,
+    borderColor: BRASS,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attributionPhotoInitials: {
+    color: BRASS,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  attributionMemberName: {
+    color: '#f0ede8',
+    fontSize: 14,
   },
   suggestionBlock: {
     marginBottom: 24,
