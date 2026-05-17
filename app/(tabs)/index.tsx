@@ -410,6 +410,12 @@ export default function TakeoffScreen() {
   const [pulseFlags, setPulseFlags] = useState<string[]>([]);
   const [pulseData, setPulseData] = useState<PulseData | null>(null);
   const [pulseExpanded, setPulseExpanded] = useState(false);
+  // Handoff — coordination prompt surfaced when one member is
+  // blocked and another can cover. `acked` flips to true after the
+  // user taps the ack button; we keep the row mounted briefly to
+  // show "Acknowledged" before fading.
+  const [handoff, setHandoff] = useState<{ signalId: string; message: string } | null>(null);
+  const [handoffAcked, setHandoffAcked] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   // Ask Conductor — single-shot Q&A. Always fresh call (server-side
   // 30min cache covers the duplicate-question case). State carries the
@@ -542,6 +548,12 @@ export default function TakeoffScreen() {
       setPulseData(data.pulseData && typeof data.pulseData === 'object'
         ? (data.pulseData as PulseData)
         : null);
+      setHandoff(
+        data.handoff && typeof data.handoff === 'object' && data.handoff.signalId && data.handoff.message
+          ? { signalId: String(data.handoff.signalId), message: String(data.handoff.message) }
+          : null
+      );
+      setHandoffAcked(false);
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -877,6 +889,47 @@ export default function TakeoffScreen() {
             </View>
           )}
 
+          {!loading && handoff ? (
+            // Handoff ack row — small brass button right-aligned
+            // below the brief prose. Tap POSTs to the ack endpoint
+            // and flips the row to a muted "Acknowledged" label that
+            // unmounts after 3s.
+            <View style={styles.handoffWrap}>
+              {handoffAcked ? (
+                <Text style={styles.handoffAckedText}>Acknowledged</Text>
+              ) : (
+                <TouchableOpacity
+                  onPress={async () => {
+                    setHandoffAcked(true);
+                    try {
+                      await fetch(
+                        'https://conductor-ivory.vercel.app/api/signals?type=handoff',
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            signalId: handoff.signalId,
+                            acknowledgedBy: 'james_totalhome_gmail_com',
+                            userId: 'james_totalhome_gmail_com',
+                          }),
+                        }
+                      );
+                    } catch {
+                      // Best-effort — the next brief will still suppress
+                      // it if the write reached Redis; if not, the user
+                      // can tap again on the next brief.
+                    }
+                    setTimeout(() => setHandoff(null), 3000);
+                  }}
+                  activeOpacity={0.6}
+                  style={styles.handoffBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.handoffBtnText}>{userName || 'You'} has this ✓</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null}
+
           {!loading && weekInReview ? (
             // Week in Review — Clearance-only Sunday reflection paragraph.
             // Server returns null on non-Sunday and on empty memory weeks,
@@ -1206,6 +1259,32 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(184, 150, 12, 0.2)',
     marginBottom: 16,
+  },
+  handoffWrap: {
+    alignItems: 'flex-end',
+    marginTop: 12,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
+  handoffBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(184, 150, 12, 0.55)',
+    backgroundColor: 'rgba(184, 150, 12, 0.07)',
+  },
+  handoffBtnText: {
+    color: '#b8960c',
+    fontSize: 12,
+    letterSpacing: 0.3,
+    fontWeight: '500',
+  },
+  handoffAckedText: {
+    color: '#5a5855',
+    fontSize: 12,
+    fontStyle: 'italic',
+    paddingVertical: 7,
   },
   weekInReviewLabel: {
     color: '#5a5855',
