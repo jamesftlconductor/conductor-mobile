@@ -24,6 +24,7 @@ export default function RootLayout() {
           <Stack.Screen name="compass" options={{ headerShown: false, gestureEnabled: true }} />
           <Stack.Screen name="crew" options={{ headerShown: false, gestureEnabled: true }} />
           <Stack.Screen name="programme" options={{ headerShown: false, gestureEnabled: true }} />
+          <Stack.Screen name="signal-filters" options={{ headerShown: false, gestureEnabled: true }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

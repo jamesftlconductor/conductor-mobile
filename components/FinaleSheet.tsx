@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Modal,
   Pressable,
@@ -18,6 +19,7 @@ const OFF_WHITE = '#f0ede8';
 const MUTED = '#5a5855';
 const BRASS = '#b8960c';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
+const USER_ID = 'james_totalhome_gmail_com';
 
 // Status cycle for the edit-mode tap-to-advance picker. Keep in sync
 // with the values produced by the import classifier; "Unknown" is the
@@ -324,6 +326,47 @@ function SingleSheet({
                   <Text style={styles.btnPrimaryText}>Rest</Text>
                 </TouchableOpacity>
               </View>
+
+              {signal.sender ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    const senderName = signal.sender || '';
+                    Alert.alert(
+                      'Camouflage',
+                      `Hide all future signals from ${senderName}? This can be undone in Settings.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Hide signals',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              await fetch(`${API_BASE}/signals?type=camouflage`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  userId: USER_ID,
+                                  ruleType: 'sender',
+                                  value: senderName,
+                                }),
+                              });
+                            } catch {
+                              // Best-effort — rule may not have landed.
+                            }
+                            onClose();
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.camouflageLinkWrap}>
+                  <Text style={styles.camouflageLink}>
+                    Never show signals from {signal.sender}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </>
           ) : (
             <>
@@ -538,6 +581,19 @@ const styles = StyleSheet.create({
     color: OFF_WHITE,
     fontSize: 15,
     fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+  // Camouflage link sits below the Hold/Rest button row. Small, muted,
+  // not styled as a button — it's an escape hatch, not a primary
+  // action.
+  camouflageLinkWrap: {
+    marginTop: 16,
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  camouflageLink: {
+    color: MUTED,
+    fontSize: 12,
     letterSpacing: 0.3,
   },
   btnSave: {

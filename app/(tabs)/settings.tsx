@@ -6,7 +6,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -303,6 +305,14 @@ export default function SettingsScreen() {
   }>(null);
   const [missedCuesCount, setMissedCuesCount] = useState(0);
   const [vaultCount, setVaultCount] = useState(0);
+  // Oura connection state — polled on focus so the row reflects whether
+  // the OAuth flow completed in Safari since the last visit.
+  const [ouraConnected, setOuraConnected] = useState<boolean | null>(null);
+  // API key modal — shows the household's API key with a copy button.
+  const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [apiKeyCopied, setApiKeyCopied] = useState(false);
   // Local draft for the work-calendar TextInput. Commits to settings (and
   // POSTs to backend) only onBlur, never per-keystroke — eliminates a race
   // condition where a partial mid-edit value could be the last POST to
@@ -350,6 +360,15 @@ export default function SettingsScreen() {
           setVaultCount(within.length);
         })
         .catch(() => {});
+      // Oura connection state — polled on focus so the row reflects
+      // an OAuth flow that just completed in Safari.
+      fetch(`${API_BASE}/oura/status?userId=${USER_ID}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled || !d) return;
+          setOuraConnected(d.connected === true);
+        })
+        .catch(() => {});
       return () => {
         cancelled = true;
       };
@@ -365,6 +384,70 @@ export default function SettingsScreen() {
   function setChildcare(v: boolean) { update({ ...settings, childcareEnabled: v }); }
   function setHorizon(v: boolean) { update({ ...settings, horizonEnabled: v }); }
   function setMidday(v: boolean) { update({ ...settings, middayEnabled: v }); }
+
+  function handleConnectOura() {
+    Linking.openURL(`${API_BASE}/oura/auth?userId=${USER_ID}`);
+  }
+
+  async function handleDisconnectOura() {
+    Alert.alert(
+      'Disconnect Oura Ring',
+      'Conductor will stop reading your daily readiness, sleep, and activity. You can reconnect anytime.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await fetch(`${API_BASE}/oura/disconnect?userId=${USER_ID}`, { method: 'GET' });
+              setOuraConnected(false);
+            } catch { /* best-effort */ }
+          },
+        },
+      ]
+    );
+  }
+
+  async function handleShowApiKey() {
+    setApiKeyModalVisible(true);
+    setApiKeyCopied(false);
+    if (apiKey) return;
+    setApiKeyLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/ingest/key?userId=${USER_ID}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (typeof data?.apiKey === 'string') setApiKey(data.apiKey);
+    } catch {
+      // Surface failure as a missing key — the modal will show a retry-
+      // by-reopen affordance via the loading text.
+    } finally {
+      setApiKeyLoading(false);
+    }
+  }
+
+  async function handleCopyApiKey() {
+    if (!apiKey) return;
+    // Try expo-clipboard via dynamic import; if it's not in the current
+    // bundle (not yet baked into the native build), fall back silently —
+    // the key is rendered in a `selectable` Text so the user can still
+    // long-press to copy manually.
+    try {
+      const mod: { setStringAsync?: (s: string) => Promise<void> } | null =
+        await (Function('return import("expo-clipboard")')() as Promise<unknown>)
+          .then((m) => m as { setStringAsync?: (s: string) => Promise<void> })
+          .catch(() => null);
+      if (mod && typeof mod.setStringAsync === 'function') {
+        await mod.setStringAsync(apiKey);
+      }
+    } catch {
+      // ignored — fall through to the "Copied" flash anyway so the
+      // user gets feedback even when programmatic copy fails.
+    }
+    setApiKeyCopied(true);
+    setTimeout(() => setApiKeyCopied(false), 2000);
+  }
   function commitWorkCalendarName() {
     const trimmed = workCalDraft.trim();
     if (trimmed === (settings.workCalendarName || '').trim()) return;
@@ -527,6 +610,31 @@ export default function SettingsScreen() {
           subtext="What Conductor has learned"
         />
         <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
+        <ChevronRow
+          label="Signal Filters"
+          onPress={() => router.push('/signal-filters' as never)}
+        />
+        {ouraConnected === true ? (
+          <Row
+            label="Oura Ring"
+            subtext="Connected"
+            right={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Text style={styles.ouraConnectedText}>✓</Text>
+                <TouchableOpacity onPress={handleDisconnectOura} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.ouraDisconnectLink}>Disconnect</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        ) : (
+          <TouchableOpacity onPress={handleConnectOura} activeOpacity={0.6}>
+            <View style={styles.ouraConnectRow}>
+              <Text style={styles.ouraConnectLabel}>Oura Ring</Text>
+              <Text style={styles.ouraConnectAction}>Connect Oura Ring →</Text>
+            </View>
+          </TouchableOpacity>
+        )}
         <View style={styles.workCalRow}>
           <View style={styles.workCalHeaderRow}>
             <Text style={styles.workCalLabel}>Work Calendar</Text>
@@ -555,6 +663,12 @@ export default function SettingsScreen() {
 
         <SectionHeader title="Conductor" />
         <Row label="Conductor" subtext="Version 1.0.0" />
+        <Row
+          label="API Access"
+          subtext="Send signals to Conductor from any service"
+          onPress={handleShowApiKey}
+          right={<ChevronRight size={18} color={MUTED} />}
+        />
         <ChevronRow
           label="How Conductor thinks"
           onPress={() => comingSoon('How Conductor thinks')}
@@ -589,6 +703,41 @@ export default function SettingsScreen() {
             </View>
             <TouchableOpacity style={styles.doneBtn} onPress={commitTimeEdit}>
               <Text style={styles.doneBtnText}>Over</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={apiKeyModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setApiKeyModalVisible(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setApiKeyModalVisible(false)}>
+          <Pressable style={styles.apiKeySheet} onPress={() => {}}>
+            <Text style={styles.apiKeySheetTitle}>API Access</Text>
+            <Text style={styles.apiKeySubtext}>
+              Send signals to Conductor from any service. POST to
+              /api/ingest with this key in the X-Conductor-Key header.
+            </Text>
+            {apiKeyLoading || !apiKey ? (
+              <Text style={styles.apiKeyLoading}>
+                {apiKeyLoading ? 'Loading…' : 'Failed to load. Close and reopen to retry.'}
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.apiKeyValue} selectable>{apiKey}</Text>
+                <TouchableOpacity onPress={handleCopyApiKey} style={styles.apiKeyCopyBtn}>
+                  <Text style={styles.apiKeyCopyBtnText}>
+                    {apiKeyCopied ? 'Copied ✓' : 'Copy'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity
+              onPress={() => setApiKeyModalVisible(false)}
+              style={styles.apiKeyDoneBtn}>
+              <Text style={styles.apiKeyDoneBtnText}>Done</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -783,6 +932,95 @@ const styles = StyleSheet.create({
     color: BG,
     fontSize: 15,
     fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  // Oura Ring row — two states (connected vs not). Connected uses the
+  // shared Row component; the Connect state is a custom row so the
+  // brass call-to-action text aligns right with the label.
+  ouraConnectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: SOFT_BORDER,
+  },
+  ouraConnectLabel: {
+    color: OFF_WHITE,
+    fontSize: 15,
+  },
+  ouraConnectAction: {
+    color: BRASS,
+    fontSize: 13,
+    letterSpacing: 0.3,
+  },
+  ouraConnectedText: {
+    color: SAGE,
+    fontSize: 16,
+  },
+  ouraDisconnectLink: {
+    color: MUTED,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  // API key modal — same backdrop pattern as the time-edit sheet, with
+  // a monospace-leaning display block for the key itself plus copy +
+  // done buttons.
+  apiKeySheet: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    gap: 14,
+  },
+  apiKeySheetTitle: {
+    color: OFF_WHITE,
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  apiKeySubtext: {
+    color: MUTED,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  apiKeyValue: {
+    color: OFF_WHITE,
+    fontSize: 13,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 4,
+  },
+  apiKeyLoading: {
+    color: MUTED,
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginVertical: 12,
+  },
+  apiKeyCopyBtn: {
+    backgroundColor: BRASS,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  apiKeyCopyBtnText: {
+    color: BG,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  apiKeyDoneBtn: {
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  apiKeyDoneBtnText: {
+    color: MUTED,
+    fontSize: 13,
     letterSpacing: 0.3,
   },
 });

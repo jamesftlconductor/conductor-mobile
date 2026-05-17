@@ -27,6 +27,14 @@ type PulseData = {
     restingHR: number | null;
     steps: number | null;
     activeCalories: number | null;
+    // Oura subset — null when the user hasn't connected the ring.
+    oura?: {
+      readinessScore: number | null;
+      deepSleepSeconds: number | null;
+      // Oura's body_temperature contributor: ~100 is normal; lower
+      // numbers indicate elevated body temperature relative to baseline.
+      temperatureContrib: number | null;
+    } | null;
   } | null;
   weather: {
     tempF: number | null;
@@ -265,6 +273,37 @@ function PulseHealthSection({ health }: { health: PulseData['health'] }) {
         <Text style={[styles.pulseRow, { color: '#a8a5a0' }]}>
           🔥  {roundInt(activeCalories)} kcal
         </Text>
+      ) : null}
+      {health.oura ? (
+        <>
+          {health.oura.readinessScore != null ? (
+            <Text
+              style={[
+                styles.pulseRow,
+                {
+                  color:
+                    health.oura.readinessScore > 70 ? '#86efac'
+                    : health.oura.readinessScore >= 50 ? '#f59e0b'
+                    : '#ef4444',
+                },
+              ]}>
+              🔴  Readiness {roundInt(health.oura.readinessScore)}/100
+            </Text>
+          ) : null}
+          {health.oura.deepSleepSeconds != null ? (
+            <Text style={[styles.pulseRow, { color: '#a8a5a0' }]}>
+              💤  Deep sleep {Math.floor(health.oura.deepSleepSeconds / 3600)}h{' '}
+              {Math.round((health.oura.deepSleepSeconds % 3600) / 60)}m
+            </Text>
+          ) : null}
+          {/* Body temperature: Oura's contributor score where lower = elevated.
+              Surface only when it's notable (<85 = slightly+ elevated). */}
+          {health.oura.temperatureContrib != null && health.oura.temperatureContrib < 85 ? (
+            <Text style={[styles.pulseRow, { color: '#f59e0b' }]}>
+              🌡  Temperature slightly elevated
+            </Text>
+          ) : null}
+        </>
       ) : null}
     </View>
   );
