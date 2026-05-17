@@ -159,18 +159,42 @@ function buildItems(args: {
     return name ? `${name}'s` : undefined;
   };
 
-  // Signals
+  // Signals — include both dated items in the 14+ window AND no-date /
+  // unparseable-date items (e.g. eta:"unknown" from the import
+  // classifier). The latter land in the "On the Edge" bucket with a
+  // synthetic far-future dateMs so they sort last and display "no date"
+  // instead of a day-count. Only state=incoming/active reach this loop
+  // since loadSignals already filters expired/resolved upstream.
+  const FAR_FUTURE_MS = today.getTime() + 365 * DAY_MS; // synthetic edge-bucket anchor
   for (const s of signals || []) {
-    if (!s.eta) continue;
-    const ms = ymdToMs(s.eta);
-    if (!ms || ms < fourteen) continue;
+    const state = (s as Signal & { state?: string }).state;
+    if (state && state !== 'incoming' && state !== 'active') continue;
+    const rawMs = s.eta ? ymdToMs(s.eta) : 0;
+    const hasUsableDate = rawMs >= fourteen;
+    const noUsableDate = !s.eta || rawMs === 0 || (rawMs > 0 && rawMs < fourteen && rawMs < today.getTime() - 30 * DAY_MS);
+    // Dated items in the near window (<14d) belong on Hover/Programme,
+    // not Horizon — skip those. Items with parseable past dates >30d
+    // ago are presumed stale and also skipped.
+    if (!hasUsableDate && !s.eta) {
+      // No eta at all — only show if the signal type warrants horizon
+      // visibility (travel/deadline/reservation/service). Other types
+      // without dates would clutter the edge bucket.
+      if (!['travel', 'reservation', 'deadline', 'service'].includes(s.type || '')) continue;
+    } else if (!hasUsableDate && s.eta && rawMs === 0) {
+      // Unparseable eta string ("unknown", "TBD", etc.) — treat like
+      // missing eta. Apply the same type gate.
+      if (!['travel', 'reservation', 'deadline', 'service'].includes(s.type || '')) continue;
+    } else if (!hasUsableDate) {
+      // Parseable date but earlier than 14d out — belongs elsewhere.
+      continue;
+    }
     const meta = metaFor(s);
     items.push({
       id: `signal-${s.id}`,
       kind: 'signal',
       description: s.description || 'Unknown',
-      date: s.eta,
-      dateMs: ms,
+      date: hasUsableDate ? (s.eta || '') : '',
+      dateMs: hasUsableDate ? rawMs : FAR_FUTURE_MS,
       emoji: meta.emoji,
       ownerTag: ownerTagFor((s as Signal & { userId?: string }).userId),
       source: 'gmail',
@@ -254,11 +278,22 @@ function buildItems(args: {
   return { items, memberMap };
 }
 
+// Description keywords that identify a reservation/service signal as
+// travel-related (hotel bookings, flights, airport transfers, rental
+// cars, etc.). A reservation with one of these strings belongs under
+// the Travel filter alongside type === "travel" signals.
+const TRAVEL_KEYWORDS = /\b(hotel|flight|airline|airport|airbnb|vrbo|resort|rental car|inn|lodge|booking|reservation\s+confirmation|trip\b|paris|london|tokyo|nyc|new york|los angeles|miami)\b/i;
+function isTravelLike(item: Item): boolean {
+  if (item.signalType === 'travel') return true;
+  if (item.signalType === 'reservation' && TRAVEL_KEYWORDS.test(item.description)) return true;
+  return false;
+}
+
 function matchesFilter(item: Item, filter: FilterKey): boolean {
   if (filter === 'all') return true;
   if (filter === 'vault') return item.kind === 'vault';
   if (filter === 'crew') return item.kind === 'crew_event' || item.kind === 'birthday' || item.kind === 'anniversary';
-  if (filter === 'travel') return item.signalType === 'travel';
+  if (filter === 'travel') return isTravelLike(item);
   if (filter === 'deadlines') return item.signalType === 'deadline' || item.kind === 'vault';
   if (filter === 'appointments') return item.signalType === 'appointment' || item.signalType === 'service' || item.signalType === 'reservation';
   return true;
@@ -565,7 +600,7 @@ function HorizonItemRow({
           ) : null}
           <View style={styles.itemMetaRow}>
             <Text style={[styles.itemDays, { color }]}>
-              {days}d
+              {item.date ? `${days}d` : 'no date'}
             </Text>
             <Text style={styles.itemSourceBadge}>{sourceBadge}</Text>
             {noted ? (
@@ -575,7 +610,7 @@ function HorizonItemRow({
             ) : null}
           </View>
         </View>
-        <Text style={styles.itemDate}>{formatDate(item.dateMs)}</Text>
+        <Text style={styles.itemDate}>{item.date ? formatDate(item.dateMs) : ''}</Text>
       </View>
 
       <View style={styles.progressTrack}>
