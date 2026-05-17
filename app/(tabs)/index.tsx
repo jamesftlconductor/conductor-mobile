@@ -445,6 +445,14 @@ export default function TakeoffScreen() {
   >([]);
   const [autoResExpanded, setAutoResExpanded] = useState(false);
   const [dismissedAutoRes, setDismissedAutoRes] = useState<Set<string>>(new Set());
+  // Conductor's one proactive question per brief. Stored alongside
+  // a per-day set of dismissed/acknowledged question texts so the
+  // same prompt doesn't reappear when the brief refreshes within
+  // the same ET day.
+  const [conductorQuestion, setConductorQuestion] = useState<string | null>(null);
+  const [conductorQuestionAcked, setConductorQuestionAcked] = useState<
+    'ack' | 'dismissed' | null
+  >(null);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   // Ask Conductor — single-shot Q&A. Always fresh call (server-side
   // 30min cache covers the duplicate-question case). State carries the
@@ -583,6 +591,30 @@ export default function TakeoffScreen() {
           : null
       );
       setHandoffAcked(false);
+
+      // Conductor question — load + filter against today's
+      // dismissed-questions list so the user doesn't see the same
+      // prompt twice within an ET day.
+      const incomingQ =
+        typeof data.conductorQuestion === 'string' && data.conductorQuestion.length > 0
+          ? data.conductorQuestion
+          : null;
+      try {
+        const todayKey = new Date().toLocaleDateString('en-US', {
+          timeZone: 'America/New_York',
+          year: 'numeric', month: '2-digit', day: '2-digit',
+        });
+        const rawList = await AsyncStorage.getItem('conductorQ:dismissed:' + todayKey);
+        const dismissedToday = rawList ? new Set(JSON.parse(rawList) as string[]) : new Set<string>();
+        if (incomingQ && dismissedToday.has(incomingQ)) {
+          setConductorQuestion(null);
+        } else {
+          setConductorQuestion(incomingQ);
+        }
+      } catch {
+        setConductorQuestion(incomingQ);
+      }
+      setConductorQuestionAcked(null);
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -1067,6 +1099,77 @@ export default function TakeoffScreen() {
             );
           })()}
 
+          {!loading && conductorQuestion ? (
+            // Conductor's one proactive question — surfaced below
+            // the Took Care Of band, above the feedback row. Two
+            // small actions: "On it" (acknowledge) and "Remove"
+            // (dismiss). Both fire-and-forget telemetry POSTs to
+            // /api/signals?type=conductorQuestion. Dismissals also
+            // persist per-day to AsyncStorage so the same prompt
+            // doesn't reappear during the ET day.
+            <View style={styles.conductorQWrap}>
+              <Text style={styles.conductorQLabel}>CONDUCTOR ASKS</Text>
+              <Text style={styles.conductorQText}>{conductorQuestion}</Text>
+              {conductorQuestionAcked === 'ack' ? (
+                <Text style={styles.conductorQAckedText}>Got it ✓</Text>
+              ) : conductorQuestionAcked === 'dismissed' ? null : (
+                <View style={styles.conductorQRow}>
+                  <TouchableOpacity
+                    style={[styles.conductorQBtn, styles.conductorQOnIt]}
+                    onPress={() => {
+                      setConductorQuestionAcked('ack');
+                      const q = conductorQuestion;
+                      fetch('https://conductor-ivory.vercel.app/api/signals?type=conductorQuestion', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          userId: 'james_totalhome_gmail_com',
+                          question: q,
+                          response: 'acknowledged',
+                        }),
+                      }).catch(() => {});
+                      setTimeout(() => setConductorQuestion(null), 2000);
+                    }}>
+                    <Text style={styles.conductorQOnItText}>On it</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.conductorQBtn, styles.conductorQRemove]}
+                    onPress={async () => {
+                      setConductorQuestionAcked('dismissed');
+                      const q = conductorQuestion;
+                      // Persist per-day dismissal so the same prompt
+                      // doesn't reappear after a brief refresh.
+                      try {
+                        const todayKey = new Date().toLocaleDateString('en-US', {
+                          timeZone: 'America/New_York',
+                          year: 'numeric', month: '2-digit', day: '2-digit',
+                        });
+                        const k = 'conductorQ:dismissed:' + todayKey;
+                        const raw = await AsyncStorage.getItem(k);
+                        const arr = raw ? JSON.parse(raw) : [];
+                        if (q && !arr.includes(q)) arr.push(q);
+                        await AsyncStorage.setItem(k, JSON.stringify(arr));
+                      } catch {
+                        // best-effort
+                      }
+                      fetch('https://conductor-ivory.vercel.app/api/signals?type=conductorQuestion', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          userId: 'james_totalhome_gmail_com',
+                          question: q,
+                          response: 'dismissed',
+                        }),
+                      }).catch(() => {});
+                      setConductorQuestion(null);
+                    }}>
+                    <Text style={styles.conductorQRemoveText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ) : null}
+
           {!loading && weekInReview ? (
             // Week in Review — Clearance-only Sunday reflection paragraph.
             // Server returns null on non-Sunday and on empty memory weeks,
@@ -1488,6 +1591,59 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(184, 150, 12, 0.2)',
     marginBottom: 16,
+  },
+  conductorQWrap: {
+    marginTop: 18,
+    marginBottom: 6,
+    paddingTop: 14,
+    paddingBottom: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(184, 150, 12, 0.18)',
+  },
+  conductorQLabel: {
+    color: '#5a5855',
+    fontSize: 9,
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  conductorQText: {
+    color: '#f0ede8',
+    fontSize: 13,
+    fontStyle: 'italic',
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  conductorQRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  conductorQBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  conductorQOnIt: {
+    borderColor: 'rgba(184, 150, 12, 0.55)',
+    backgroundColor: 'rgba(184, 150, 12, 0.08)',
+  },
+  conductorQOnItText: {
+    color: '#b8960c',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  conductorQRemove: {
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  conductorQRemoveText: {
+    color: '#5a5855',
+    fontSize: 12,
+  },
+  conductorQAckedText: {
+    color: '#5a5855',
+    fontSize: 12,
+    fontStyle: 'italic',
+    paddingVertical: 4,
   },
   autoResWrap: {
     marginTop: 16,
