@@ -5,13 +5,51 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { Minimap } from '@/components/Minimap';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
+
+// LayoutAnimation needs an opt-in on Android; iOS supports it by default.
+// Enabling at module-load is the official pattern — re-calling per-toggle
+// has no benefit.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+type PulseData = {
+  health: {
+    sleep: number | null;
+    hrv: { current: number | null; baseline7d: number | null };
+    restingHR: number | null;
+    steps: number | null;
+    activeCalories: number | null;
+  } | null;
+  weather: {
+    tempF: number | null;
+    heatIndex: number | null;
+    humidity: number | null;
+    conditions: string | null;
+  } | null;
+  signalLoad: 'heavy' | 'moderate' | 'light' | 'clear';
+  urgentCount: number;
+  synthesisFlags: string[];
+};
+
+// Synthesis-flag → user-facing phrase. Only flags listed here render in the
+// expanded card; others (travel_prep, birthday_today, etc.) shape tone via
+// the prompt but don't surface as user-readable lines.
+const PULSE_FLAG_PHRASES: Record<string, string> = {
+  dehydration_risk: 'Dehydration risk — stay ahead of fluids',
+  high_stress_load: 'Heavy load on a recovery day',
+  fatigue_plus_demands: 'Short sleep with urgent signals',
+  green_light: 'Good day — health and load are both favorable',
+  heat_caution: 'Heat caution for outdoor activity',
+  storm_plus_outdoor: 'Storm timing may affect outdoor plans',
+};
 
 type BriefSegment =
   | { type: 'text'; content: string }
@@ -158,6 +196,159 @@ async function fetchBriefWithRetry(url: string) {
   }
 }
 
+// Round-half-up integer formatting. JS toFixed/Math.round handle floats
+// adequately for the small one-decimal cases we need.
+function roundInt(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return '';
+  return String(Math.round(n));
+}
+
+function PulseHealthSection({ health }: { health: PulseData['health'] }) {
+  if (!health) {
+    return (
+      <View style={styles.pulseSection}>
+        <Text style={styles.pulseSectionLabel}>HEALTH</Text>
+        <Text style={styles.pulseEmpty}>
+          Health data not connected — grant access in Settings
+        </Text>
+      </View>
+    );
+  }
+  const { sleep, hrv, restingHR, steps, activeCalories } = health;
+  const anyValue = sleep != null || hrv?.current != null || restingHR != null
+    || steps != null || activeCalories != null;
+  if (!anyValue) {
+    return (
+      <View style={styles.pulseSection}>
+        <Text style={styles.pulseSectionLabel}>HEALTH</Text>
+        <Text style={styles.pulseEmpty}>
+          Health data not connected — grant access in Settings
+        </Text>
+      </View>
+    );
+  }
+  const sleepColor = sleep != null && sleep < 6 ? '#b8960c' : '#a8a5a0';
+  let hrvBelowPct: number | null = null;
+  if (hrv?.current != null && hrv?.baseline7d) {
+    hrvBelowPct = Math.round((1 - hrv.current / hrv.baseline7d) * 100);
+  }
+  const hrvLow = hrvBelowPct != null && hrvBelowPct > 15;
+  const hrvColor = hrvLow ? '#f59e0b' : '#a8a5a0';
+
+  return (
+    <View style={styles.pulseSection}>
+      <Text style={styles.pulseSectionLabel}>HEALTH</Text>
+      {sleep != null ? (
+        <Text style={[styles.pulseRow, { color: sleepColor }]}>
+          🌙  {sleep.toFixed(1)}h
+        </Text>
+      ) : null}
+      {hrv?.current != null ? (
+        <Text style={[styles.pulseRow, { color: hrvColor }]}>
+          💓  {roundInt(hrv.current)}
+          {hrvBelowPct != null && hrvBelowPct > 0
+            ? ` — ${hrvBelowPct}% below baseline`
+            : ''}
+        </Text>
+      ) : null}
+      {restingHR != null ? (
+        <Text style={[styles.pulseRow, { color: '#a8a5a0' }]}>
+          ❤️  {roundInt(restingHR)} bpm
+        </Text>
+      ) : null}
+      {steps != null ? (
+        <Text style={[styles.pulseRow, { color: '#a8a5a0' }]}>
+          👟  {steps.toLocaleString()} so far
+        </Text>
+      ) : null}
+      {activeCalories != null ? (
+        <Text style={[styles.pulseRow, { color: '#a8a5a0' }]}>
+          🔥  {roundInt(activeCalories)} kcal
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function PulseConditionsSection({ weather }: { weather: PulseData['weather'] }) {
+  // Always show the header even when individual fields are absent, to mark
+  // the section's place in the card structure. Individual rows guard on
+  // null so a missing humidity reading just drops that one line.
+  const tempF = weather?.tempF;
+  const heatIndex = weather?.heatIndex;
+  const humidity = weather?.humidity;
+  const conditions = weather?.conditions;
+
+  const heatRef = heatIndex ?? tempF ?? null;
+  const tempColor = heatRef != null && heatRef > 100
+    ? '#ef4444'
+    : heatRef != null && heatRef > 90 ? '#f59e0b' : '#a8a5a0';
+  const humidColor = humidity != null && humidity > 80 ? '#f59e0b' : '#a8a5a0';
+
+  return (
+    <View style={styles.pulseSection}>
+      <Text style={styles.pulseSectionLabel}>CONDITIONS</Text>
+      {tempF != null ? (
+        <Text style={[styles.pulseRow, { color: tempColor }]}>
+          🌡  {roundInt(tempF)}°F
+          {heatIndex != null && heatIndex !== tempF
+            ? `, feels like ${roundInt(heatIndex)}°F`
+            : ''}
+        </Text>
+      ) : null}
+      {humidity != null ? (
+        <Text style={[styles.pulseRow, { color: humidColor }]}>
+          💧  {roundInt(humidity)}%
+        </Text>
+      ) : null}
+      {conditions ? (
+        <Text style={[styles.pulseRow, { color: '#a8a5a0' }]}>{conditions}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function PulseLoadSection({
+  signalLoad,
+  urgentCount,
+}: {
+  signalLoad: PulseData['signalLoad'];
+  urgentCount: number;
+}) {
+  const loadLabel = signalLoad.charAt(0).toUpperCase() + signalLoad.slice(1);
+  let loadColor = '#a8a5a0';
+  if (signalLoad === 'heavy') loadColor = '#f59e0b';
+  else if (signalLoad === 'moderate') loadColor = '#b8960c';
+  return (
+    <View style={styles.pulseSection}>
+      <Text style={styles.pulseSectionLabel}>SIGNAL LOAD</Text>
+      <Text style={[styles.pulseRow, { color: loadColor }]}>{loadLabel}</Text>
+      {urgentCount > 0 ? (
+        <Text style={[styles.pulseRow, { color: '#ef4444' }]}>
+          {urgentCount} urgent
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function PulseFlagsSection({ flags }: { flags: string[] }) {
+  const phrased = (flags || [])
+    .map((f) => PULSE_FLAG_PHRASES[f])
+    .filter((p): p is string => typeof p === 'string' && p.length > 0);
+  if (phrased.length === 0) return null;
+  return (
+    <View style={styles.pulseSection}>
+      <Text style={styles.pulseSectionLabel}>CONDUCTOR NOTICED</Text>
+      {phrased.map((phrase, i) => (
+        <Text key={i} style={[styles.pulseRow, { color: '#d6d3cd' }]}>
+          {phrase}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 export default function TakeoffScreen() {
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
@@ -174,6 +365,7 @@ export default function TakeoffScreen() {
   // the synthesis flags that produced it (revealed on tap).
   const [pulse, setPulse] = useState<string | null>(null);
   const [pulseFlags, setPulseFlags] = useState<string[]>([]);
+  const [pulseData, setPulseData] = useState<PulseData | null>(null);
   const [pulseExpanded, setPulseExpanded] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [loading, setLoading] = useState(true);
@@ -251,6 +443,7 @@ export default function TakeoffScreen() {
     theReadOpacity.setValue(0);
     setPulse(null);
     setPulseFlags([]);
+    setPulseData(null);
     setPulseExpanded(false);
     const { endpoint } = getBriefMode(new Date().getHours());
     if (!endpoint) {
@@ -282,6 +475,9 @@ export default function TakeoffScreen() {
         ? data.pulse
         : null);
       setPulseFlags(Array.isArray(data.pulseFlags) ? data.pulseFlags : []);
+      setPulseData(data.pulseData && typeof data.pulseData === 'object'
+        ? (data.pulseData as PulseData)
+        : null);
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -299,6 +495,19 @@ export default function TakeoffScreen() {
       // best-effort — still navigate
     }
     router.push('/(tabs)/hover');
+  }
+
+  function togglePulse() {
+    // 250ms easeInEaseOut height animation. LayoutAnimation schedules the
+    // next layout pass to interpolate — the state flip on the next line
+    // triggers the re-render that supplies the new height.
+    LayoutAnimation.configureNext({
+      duration: 250,
+      create: { type: 'easeInEaseOut', property: 'opacity' },
+      update: { type: 'easeInEaseOut' },
+      delete: { type: 'easeInEaseOut', property: 'opacity' },
+    });
+    setPulseExpanded((v) => !v);
   }
 
   function toggleTheRead() {
@@ -427,18 +636,26 @@ export default function TakeoffScreen() {
 
           {pulse ? (
             // The Pulse — synthesis layer output. One warm editorial
-            // sentence; tap reveals the synthesis flags that produced it.
+            // sentence; tap expands inline into the full health + context
+            // card via LayoutAnimation. Card sections render from
+            // pulseData with per-field null guards.
             <TouchableOpacity
-              onPress={() => setPulseExpanded((v) => !v)}
+              onPress={togglePulse}
               activeOpacity={0.6}
               hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
               style={styles.pulseWrap}>
               <Text style={styles.pulseLabel}>THE PULSE</Text>
               <Text style={styles.pulseText}>{pulse}</Text>
-              {pulseExpanded && pulseFlags.length > 0 ? (
-                <Text style={styles.pulseFlags}>
-                  {pulseFlags.join(' · ')}
-                </Text>
+              {pulseExpanded && pulseData ? (
+                <View style={styles.pulseCard}>
+                  <PulseHealthSection health={pulseData.health} />
+                  <PulseConditionsSection weather={pulseData.weather} />
+                  <PulseLoadSection
+                    signalLoad={pulseData.signalLoad}
+                    urgentCount={pulseData.urgentCount}
+                  />
+                  <PulseFlagsSection flags={pulseData.synthesisFlags} />
+                </View>
               ) : null}
             </TouchableOpacity>
           ) : null}
@@ -615,11 +832,35 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 19,
   },
-  pulseFlags: {
+  // Expanded card sits inline below the pulse sentence. Brass-edged top
+  // border separates it from the editorial line; each section stacks
+  // vertically with a 14px gap.
+  pulseCard: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(184, 150, 12, 0.18)',
+  },
+  pulseSection: {
+    marginBottom: 14,
+  },
+  pulseSectionLabel: {
     color: '#5a5855',
-    fontSize: 10,
-    letterSpacing: 1,
-    marginTop: 6,
+    fontSize: 9,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  pulseRow: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 2,
+  },
+  pulseEmpty: {
+    color: '#5a5855',
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
   // Date sits in normal flow above the divider, right-aligned within
   // the content's horizontal padding. Hardcoded to the muted grey
