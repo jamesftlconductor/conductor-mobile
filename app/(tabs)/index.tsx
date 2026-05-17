@@ -169,6 +169,12 @@ export default function TakeoffScreen() {
   const [theRead, setTheRead] = useState<string | null>(null);
   const [theReadExpanded, setTheReadExpanded] = useState(false);
   const theReadOpacity = useRef(new Animated.Value(0)).current;
+  // The Pulse — synthesis layer output: one warm sentence summarizing the
+  // day's signal load + health + weather as a single editorial cue, plus
+  // the synthesis flags that produced it (revealed on tap).
+  const [pulse, setPulse] = useState<string | null>(null);
+  const [pulseFlags, setPulseFlags] = useState<string[]>([]);
+  const [pulseExpanded, setPulseExpanded] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
@@ -243,6 +249,9 @@ export default function TakeoffScreen() {
     setTheRead(null);
     setTheReadExpanded(false);
     theReadOpacity.setValue(0);
+    setPulse(null);
+    setPulseFlags([]);
+    setPulseExpanded(false);
     const { endpoint } = getBriefMode(new Date().getHours());
     if (!endpoint) {
       // Overwatch mode — no brief to fetch. Just exit loading so the
@@ -269,6 +278,10 @@ export default function TakeoffScreen() {
       setTheRead(typeof data.theRead === 'string' && data.theRead.length > 0
         ? data.theRead
         : null);
+      setPulse(typeof data.pulse === 'string' && data.pulse.length > 0
+        ? data.pulse
+        : null);
+      setPulseFlags(Array.isArray(data.pulseFlags) ? data.pulseFlags : []);
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -411,6 +424,24 @@ export default function TakeoffScreen() {
             </Text>
             <Text style={[styles.title, { color: theme.title }]}>{mode.title}</Text>
           </View>
+
+          {pulse ? (
+            // The Pulse — synthesis layer output. One warm editorial
+            // sentence; tap reveals the synthesis flags that produced it.
+            <TouchableOpacity
+              onPress={() => setPulseExpanded((v) => !v)}
+              activeOpacity={0.6}
+              hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+              style={styles.pulseWrap}>
+              <Text style={styles.pulseLabel}>THE PULSE</Text>
+              <Text style={styles.pulseText}>{pulse}</Text>
+              {pulseExpanded && pulseFlags.length > 0 ? (
+                <Text style={styles.pulseFlags}>
+                  {pulseFlags.join(' · ')}
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+          ) : null}
 
           <Text style={styles.inFlowDate}>{date}</Text>
 
@@ -563,6 +594,32 @@ const styles = StyleSheet.create({
   },
   scrollFlex: {
     flex: 1,
+  },
+  // The Pulse — synthesis output sits between the greeting/title block
+  // and the in-flow date. Small uppercase label + one italic editorial
+  // sentence; tap expands to reveal the synthesis flags that produced it.
+  pulseWrap: {
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  pulseLabel: {
+    color: '#5a5855',
+    fontSize: 9,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  pulseText: {
+    color: '#d6d3cd',
+    fontSize: 13,
+    fontStyle: 'italic',
+    lineHeight: 19,
+  },
+  pulseFlags: {
+    color: '#5a5855',
+    fontSize: 10,
+    letterSpacing: 1,
+    marginTop: 6,
   },
   // Date sits in normal flow above the divider, right-aligned within
   // the content's horizontal padding. Hardcoded to the muted grey
