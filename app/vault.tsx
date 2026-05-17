@@ -57,6 +57,17 @@ type VaultItem = {
   handled?: boolean;
   createdAt?: string;
   foundAt?: number;
+  // Set on rows that came in via /api/network?action=share-vault.
+  // Read-only by default — mobile UI hides edit/handle affordances
+  // unless sharedFrom.permissionLevel === 'edit'.
+  isShared?: boolean;
+  sharedFrom?: {
+    householdId: string;
+    householdName: string;
+    sharedAt: string;
+    originalId?: string;
+    permissionLevel?: 'view' | 'edit';
+  };
 };
 
 type SortKey = 'urgency' | 'category' | 'amount' | 'added';
@@ -194,19 +205,28 @@ export default function VaultScreen() {
     setExpandedId((current) => (current === id ? null : id));
   }
 
-  const filteredItems = useMemo(() => {
+  // Partition into household-owned vs shared. Shared items render
+  // in a separate section at the bottom with their own muted header
+  // and "From: {householdName}" badges. Search filtering applies to
+  // both so a query reaches across.
+  const { ownedItems, sharedItems } = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (q.length === 0) return items;
-    return items.filter((v) => {
-      const haystack = [v.description, v.provider, v.category, v.notes, v.agentName]
-        .filter(Boolean).join(' ').toLowerCase();
-      return haystack.includes(q);
-    });
+    const all = q.length === 0
+      ? items
+      : items.filter((v) => {
+          const haystack = [v.description, v.provider, v.category, v.notes, v.agentName]
+            .filter(Boolean).join(' ').toLowerCase();
+          return haystack.includes(q);
+        });
+    return {
+      ownedItems: all.filter((v) => !v.isShared),
+      sharedItems: all.filter((v) => v.isShared),
+    };
   }, [items, search]);
 
   const grouped = useMemo(() => {
     const byCat: Record<string, VaultItem[]> = {};
-    for (const item of filteredItems) {
+    for (const item of ownedItems) {
       const cat = backendToDisplay(item.category);
       if (!byCat[cat]) byCat[cat] = [];
       byCat[cat].push(item);
@@ -214,7 +234,7 @@ export default function VaultScreen() {
     return DISPLAY_CATEGORIES
       .filter((c) => byCat[c.key] && byCat[c.key].length > 0)
       .map((c) => ({ ...c, items: byCat[c.key] }));
-  }, [filteredItems]);
+  }, [ownedItems]);
 
   async function patchItem(itemId: string, updates: Partial<VaultItem>) {
     setItems((prev) => prev.map((v) => (v.id === itemId ? { ...v, ...updates } : v)));
@@ -329,6 +349,30 @@ export default function VaultScreen() {
               ))}
             </View>
           ))
+        )}
+
+        {sharedItems.length > 0 && (
+          <View style={styles.sharedSection}>
+            <Text style={styles.sharedHeader}>SHARED WITH YOU</Text>
+            <View style={styles.sharedLine} />
+            {sharedItems.map((item) => (
+              <View key={item.id} style={styles.sharedItem}>
+                <Text style={styles.sharedDesc} numberOfLines={2}>
+                  {item.description || 'Vault item'}
+                </Text>
+                {item.sharedFrom?.householdName ? (
+                  <Text style={styles.sharedFromBadge}>
+                    From: {item.sharedFrom.householdName}
+                  </Text>
+                ) : null}
+                {item.renewalDate ? (
+                  <Text style={styles.sharedMeta}>
+                    {item.renewalDate}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+          </View>
         )}
 
         <TouchableOpacity
@@ -494,6 +538,12 @@ function VaultItemRow({
               <Text style={styles.actionRemoveText}>Remove</Text>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity
+            onPress={() => router.push(`/network?shareItemId=${item.id}` as never)}
+            style={styles.shareNetworkLink}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <Text style={styles.shareNetworkLinkText}>Share with Network →</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
     </TouchableOpacity>
@@ -771,6 +821,47 @@ const styles = StyleSheet.create({
   searchIcon: { fontSize: 14, color: MUTED },
   searchInput: { flex: 1, color: OFF_WHITE, fontSize: 13, padding: 0 },
   section: { marginBottom: 24 },
+  sharedSection: {
+    marginTop: 28,
+    paddingTop: 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  sharedHeader: {
+    color: '#5a5855',
+    fontSize: 10,
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  sharedLine: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 12,
+  },
+  sharedItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    marginBottom: 10,
+  },
+  sharedDesc: {
+    color: '#f0ede8',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  sharedFromBadge: {
+    color: '#5a5855',
+    fontSize: 9,
+    letterSpacing: 0.5,
+    marginTop: 6,
+    textTransform: 'uppercase',
+  },
+  sharedMeta: {
+    color: '#5a5855',
+    fontSize: 11,
+    marginTop: 4,
+  },
   sectionHeader: {
     color: BRASS,
     fontSize: 10,
@@ -826,6 +917,16 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   actionBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
   actionHandled: { backgroundColor: BRASS },
+  shareNetworkLink: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingVertical: 4,
+  },
+  shareNetworkLinkText: {
+    color: BRASS,
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
   actionHandledText: { color: BG, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
   actionRemove: { paddingVertical: 8, paddingHorizontal: 14 },
   actionRemoveText: {

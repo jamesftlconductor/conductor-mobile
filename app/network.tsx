@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -65,6 +65,14 @@ function loadColor(load?: string): string {
 }
 
 export default function NetworkScreen() {
+  // shareItemId param — set when the user enters from the Vault
+  // "Share with Network →" link. When present, renders a banner at
+  // the top inviting them to pick a connection + permission.
+  const params = useLocalSearchParams<{ shareItemId?: string }>();
+  const shareItemId = params?.shareItemId || null;
+  const [sharing, setSharing] = useState(false);
+  const [sharePermission, setSharePermission] = useState<'view' | 'edit'>('view');
+
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,6 +82,35 @@ export default function NetworkScreen() {
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+
+  async function shareVaultWith(targetHouseholdId: string) {
+    if (!shareItemId) return;
+    setSharing(true);
+    try {
+      const res = await fetch(`${API_BASE}/network?action=share-vault`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: USER_ID,
+          vaultItemId: shareItemId,
+          targetHouseholdId,
+          permissionLevel: sharePermission,
+        }),
+      });
+      if (res.ok) {
+        Alert.alert('Shared', 'The vault item was shared.', [
+          { text: 'OK', onPress: () => router.back() },
+        ]);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        Alert.alert('Could not share', data?.error || 'Unknown error');
+      }
+    } catch (err: any) {
+      Alert.alert('Network error', err?.message || String(err));
+    } finally {
+      setSharing(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -197,6 +234,34 @@ export default function NetworkScreen() {
           Connected households. Each connection sees only what its permission level allows.
         </Text>
 
+        {shareItemId ? (
+          <View style={styles.shareBanner}>
+            <Text style={styles.shareBannerTitle}>Share vault item</Text>
+            <Text style={styles.shareBannerHint}>
+              Pick a permission, then tap a connected household to share with.
+            </Text>
+            <View style={styles.shareLevelRow}>
+              {(['view', 'edit'] as const).map((p) => (
+                <Pressable
+                  key={p}
+                  onPress={() => setSharePermission(p)}
+                  style={[
+                    styles.shareLevelPill,
+                    sharePermission === p && styles.shareLevelPillActive,
+                  ]}>
+                  <Text
+                    style={[
+                      styles.shareLevelPillText,
+                      sharePermission === p && styles.shareLevelPillTextActive,
+                    ]}>
+                    {p}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {connections.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No connections yet</Text>
@@ -208,8 +273,14 @@ export default function NetworkScreen() {
         ) : (
           connections.map((c) => {
             const s = c.summary || {};
+            const Container: any = shareItemId ? TouchableOpacity : View;
             return (
-              <View key={c.connectedHouseholdId} style={styles.card}>
+              <Container
+                key={c.connectedHouseholdId}
+                style={styles.card}
+                activeOpacity={0.7}
+                onPress={shareItemId ? () => shareVaultWith(c.connectedHouseholdId) : undefined}
+                disabled={sharing}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTitle} numberOfLines={1}>
                     {c.connectedHouseholdId}
@@ -251,13 +322,19 @@ export default function NetworkScreen() {
                   </View>
                 )}
 
-                <Pressable
-                  onPress={() => disconnect(c.connectedHouseholdId)}
-                  style={styles.disconnectBtn}
-                >
-                  <Text style={styles.disconnectText}>Disconnect</Text>
-                </Pressable>
-              </View>
+                {!shareItemId ? (
+                  <Pressable
+                    onPress={() => disconnect(c.connectedHouseholdId)}
+                    style={styles.disconnectBtn}
+                  >
+                    <Text style={styles.disconnectText}>Disconnect</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.shareCardHint}>
+                    Tap to share with this household →
+                  </Text>
+                )}
+              </Container>
             );
           })
         )}
@@ -357,6 +434,48 @@ const styles = StyleSheet.create({
   inviteBtnText: { color: BRASS, fontSize: 14, fontWeight: '500' },
   scroll: { padding: 18, paddingBottom: 80 },
   subtitle: { color: MUTED, fontSize: 13, marginBottom: 18, lineHeight: 19 },
+  shareBanner: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(184, 150, 12, 0.45)',
+    backgroundColor: 'rgba(184, 150, 12, 0.06)',
+    marginBottom: 18,
+  },
+  shareBannerTitle: {
+    color: BRASS,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    marginBottom: 4,
+  },
+  shareBannerHint: {
+    color: MUTED,
+    fontSize: 12,
+    marginBottom: 12,
+    lineHeight: 17,
+  },
+  shareLevelRow: { flexDirection: 'row', gap: 8 },
+  shareLevelPill: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SOFT_BORDER,
+  },
+  shareLevelPillActive: {
+    borderColor: BRASS,
+    backgroundColor: 'rgba(184, 150, 12, 0.12)',
+  },
+  shareLevelPillText: { color: MUTED, fontSize: 12, letterSpacing: 0.5 },
+  shareLevelPillTextActive: { color: BRASS, fontWeight: '600' },
+  shareCardHint: {
+    color: BRASS,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 10,
+    letterSpacing: 0.3,
+  },
   emptyCard: {
     padding: 20,
     borderRadius: 12,
