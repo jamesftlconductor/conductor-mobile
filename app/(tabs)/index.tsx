@@ -416,6 +416,19 @@ export default function TakeoffScreen() {
   // show "Acknowledged" before fading.
   const [handoff, setHandoff] = useState<{ signalId: string; message: string } | null>(null);
   const [handoffAcked, setHandoffAcked] = useState(false);
+  // Quick-action popover — opened by long-press on a brief signal
+  // chip. Holds the targeted signal id + content phrase so the
+  // popover can render a confirmation header naming what was tapped.
+  // `acted` flips after the user picks an action and drives the
+  // optimistic UI: a brief strikethrough/dim/fade on the chip and
+  // popover dismissal. `quickActed` is the per-signal map of applied
+  // actions so we can keep chips dimmed/struck across re-renders.
+  const [quickActionTarget, setQuickActionTarget] = useState<
+    { signalId: string | number; phrase: string } | null
+  >(null);
+  const [quickActed, setQuickActed] = useState<
+    Record<string, 'done' | 'snoozed' | 'dismissed'>
+  >({});
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   // Ask Conductor — single-shot Q&A. Always fresh call (server-side
   // 30min cache covers the duplicate-question case). State carries the
@@ -870,14 +883,27 @@ export default function TakeoffScreen() {
                 {(segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment]).map((seg, i) => {
                   if (seg.type === 'signal') {
                     const color = (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
+                    const acted = quickActed[String(seg.signalId)];
+                    // Optimistic chip styling per applied action.
+                    const chipExtra: any = {};
+                    if (acted === 'done') chipExtra.textDecorationLine = 'line-through';
+                    else if (acted === 'snoozed') chipExtra.opacity = 0.45;
+                    else if (acted === 'dismissed') chipExtra.opacity = 0.25;
                     return (
                       <Text
                         key={i}
                         onPress={() => handleSignalTap(seg.signalId)}
+                        onLongPress={() =>
+                          setQuickActionTarget({
+                            signalId: seg.signalId,
+                            phrase: seg.content || '',
+                          })
+                        }
                         style={{
-                          textDecorationLine: 'underline',
+                          textDecorationLine: acted === 'done' ? 'line-through' : 'underline',
                           textDecorationColor: color,
                           textDecorationStyle: 'solid',
+                          ...chipExtra,
                         }}>
                         {seg.content}
                       </Text>
@@ -1041,6 +1067,98 @@ export default function TakeoffScreen() {
               activeOpacity={0.7}>
               <Text style={styles.transparencyCloseBtnText}>Shut</Text>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Quick-action popover — long-press on any signal chip in the
+          brief brings this up. Three options + dismiss on backdrop tap.
+          Optimistic UI: chip styling flips immediately, API call fires
+          in the background, errors silently revert via the next brief
+          fetch. */}
+      <Modal
+        visible={quickActionTarget != null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setQuickActionTarget(null)}>
+        <Pressable
+          style={styles.quickActionBackdrop}
+          onPress={() => setQuickActionTarget(null)}>
+          <Pressable style={styles.quickActionSheet} onPress={() => {}}>
+            <Text style={styles.quickActionHeader}>
+              {quickActionTarget?.phrase || 'Signal'}
+            </Text>
+            <View style={styles.quickActionRow}>
+              <TouchableOpacity
+                style={[styles.quickActionBtn, styles.quickActionDone]}
+                onPress={() => {
+                  const t = quickActionTarget;
+                  if (!t) return;
+                  setQuickActed((m) => ({ ...m, [String(t.signalId)]: 'done' }));
+                  setQuickActionTarget(null);
+                  fetch('https://conductor-ivory.vercel.app/api/signals', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: t.signalId,
+                      state: 'resolved',
+                      userId: 'james_totalhome_gmail_com',
+                    }),
+                  }).catch(() => {});
+                }}>
+                <Text style={styles.quickActionDoneText}>Done ✓</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickActionBtn, styles.quickActionMuted]}
+                onPress={() => {
+                  const t = quickActionTarget;
+                  if (!t) return;
+                  setQuickActed((m) => ({ ...m, [String(t.signalId)]: 'snoozed' }));
+                  setQuickActionTarget(null);
+                  fetch('https://conductor-ivory.vercel.app/api/signals', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: t.signalId,
+                      state: 'snoozed',
+                      userId: 'james_totalhome_gmail_com',
+                    }),
+                  }).catch(() => {});
+                }}>
+                <Text style={styles.quickActionMutedText}>Snooze 24h ⏸</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickActionBtn, styles.quickActionDanger]}
+                onPress={() => {
+                  const t = quickActionTarget;
+                  if (!t) return;
+                  setQuickActed((m) => ({ ...m, [String(t.signalId)]: 'dismissed' }));
+                  setQuickActionTarget(null);
+                  // Camouflage by sender — backend resolves the
+                  // signal's sender from signalId and adds a rule
+                  // suppressing future imports from that source.
+                  fetch('https://conductor-ivory.vercel.app/api/signals?type=camouflage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      userId: 'james_totalhome_gmail_com',
+                      signalId: t.signalId,
+                    }),
+                  }).catch(() => {});
+                  // Also resolve the signal so it drops off Horizon.
+                  fetch('https://conductor-ivory.vercel.app/api/signals', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: t.signalId,
+                      state: 'expired',
+                      userId: 'james_totalhome_gmail_com',
+                    }),
+                  }).catch(() => {});
+                }}>
+                <Text style={styles.quickActionDangerText}>Not relevant ✗</Text>
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1359,6 +1477,70 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.5,
     textAlign: 'center',
+  },
+  quickActionBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 22,
+  },
+  quickActionSheet: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(184, 150, 12, 0.35)',
+    width: '100%',
+    maxWidth: 360,
+  },
+  quickActionHeader: {
+    color: '#f0ede8',
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginBottom: 14,
+    textAlign: 'center',
+  },
+  quickActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  quickActionBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  quickActionDone: {
+    borderColor: 'rgba(184, 150, 12, 0.65)',
+    backgroundColor: 'rgba(184, 150, 12, 0.10)',
+  },
+  quickActionDoneText: {
+    color: '#b8960c',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  quickActionMuted: {
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  quickActionMutedText: {
+    color: '#a8a5a0',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  quickActionDanger: {
+    borderColor: 'rgba(217, 119, 87, 0.4)',
+    backgroundColor: 'rgba(217, 119, 87, 0.06)',
+  },
+  quickActionDangerText: {
+    color: '#d97757',
+    fontSize: 12,
+    fontWeight: '500',
   },
   transparencyBackdrop: {
     flex: 1,
