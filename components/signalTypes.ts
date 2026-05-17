@@ -6,6 +6,10 @@ export type Signal = {
   eta?: string | null;
   type?: string;
   state?: string;
+  // Optional ingestion/edit timestamps — used by the Hover age-pressure
+  // calculation to widen the pulse rate as a signal lingers unresolved.
+  lastUpdate?: string;
+  createdAt?: string;
 };
 
 export type TypeMeta = { emoji: string; color: string; label: string };

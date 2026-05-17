@@ -82,6 +82,36 @@ function ringForSignal(s: Signal): RingKey {
   return 'outer';
 }
 
+// Age pressure — a signal lingering unresolved gradually pulses
+// faster on the radar, communicating natural time pressure without
+// any manual urgency escalation. Tiered multiplier applied as
+// (1 - multiplier) on the ring's base pulseMs.
+//   0–2d:  0%   (normal)
+//   3–5d:  15%
+//   6–9d:  30%
+//   10–14: 50%
+//   15+:   70%  (cap, equal to urgent inner-ring pulse)
+function agePressureMultiplier(signal: Signal): number {
+  const stamp = signal.lastUpdate || signal.createdAt;
+  if (!stamp) return 0;
+  const ms = Date.parse(stamp);
+  if (isNaN(ms)) return 0;
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (days < 3) return 0;
+  if (days < 6) return 0.15;
+  if (days < 10) return 0.30;
+  if (days < 15) return 0.50;
+  return 0.70;
+}
+
+function signalAgeDays(signal: Signal): number {
+  const stamp = signal.lastUpdate || signal.createdAt;
+  if (!stamp) return 0;
+  const ms = Date.parse(stamp);
+  if (isNaN(ms)) return 0;
+  return Math.floor((Date.now() - ms) / 86400000);
+}
+
 function idAngle(id: Signal['id']): number {
   // Spread between 30° and 330° so the 12 o'clock area stays clear.
   const n = typeof id === 'number' ? id : parseInt(String(id), 10) || 0;
@@ -476,13 +506,20 @@ function RotatingRing({
         const tk = typeKeyFor(s);
         const isHighlighted = highlightedTypeKey === tk;
         const isDottedDimmed = dimmedTypeKey !== null && !isHighlighted;
+        // Age pressure widens pulse rate as the signal lingers.
+        // 600ms floor matches inner-ring urgent pulse — never faster
+        // than the most urgent dot on the radar.
+        const pressure = agePressureMultiplier(s);
+        const ageDays = signalAgeDays(s);
+        const effectivePulseMs = Math.max(600, Math.round(ring.pulseMs * (1 - pressure)));
         return (
           <SignalDot
             key={String(s.id)}
             meta={meta}
             x={x}
             y={y}
-            pulseMs={ring.pulseMs}
+            pulseMs={effectivePulseMs}
+            ageDays={ageDays}
             paused={pausedSignalId === String(s.id)}
             dim={isDottedDimmed}
             highlight={isHighlighted}
@@ -500,6 +537,7 @@ function SignalDot({
   x,
   y,
   pulseMs,
+  ageDays,
   paused,
   dim,
   highlight,
@@ -510,6 +548,7 @@ function SignalDot({
   x: number;
   y: number;
   pulseMs: number;
+  ageDays: number;
   paused: boolean;
   dim: boolean;
   highlight: boolean;
@@ -579,11 +618,20 @@ function SignalDot({
         style={[
           styles.signalCircle,
           {
+            // Signals 10+ days old shift to a subtle amber tint —
+            // "this has been waiting" cue, without alarming the user
+            // by changing the emoji or position.
             backgroundColor: meta.color + '26',
             borderColor: meta.color + '66',
             transform: [{ scale: composedScale }],
           },
         ]}>
+        {ageDays >= 10 ? (
+          <View
+            pointerEvents="none"
+            style={[styles.signalCircle, styles.signalAgedOverlay]}
+          />
+        ) : null}
         <Text style={styles.signalEmoji}>{meta.emoji}</Text>
       </Animated.View>
     </TouchableOpacity>
@@ -1425,6 +1473,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  signalAgedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: 'rgba(184, 150, 12, 0.20)',
+    borderWidth: 0,
   },
   signalEmoji: {
     fontSize: 16,
