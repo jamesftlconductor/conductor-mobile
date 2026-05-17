@@ -5,7 +5,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
+import { ActivityIndicator, Animated, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
@@ -372,6 +372,14 @@ export default function TakeoffScreen() {
   const [pulseData, setPulseData] = useState<PulseData | null>(null);
   const [pulseExpanded, setPulseExpanded] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  // Ask Conductor — single-shot Q&A. Always fresh call (server-side
+  // 30min cache covers the duplicate-question case). State carries the
+  // current question draft, the loading flag, the answer/error result.
+  const [askQuestion, setAskQuestion] = useState('');
+  const [askLoading, setAskLoading] = useState(false);
+  const [askAnswer, setAskAnswer] = useState<string | null>(null);
+  const [askError, setAskError] = useState(false);
+  const askInputRef = useRef<TextInput | null>(null);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [greeting, setGreeting] = useState('');
@@ -450,6 +458,12 @@ export default function TakeoffScreen() {
     setPulseFlags([]);
     setPulseData(null);
     setPulseExpanded(false);
+    // Ask Conductor — full reset on brief regenerate. Carrying an answer
+    // across briefs would imply continuity that isn't there yet.
+    setAskQuestion('');
+    setAskLoading(false);
+    setAskAnswer(null);
+    setAskError(false);
     const { endpoint } = getBriefMode(new Date().getHours());
     if (!endpoint) {
       // Overwatch mode — no brief to fetch. Just exit loading so the
@@ -540,6 +554,44 @@ export default function TakeoffScreen() {
         useNativeDriver: true,
       }).start();
     }
+  }
+
+  async function submitAsk() {
+    const q = askQuestion.trim();
+    if (q.length === 0) return;
+    if (askLoading) return;
+    setAskLoading(true);
+    setAskError(false);
+    setAskAnswer(null);
+    try {
+      const res = await fetch('https://conductor-ivory.vercel.app/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: 'james_totalhome_gmail_com',
+          question: q,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (typeof data?.answer !== 'string' || data.answer.length === 0) {
+        throw new Error('empty answer');
+      }
+      setAskAnswer(data.answer);
+    } catch {
+      setAskError(true);
+    } finally {
+      setAskLoading(false);
+    }
+  }
+
+  function resetAsk() {
+    // "Ask another →" — clear the current answer, blank the input,
+    // refocus so the user lands directly on the keyboard.
+    setAskAnswer(null);
+    setAskError(false);
+    setAskQuestion('');
+    setTimeout(() => askInputRef.current?.focus(), 0);
   }
 
   function handleFeedback(rating: 'up' | 'down') {
@@ -666,6 +718,60 @@ export default function TakeoffScreen() {
                 </View>
               ) : null}
             </TouchableOpacity>
+          ) : null}
+
+          {mode.title !== 'Overwatch' ? (
+            // Ask Conductor — single-shot Q&A. Placed below The Pulse and
+            // above the in-flow date so the input is the natural next
+            // landing spot after reading the synthesis sentence. Overwatch
+            // mode has no brief, so the question UI is hidden there too.
+            <View style={styles.askWrap}>
+              <View style={styles.askInputRow}>
+                <TextInput
+                  ref={askInputRef}
+                  value={askQuestion}
+                  onChangeText={setAskQuestion}
+                  onSubmitEditing={submitAsk}
+                  placeholder="Ask Conductor..."
+                  placeholderTextColor="#5a5855"
+                  returnKeyType="send"
+                  editable={!askLoading}
+                  blurOnSubmit={false}
+                  style={styles.askInput}
+                />
+                <TouchableOpacity
+                  onPress={submitAsk}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  disabled={askLoading || askQuestion.trim().length === 0}>
+                  <Text
+                    style={[
+                      styles.askSend,
+                      (askLoading || askQuestion.trim().length === 0) && { opacity: 0.4 },
+                    ]}>
+                    →
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {askLoading ? (
+                <Text style={styles.askThinking}>Conductor is thinking...</Text>
+              ) : null}
+              {!askLoading && askError ? (
+                <Text style={styles.askThinking}>Conductor couldn&apos;t reach that one. Try again.</Text>
+              ) : null}
+              {!askLoading && !askError && askAnswer ? (
+                <View style={styles.askAnswerCard}>
+                  <Text style={[styles.askAnswerText, { color: theme.brief }]}>{askAnswer}</Text>
+                  <TouchableOpacity
+                    onPress={resetAsk}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.askAnotherWrap}>
+                    <Text style={styles.askAnother}>Ask another →</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
           ) : null}
 
           <Text style={styles.inFlowDate}>{date}</Text>
@@ -883,6 +989,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: 'italic',
     lineHeight: 18,
+  },
+  // Ask Conductor — input row, loading/error states, answer card. Sits
+  // between The Pulse and the in-flow date in Takeoff/Clearance modes.
+  askWrap: {
+    marginTop: 12,
+    marginBottom: 18,
+  },
+  askInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    paddingTop: 12,
+  },
+  askInput: {
+    flex: 1,
+    color: '#d6d3cd',
+    fontSize: 13,
+    paddingVertical: 6,
+  },
+  askSend: {
+    color: '#b8960c',
+    fontSize: 16,
+    paddingLeft: 12,
+  },
+  askThinking: {
+    color: '#5a5855',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  askAnswerCard: {
+    marginTop: 12,
+    paddingLeft: 12,
+    paddingVertical: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: '#b8960c',
+  },
+  askAnswerText: {
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  askAnotherWrap: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  askAnother: {
+    color: '#5a5855',
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
   // Date sits in normal flow above the divider, right-aligned within
   // the content's horizontal padding. Hardcoded to the muted grey
