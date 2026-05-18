@@ -1,203 +1,461 @@
+// Onboarding — two parallel tracks running concurrently:
+//
+//   Track 1 (background): /api/onboard pipeline. Kicked off on mount,
+//     polled every 5s. We never block on it; the personalization steps
+//     occupy the user's attention while the pipeline runs.
+//
+//   Track 2 (foreground): 3 personalization steps — household type,
+//     own/rent, notifications. Each step advances when the user picks.
+//
+// After step 3:
+//   - If pipeline already complete → straight to /onboard-reveal
+//   - Else → interstitial with cycling phrases, polled every 3s.
+//     Navigates to /onboard-reveal the moment status flips complete.
+//
+// Pipeline start time is persisted in AsyncStorage so a re-mount
+// (backgrounded app, etc.) doesn't restart the pipeline.
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Easing,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
-const PHRASES = [
-  'Reading the shape of your year.',
-  "Finding what's already in motion.",
-  'Learning what your weeks look like.',
-  'Noting what renews and what expires.',
-  'Watching for what tends to slip through.',
-  'Getting acquainted with your household.',
-  'Connecting the signals around you.',
-  'Almost ready to think alongside you.',
+const API_BASE = 'https://conductor-ivory.vercel.app/api';
+const USER_ID = 'james_totalhome_gmail_com';
+
+const BG = '#0f0f0f';
+const OFF_WHITE = '#f0ede8';
+const MUTED = '#5a5855';
+const FAINT = '#a8a5a0';
+const BRASS = '#b8960c';
+const SOFT_BORDER = 'rgba(255,255,255,0.06)';
+
+// Progress bar fills 0 → 90% over PROGRESS_DURATION_MS. Jumps to
+// 100% only when the pipeline reports complete.
+const PROGRESS_DURATION_MS = 45000;
+const STATUS_POLL_MS = 5000;
+const INTERSTITIAL_POLL_MS = 3000;
+
+const PIPELINE_START_KEY = 'onboard_pipeline_started_at';
+
+type Phase = 'step1' | 'step2' | 'step3' | 'interstitial';
+
+type HouseholdType = 'single' | 'couple' | 'family' | 'rent_focus' | 'multigenerational' | 'roommates';
+type OwnRent = 'own' | 'rent' | 'split';
+
+const TYPE_CARDS: {
+  id: HouseholdType;
+  emoji: string;
+  label: string;
+  desc: string;
+  mappedType: string;
+}[] = [
+  { id: 'single', emoji: '👤', label: 'Just me', desc: 'Personal intelligence, your way', mappedType: 'single' },
+  { id: 'couple', emoji: '👫', label: 'Couple', desc: 'Coordinated household awareness', mappedType: 'couple' },
+  { id: 'family', emoji: '👨‍👩‍👧', label: 'Family with kids', desc: 'Schedules, crew, and more', mappedType: 'family' },
+  { id: 'rent_focus', emoji: '🏠', label: 'Renting', desc: 'Lease tracking and apartment life', mappedType: 'single' },
+  { id: 'multigenerational', emoji: '👴', label: 'Multiple generations', desc: 'Health-forward household intelligence', mappedType: 'multigenerational' },
+  { id: 'roommates', emoji: '🏢', label: 'Roommates', desc: 'Shared life, separate worlds', mappedType: 'roommates' },
 ];
 
-const TRUST =
-  'We read your emails to understand your household. We store what we learn — not the emails themselves.';
-
-type Step = { kind: 'phrase'; text: string } | { kind: 'trust'; text: string };
-
-// After phrase 4 and before phrase 5, the trust statement gets its own cycle.
-const SEQUENCE: Step[] = [
-  { kind: 'phrase', text: PHRASES[0] },
-  { kind: 'phrase', text: PHRASES[1] },
-  { kind: 'phrase', text: PHRASES[2] },
-  { kind: 'phrase', text: PHRASES[3] },
-  { kind: 'trust',  text: TRUST },
-  { kind: 'phrase', text: PHRASES[4] },
-  { kind: 'phrase', text: PHRASES[5] },
-  { kind: 'phrase', text: PHRASES[6] },
-  { kind: 'phrase', text: PHRASES[7] },
+const INTERSTITIAL_PHRASES = [
+  'Reading your recent emails…',
+  'Building your signal picture…',
+  'Checking your calendar…',
+  'Almost ready…',
 ];
-
-const FADE_MS = 500;
-const HOLD_MS = 3500;
-const STEP_MS = FADE_MS + HOLD_MS; // 4000ms before fade-out begins
-const READY_HOLD_MS = 2000;
 
 export default function OnboardingScreen() {
-  const [index, setIndex] = useState(0);
-  const [done, setDone] = useState(false);
-  const opacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(1)).current;
+  const [phase, setPhase] = useState<Phase>('step1');
+  const [pickedType, setPickedType] = useState<HouseholdType | null>(null);
+  const [ownRent, setOwnRent] = useState<OwnRent | null>(null);
+  const [notifChoice, setNotifChoice] = useState<'allow' | 'skip' | null>(null);
 
-  // Slow logo pulse, 2.5s cycle.
+  const [pipelineReady, setPipelineReady] = useState(false);
+  const progress = useRef(new Animated.Value(0)).current;
+  const progressMounted = useRef(false);
+
+  // Kick pipeline + start progress on mount.
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(logoScale, {
-          toValue: 1.08,
-          duration: 1250,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoScale, {
-          toValue: 1.0,
-          duration: 1250,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [logoScale]);
+    startPipeline();
+    // Animate to 90% over PROGRESS_DURATION_MS. The final 10% jumps
+    // only when the pipeline reports complete (or we navigate away).
+    if (!progressMounted.current) {
+      progressMounted.current = true;
+      Animated.timing(progress, {
+        toValue: 0.9,
+        duration: PROGRESS_DURATION_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Phrase cycle: fade in (500ms), hold (3500ms), fade out (500ms), advance.
-  useEffect(() => {
-    if (done) return;
-    let cancelled = false;
-
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: FADE_MS,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-
-    const fadeOutTimer = setTimeout(() => {
-      if (cancelled) return;
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: FADE_MS,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (cancelled || !finished) return;
-        if (index < SEQUENCE.length - 1) {
-          setIndex((i) => i + 1);
-        } else {
-          setDone(true);
-        }
+  async function startPipeline() {
+    try {
+      const existing = await AsyncStorage.getItem(PIPELINE_START_KEY);
+      if (existing) {
+        // Already started in a prior session — just resume polling.
+        return;
+      }
+      await AsyncStorage.setItem(PIPELINE_START_KEY, String(Date.now()));
+      await fetch(`${API_BASE}/onboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID }),
       });
-    }, STEP_MS);
+    } catch {
+      // best-effort — pipeline is also kicked from callback.tsx on
+      // OAuth complete, so a network blip here isn't fatal.
+    }
+  }
 
-    return () => {
-      cancelled = true;
-      clearTimeout(fadeOutTimer);
-    };
-  }, [index, done, opacity]);
-
-  // Final state: fade in "Conductor is ready.", hold 2s, navigate.
+  // Status polling — runs the whole time. Stops once pipelineReady.
   useEffect(() => {
-    if (!done) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: FADE_MS,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-
-    const navTimer = setTimeout(() => {
-      if (!cancelled) router.replace('/onboard-reveal' as never);
-    }, FADE_MS + READY_HOLD_MS);
+    const poll = async () => {
+      if (cancelled || pipelineReady) return;
+      try {
+        const res = await fetch(`${API_BASE}/onboard?userId=${USER_ID}`);
+        const data = await res.json();
+        const state = data?.status?.state;
+        if (state === 'complete' || state === 'completed' || data?.status?.finishedAt) {
+          if (cancelled) return;
+          setPipelineReady(true);
+          Animated.timing(progress, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: false,
+          }).start();
+          return;
+        }
+      } catch { /* keep polling */ }
+      const next = phase === 'interstitial' ? INTERSTITIAL_POLL_MS : STATUS_POLL_MS;
+      timer = setTimeout(poll, next);
+    };
+    poll();
 
     return () => {
       cancelled = true;
-      clearTimeout(navTimer);
+      if (timer) clearTimeout(timer);
     };
-  }, [done, opacity]);
+  }, [phase, pipelineReady, progress]);
 
-  const current = SEQUENCE[index];
-  const textStyle = done
-    ? styles.readyText
-    : current.kind === 'trust'
-    ? styles.trustText
-    : styles.phraseText;
-  const text = done ? 'Conductor is ready.' : current.text;
+  // Auto-navigate to reveal once interstitial + pipeline complete.
+  useEffect(() => {
+    if (phase === 'interstitial' && pipelineReady) {
+      // Small delay so the user sees the 100% bar before navigating.
+      const t = setTimeout(() => {
+        AsyncStorage.removeItem(PIPELINE_START_KEY).catch(() => {});
+        router.replace('/onboard-reveal' as never);
+      }, 600);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [phase, pipelineReady]);
+
+  // ---------- Step handlers ----------
+
+  async function confirmStep1(t: HouseholdType) {
+    setPickedType(t);
+    if (t === 'rent_focus') setOwnRent('rent');
+    setPhase('step2');
+  }
+
+  async function confirmStep2(o: OwnRent) {
+    setOwnRent(o);
+    // Persist profile choice mid-flow so the brief.js voice rules
+    // are in effect by the time the first brief generates.
+    const card = TYPE_CARDS.find((c) => c.id === pickedType);
+    try {
+      await fetch(`${API_BASE}/signals?type=profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: USER_ID,
+          type: card?.mappedType || 'other',
+          ownOrRent: o === 'split' ? 'rent' : o,
+        }),
+      });
+    } catch { /* best-effort */ }
+    setPhase('step3');
+  }
+
+  async function confirmStep3(choice: 'allow' | 'skip') {
+    setNotifChoice(choice);
+    if (pipelineReady) {
+      router.replace('/onboard-reveal' as never);
+      AsyncStorage.removeItem(PIPELINE_START_KEY).catch(() => {});
+    } else {
+      setPhase('interstitial');
+    }
+  }
+
+  // ---------- Render ----------
+
+  const widthInterpolated = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   return (
     <View style={styles.container}>
-      <View style={styles.center}>
-        <Animated.View
-          style={[styles.logo, { transform: [{ scale: logoScale }] }]}>
-          <Text style={styles.logoMark}>C</Text>
-        </Animated.View>
-
-        <View style={styles.textArea}>
-          <Animated.Text style={[textStyle, { opacity }]}>{text}</Animated.Text>
-        </View>
+      {/* Progress bar — always at the very top. */}
+      <View style={styles.progressTrack}>
+        <Animated.View style={[styles.progressFill, { width: widthInterpolated }]} />
       </View>
+      {pipelineReady ? (
+        <Text style={styles.readyChip}>Ready ✓</Text>
+      ) : null}
+
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {phase === 'step1' ? (
+          <>
+            <Text style={styles.preface}>
+              While Conductor reads your household — tell us a little about yourself.
+            </Text>
+            <Text style={styles.title}>Which describes you best?</Text>
+            <View style={styles.grid}>
+              {TYPE_CARDS.map((c) => {
+                const active = pickedType === c.id;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    onPress={() => confirmStep1(c.id)}
+                    activeOpacity={0.7}
+                    style={[styles.card, active && styles.cardActive]}>
+                    <Text style={styles.cardEmoji}>{c.emoji}</Text>
+                    <Text style={[styles.cardLabel, active && { color: BRASS }]}>{c.label}</Text>
+                    <Text style={styles.cardDesc}>{c.desc}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
+        {phase === 'step2' ? (
+          <>
+            <Text style={styles.preface}>Step 2 of 3</Text>
+            <Text style={styles.title}>Do you own or rent your home?</Text>
+            <View style={styles.bigChoiceColumn}>
+              {(['own', 'rent', 'split'] as OwnRent[]).map((o) => (
+                <TouchableOpacity
+                  key={o}
+                  onPress={() => confirmStep2(o)}
+                  activeOpacity={0.7}
+                  style={[styles.bigChoice, ownRent === o && styles.bigChoiceActive]}>
+                  <Text
+                    style={[
+                      styles.bigChoiceLabel,
+                      ownRent === o && { color: BRASS, fontWeight: '600' },
+                    ]}>
+                    {o === 'own' ? 'Own' : o === 'rent' ? 'Rent' : 'Both (split)'}
+                  </Text>
+                  <Text style={styles.bigChoiceDesc}>
+                    {o === 'own'
+                      ? 'Maintenance plan + full inventory'
+                      : o === 'rent'
+                      ? 'Lease tracking + apartment scale'
+                      : 'A bit of both'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        {phase === 'step3' ? (
+          <>
+            <Text style={styles.preface}>Step 3 of 3</Text>
+            <Text style={styles.title}>Morning briefs at 7am.</Text>
+            <Text style={styles.copy}>
+              Conductor sends one push notification each morning — your
+              brief. You can adjust quiet hours and additional reminders
+              later from Your House.
+            </Text>
+            <View style={styles.bigChoiceColumn}>
+              <TouchableOpacity
+                onPress={() => confirmStep3('allow')}
+                activeOpacity={0.7}
+                style={[styles.bigChoice, styles.bigChoiceBrass]}>
+                <Text style={styles.bigChoiceBrassLabel}>Allow notifications</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => confirmStep3('skip')}
+                activeOpacity={0.6}
+                style={styles.skipBtn}>
+                <Text style={styles.skipBtnText}>Skip for now</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : null}
+
+        {phase === 'interstitial' ? (
+          <InterstitialBlock pipelineReady={pipelineReady} />
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+function InterstitialBlock({ pipelineReady }: { pipelineReady: boolean }) {
+  const [idx, setIdx] = useState(0);
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+    const cycle = () => {
+      if (cancelled) return;
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.delay(2000),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (cancelled || !finished) return;
+        setIdx((i) => (i + 1) % INTERSTITIAL_PHRASES.length);
+        cycle();
+      });
+    };
+    cycle();
+    return () => { cancelled = true; };
+  }, [opacity]);
+
+  return (
+    <View style={styles.interstitialWrap}>
+      <ActivityIndicator color={BRASS} />
+      <Animated.Text style={[styles.interstitialPhrase, { opacity }]}>
+        {pipelineReady ? 'Ready.' : INTERSTITIAL_PHRASES[idx]}
+      </Animated.Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f0f0f',
+  container: { flex: 1, backgroundColor: BG },
+
+  progressTrack: {
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginTop: Platform.OS === 'ios' ? 44 : 28,
   },
-  center: {
-    flex: 1,
+  progressFill: {
+    height: '100%',
+    backgroundColor: BRASS,
+  },
+  readyChip: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 52 : 36,
+    right: 18,
+    color: MUTED,
+    fontSize: 11,
+    letterSpacing: 0.4,
+  },
+
+  scroll: {
+    paddingHorizontal: 22,
+    paddingTop: 60,
+    paddingBottom: 60,
+  },
+  preface: {
+    color: MUTED,
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginBottom: 18,
+    lineHeight: 20,
+  },
+  title: {
+    color: OFF_WHITE,
+    fontSize: 24,
+    fontWeight: '400',
+    lineHeight: 32,
+    marginBottom: 28,
+  },
+  copy: {
+    color: FAINT,
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  card: {
+    width: '48%',
+    padding: 18,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SOFT_BORDER,
+    minHeight: 130,
+  },
+  cardActive: {
+    borderColor: BRASS,
+    backgroundColor: 'rgba(184,150,12,0.08)',
+  },
+  cardEmoji: { fontSize: 28, marginBottom: 8 },
+  cardLabel: { color: OFF_WHITE, fontSize: 14, fontWeight: '600' },
+  cardDesc: { color: FAINT, fontSize: 11, marginTop: 4, lineHeight: 16 },
+
+  bigChoiceColumn: { gap: 12 },
+  bigChoice: {
+    padding: 18,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SOFT_BORDER,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  bigChoiceActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
+  bigChoiceLabel: { color: OFF_WHITE, fontSize: 16, fontWeight: '500' },
+  bigChoiceDesc: { color: FAINT, fontSize: 12, marginTop: 4 },
+  bigChoiceBrass: {
+    backgroundColor: BRASS,
+    borderColor: BRASS,
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  bigChoiceBrassLabel: { color: '#0f0f0f', fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
+  skipBtn: { paddingVertical: 14, alignItems: 'center' },
+  skipBtnText: { color: MUTED, fontSize: 13 },
+
+  interstitialWrap: {
+    paddingVertical: 80,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    gap: 28,
   },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: '#f0ede8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 48,
-  },
-  logoMark: {
-    color: '#0f0f0f',
-    fontSize: 32,
-    fontWeight: '700',
-  },
-  textArea: {
-    minHeight: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  phraseText: {
-    color: '#f0ede8',
-    fontSize: 17,
+  interstitialPhrase: {
+    color: OFF_WHITE,
+    fontSize: 16,
     fontWeight: '300',
     textAlign: 'center',
     letterSpacing: 0.3,
-    lineHeight: 26,
+    lineHeight: 24,
     maxWidth: 280,
-  },
-  trustText: {
-    color: '#5a5855',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-    letterSpacing: 0.2,
-    maxWidth: 280,
-  },
-  readyText: {
-    color: '#f0ede8',
-    fontSize: 20,
-    fontWeight: '300',
-    textAlign: 'center',
-    letterSpacing: 0.3,
-    lineHeight: 28,
   },
 });
