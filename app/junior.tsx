@@ -230,7 +230,7 @@ export default function JuniorScreen() {
     );
   }
 
-  const earnedIds = new Set(data.badges.map((b) => b.id));
+  const earnedIds = new Set((data.badges || []).map((b) => b.id));
   const today = todayKey();
   const todayDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
