@@ -369,6 +369,198 @@ function ToggleRow({
   );
 }
 
+type StyleTone = 'direct' | 'balanced' | 'warm';
+type StyleHumor = 'yes' | 'occasionally' | 'no';
+type StyleDetail = 'brief' | 'standard' | 'thorough';
+
+function VoiceStyleBlock() {
+  const [tone, setTone] = useState<StyleTone>('balanced');
+  const [humor, setHumor] = useState<StyleHumor>('occasionally');
+  const [detail, setDetail] = useState<StyleDetail>('standard');
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${USER_ID}`);
+        const data = await res.json();
+        if (cancelled) return;
+        const p = data?.preferences || {};
+        if (p.communicationTone) setTone(p.communicationTone);
+        if (p.communicationHumor) setHumor(p.communicationHumor);
+        if (p.communicationDetail) setDetail(p.communicationDetail);
+      } catch { /* best-effort */ }
+      finally { if (!cancelled) setLoaded(true); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function persist(patch: Record<string, string>) {
+    try {
+      await fetch(`${API_BASE}/signals?type=preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID, preferences: patch }),
+      });
+      // Bust takeoff cache so the next brief reflects new voice
+      // immediately, not after the cache TTL expires.
+      fetch(`${API_BASE}/brief?userId=${USER_ID}&mode=takeoff&forceFresh=1`, { method: 'GET' })
+        .catch(() => {});
+    } catch { /* best-effort */ }
+  }
+
+  if (!loaded) {
+    return (
+      <View style={{ paddingHorizontal: 22, paddingVertical: 12 }}>
+        <Text style={{ color: MUTED, fontSize: 12 }}>Loading…</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <SegmentedRow
+        label="Tone"
+        sub="How Conductor talks to you"
+        options={[
+          { value: 'direct', label: 'Direct' },
+          { value: 'balanced', label: 'Balanced' },
+          { value: 'warm', label: 'Warm' },
+        ]}
+        value={tone}
+        onChange={(v) => { setTone(v as StyleTone); persist({ communicationTone: v }); }}
+      />
+      <SegmentedRow
+        label="Humor"
+        sub="Whether Conductor uses wit when appropriate"
+        options={[
+          { value: 'yes', label: 'Yes' },
+          { value: 'occasionally', label: 'Sometimes' },
+          { value: 'no', label: 'No' },
+        ]}
+        value={humor}
+        onChange={(v) => { setHumor(v as StyleHumor); persist({ communicationHumor: v }); }}
+      />
+      <SegmentedRow
+        label="Detail"
+        sub="How much context Conductor provides"
+        options={[
+          { value: 'brief', label: 'Brief' },
+          { value: 'standard', label: 'Standard' },
+          { value: 'thorough', label: 'Thorough' },
+        ]}
+        value={detail}
+        onChange={(v) => { setDetail(v as StyleDetail); persist({ communicationDetail: v }); }}
+      />
+    </View>
+  );
+}
+
+function SegmentedRow({
+  label, sub, options, value, onChange,
+}: {
+  label: string;
+  sub?: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <View style={{ paddingHorizontal: 22, paddingVertical: 12 }}>
+      <Text style={{ color: OFF_WHITE, fontSize: 14, fontWeight: '500', marginBottom: 4 }}>
+        {label}
+      </Text>
+      {sub ? <Text style={{ color: MUTED, fontSize: 11, marginBottom: 10 }}>{sub}</Text> : null}
+      <View style={{
+        flexDirection: 'row',
+        backgroundColor: 'rgba(255,255,255,0.04)',
+        borderRadius: 8,
+        padding: 3,
+      }}>
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <TouchableOpacity
+              key={o.value}
+              onPress={() => onChange(o.value)}
+              style={{
+                flex: 1,
+                paddingVertical: 9,
+                borderRadius: 6,
+                alignItems: 'center',
+                backgroundColor: active ? BRASS : 'transparent',
+              }}>
+              <Text
+                style={{
+                  color: active ? '#0f0f0f' : MUTED,
+                  fontSize: 12,
+                  fontWeight: active ? '600' : '400',
+                }}>
+                {o.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function HeyConductorBlock() {
+  const [shake, setShake] = useState(true);
+  const [voice, setVoice] = useState(false);
+  const [wake, setWake] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [s, v, w] = await Promise.all([
+          AsyncStorage.getItem('shakeEnabled'),
+          AsyncStorage.getItem('voiceResponsesEnabled'),
+          AsyncStorage.getItem('wakeEnabled'),
+        ]);
+        setShake(s !== 'false');
+        setVoice(v === 'true');
+        setWake(w === 'true');
+      } catch { /* best-effort */ }
+      finally { setLoaded(true); }
+    })();
+  }, []);
+
+  if (!loaded) {
+    return (
+      <View style={{ paddingHorizontal: 22, paddingVertical: 12 }}>
+        <Text style={{ color: MUTED, fontSize: 12 }}>Loading…</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <ToggleRow
+        label="Activate with shake"
+        subtext="Shake the phone to open Ask Conductor"
+        value={shake}
+        onChange={(v) => { setShake(v); AsyncStorage.setItem('shakeEnabled', String(v)); }}
+      />
+      <ToggleRow
+        label="Speak responses"
+        subtext="Conductor reads answers aloud"
+        value={voice}
+        onChange={(v) => { setVoice(v); AsyncStorage.setItem('voiceResponsesEnabled', String(v)); }}
+      />
+      <ToggleRow
+        label="Hey Conductor wake phrase"
+        subtext="Say Hey Conductor when app is open (needs native build)"
+        value={wake}
+        onChange={(v) => { setWake(v); AsyncStorage.setItem('wakeEnabled', String(v)); }}
+      />
+    </View>
+  );
+}
+
 function ReferralBlock() {
   const [data, setData] = useState<{
     referralCode?: string;
@@ -828,7 +1020,7 @@ export default function SettingsScreen() {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>Your House</Text>
 
         <SecuritySection />
 
@@ -1057,6 +1249,12 @@ export default function SettingsScreen() {
             Helps Conductor detect scheduling conflicts
           </Text>
         </View>
+
+        <SectionHeader title="Your Voice" subtext="How Conductor talks to you" />
+        <VoiceStyleBlock />
+
+        <SectionHeader title="Hey Conductor" subtext="Hands-free interaction" />
+        <HeyConductorBlock />
 
         <SectionHeader title="Conductor" />
         <Row label="Conductor" subtext="Version 1.0.0" />

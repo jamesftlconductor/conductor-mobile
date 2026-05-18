@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
@@ -14,6 +14,9 @@ import { Minimap } from '@/components/Minimap';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
+import { useShakeToAsk } from '@/components/useShakeToAsk';
+import { conductorHaptics } from '@/app/haptics';
+import * as Speech from 'expo-speech';
 
 // LayoutAnimation needs an opt-in on Android; iOS supports it by default.
 // Enabling at module-load is the official pattern — re-calling per-toggle
@@ -564,6 +567,50 @@ export default function TakeoffScreen() {
   // Suggestion chips appear below the input when it's focused — give
   // users a starting point for common home-services questions.
   const [askFocused, setAskFocused] = useState(false);
+  // Speech playback state — driven by AsyncStorage's
+  // voiceResponsesEnabled toggle. When the brief or ask answer comes
+  // back AND speech is enabled, we route the spoken summary through
+  // expo-speech. The Stop button below the answer surfaces while
+  // speech is active.
+  const [speechActive, setSpeechActive] = useState(false);
+  const voiceEnabledRef = useRef(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const v = await AsyncStorage.getItem('voiceResponsesEnabled');
+        voiceEnabledRef.current = v === 'true';
+      } catch { /* ignore */ }
+    })();
+  }, []);
+  const stopSpeech = useCallback(() => {
+    try { Speech.stop(); } catch { /* ignore */ }
+    setSpeechActive(false);
+  }, []);
+  const speak = useCallback((text: string | null | undefined) => {
+    if (!text || !voiceEnabledRef.current) return;
+    try {
+      Speech.stop();
+      setSpeechActive(true);
+      Speech.speak(text, {
+        language: 'en-US',
+        pitch: 1.0,
+        rate: 0.88,
+        onDone: () => setSpeechActive(false),
+        onStopped: () => setSpeechActive(false),
+        onError: () => setSpeechActive(false),
+      });
+    } catch {
+      setSpeechActive(false);
+    }
+  }, []);
+
+  // Shake-to-ask: shake fires haptic + focuses the question input so
+  // the keyboard's native dictation button is one tap away. Reuses
+  // existing ask input so we don't need a separate "Listening" state.
+  useShakeToAsk(() => {
+    conductorHaptics.newSignal();
+    setTimeout(() => askInputRef.current?.focus(), 60);
+  });
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [greeting, setGreeting] = useState('');
@@ -703,6 +750,12 @@ export default function TakeoffScreen() {
         setSegments(data.segments);
       } else {
         setSegments([{ type: 'text', content: data.brief || '' }]);
+      }
+      // Speak the brief summary on Takeoff load when voice toggle on.
+      // Delayed by 1s so the user has a beat to land on the screen
+      // before the audio starts. Skips Clearance/Overwatch modes.
+      if (mode.endpoint === 'brief' && typeof data.spokenSummary === 'string' && data.spokenSummary.length > 0) {
+        setTimeout(() => speak(data.spokenSummary), 1000);
       }
       setTransparency(typeof data.transparency === 'string' && data.transparency.length > 0
         ? data.transparency
@@ -877,6 +930,10 @@ export default function TakeoffScreen() {
         throw new Error('empty answer');
       }
       setAskAnswer(data.answer);
+      // Spoken response — gated on the voiceResponsesEnabled toggle.
+      // Prefer the spokenAnswer field if backend returned one, fall
+      // back to the written answer.
+      speak(data.spokenAnswer || data.answer);
       // New: action handling. NAVIGATE auto-routes after a beat;
       // confirm_setting holds for the user to tap Yes/No (handled
       // by askAction state below).
@@ -884,6 +941,8 @@ export default function TakeoffScreen() {
         if (data.action.type === 'navigate' && typeof data.action.destination === 'string') {
           setTimeout(() => router.push(data.action.destination as any), 700);
         } else if (data.action.type === 'confirm_setting') {
+          setAskAction(data.action);
+        } else if (data.action.type === 'navigate_offer' && typeof data.action.destination === 'string') {
           setAskAction(data.action);
         }
       }
@@ -1105,6 +1164,11 @@ export default function TakeoffScreen() {
               {!askLoading && !askError && askAnswer ? (
                 <View style={styles.askAnswerCard}>
                   <Text style={[styles.askAnswerText, { color: theme.brief }]}>{askAnswer}</Text>
+                  {speechActive ? (
+                    <TouchableOpacity onPress={stopSpeech} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                      <Text style={{ color: '#5a5855', fontSize: 11, marginTop: 8 }}>■ Stop</Text>
+                    </TouchableOpacity>
+                  ) : null}
                   {askAction?.type === 'confirm_setting' ? (
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
                       <TouchableOpacity
