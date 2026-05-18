@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -347,7 +348,7 @@ export default function NetworkScreen() {
         onRequestClose={resetInviteModal}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <SwipeDismissSheet style={styles.modalCard} onClose={resetInviteModal}>
             <Text style={styles.modalTitle}>Invite a household</Text>
 
             {generatedUrl ? (
@@ -408,7 +409,7 @@ export default function NetworkScreen() {
                 </TouchableOpacity>
               </>
             )}
-          </View>
+          </SwipeDismissSheet>
         </View>
       </Modal>
     </View>

@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { SwipeableRow } from '@/components/SwipeableRow';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -527,27 +528,32 @@ export default function HorizonScreen() {
               <Text style={styles.sectionSub}>{section.sub}</Text>
               <View style={styles.sectionLine} />
               {section.items.map((it) => (
-                <HorizonItemRow
+                <SwipeableRow
                   key={it.id}
-                  item={it}
-                  bucket={section.key}
-                  expanded={expandedId === it.id}
-                  onToggle={() => toggle(it.id)}
-                  onPatch={(field, value) => patchSignalField(it, field, value)}
-                  onNoted={() => noteItem(it)}
-                  onMoveToVault={() => moveToVault(it)}
                   onRest={() => restItem(it)}
-                  relatedSignals={
-                    it.signalRef
-                      ? signals.filter((s) =>
-                          String(s.id) !== String(it.signalRef!.id) &&
-                          ((s.sender && (it.signalRef as Signal & { sender?: string }).sender &&
-                            s.sender === (it.signalRef as Signal & { sender?: string }).sender) ||
-                            (s.type && s.type === it.signalRef!.type))
-                        ).slice(0, 3)
-                      : []
-                  }
-                />
+                  onRemove={() => moveToVault(it)}
+                  removeLabel="To Vault">
+                  <HorizonItemRow
+                    item={it}
+                    bucket={section.key}
+                    expanded={expandedId === it.id}
+                    onToggle={() => toggle(it.id)}
+                    onPatch={(field, value) => patchSignalField(it, field, value)}
+                    onNoted={() => noteItem(it)}
+                    onMoveToVault={() => moveToVault(it)}
+                    onRest={() => restItem(it)}
+                    relatedSignals={
+                      it.signalRef
+                        ? signals.filter((s) =>
+                            String(s.id) !== String(it.signalRef!.id) &&
+                            ((s.sender && (it.signalRef as Signal & { sender?: string }).sender &&
+                              s.sender === (it.signalRef as Signal & { sender?: string }).sender) ||
+                              (s.type && s.type === it.signalRef!.type))
+                          ).slice(0, 3)
+                        : []
+                    }
+                  />
+                </SwipeableRow>
               ))}
             </View>
           ))

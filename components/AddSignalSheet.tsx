@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { LEGEND_ORDER, Signal, TYPE_META } from './signalTypes';
+import { SwipeDismissSheet } from './SwipeDismissSheet';
 
 const BG = '#0f0f0f';
 const OFF_WHITE = '#f0ede8';
@@ -106,8 +107,8 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.kbWrap}>
         <Pressable style={styles.modalBackdrop} onPress={onClose}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            <View style={styles.sheetHandle} />
+          <SwipeDismissSheet style={styles.sheet} onClose={onClose}>
+            <Pressable onPress={() => {}}>
             <Text style={styles.sheetHeader}>Add Signal</Text>
 
           <TextInput
@@ -175,7 +176,8 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
               <Text style={styles.btnAddText}>Launch</Text>
             </TouchableOpacity>
           </View>
-          </Pressable>
+            </Pressable>
+          </SwipeDismissSheet>
         </Pressable>
       </KeyboardAvoidingView>
     </Modal>

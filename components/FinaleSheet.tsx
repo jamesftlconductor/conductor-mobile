@@ -15,6 +15,7 @@ import {
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { metaFor, Signal, TYPE_META } from './signalTypes';
+import { SwipeDismissSheet } from './SwipeDismissSheet';
 import { Tooltip } from './Tooltip';
 
 const BG = '#0f0f0f';
@@ -292,8 +293,8 @@ function SingleSheet({
       transparent
       onRequestClose={onClose}>
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.sheetHandle} />
+        <SwipeDismissSheet style={styles.sheet} onClose={onClose}>
+          <Pressable onPress={() => {}}>
           <View style={styles.sheetHeaderWrap}>
             <Text style={styles.sheetHeader}>Finale</Text>
             {!editing && (
@@ -460,7 +461,8 @@ function SingleSheet({
               </View>
             </>
           )}
-        </Pressable>
+          </Pressable>
+        </SwipeDismissSheet>
       </Pressable>
     </Modal>
   );
@@ -535,7 +537,8 @@ function CrewAttributionRow({
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.attributionBackdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.attributionSheet} onPress={() => {}}>
+          <SwipeDismissSheet style={styles.attributionSheet} onClose={() => setOpen(false)}>
+            <Pressable onPress={() => {}}>
             <Text style={styles.attributionSheetTitle}>Assign signal to</Text>
             <TouchableOpacity
               onPress={() => assign(null)}
@@ -562,7 +565,8 @@ function CrewAttributionRow({
                 <Text style={styles.attributionMemberName}>{m.name}</Text>
               </TouchableOpacity>
             ))}
-          </Pressable>
+            </Pressable>
+          </SwipeDismissSheet>
         </Pressable>
       </Modal>
     </>
