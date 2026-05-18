@@ -145,10 +145,49 @@ const SIGNAL_TYPE_EMOJI: Record<string, string> = {
 function SignalChipsRow({
   memberName,
   signals,
+  onChanged,
 }: {
   memberName: string;
   signals: AttributedSignal[];
+  onChanged?: () => void;
 }) {
+  // Long-press target — when non-null, render a centered popover
+  // over the screen with three actions: Done / Snooze / Remove
+  // attribution. Tap-outside dismisses. All actions fire-and-forget
+  // then trigger a parent reload via onChanged.
+  const [target, setTarget] = useState<AttributedSignal | null>(null);
+  const [working, setWorking] = useState(false);
+
+  async function patchState(state: 'resolved' | 'snoozed') {
+    if (!target) return;
+    setWorking(true);
+    try {
+      await fetch(`${API_BASE}/signals`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: target.id, state, userId: USER_ID }),
+      });
+    } catch { /* best-effort */ }
+    setWorking(false);
+    setTarget(null);
+    onChanged?.();
+  }
+
+  async function removeAttribution() {
+    if (!target) return;
+    setWorking(true);
+    try {
+      await fetch(`${API_BASE}/signals?type=crew-attribution`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID, signalId: target.id, crewMemberName: null }),
+      });
+    } catch { /* best-effort */ }
+    setWorking(false);
+    setTarget(null);
+    onChanged?.();
+  }
+
   if (!signals || signals.length === 0) {
     return (
       <View style={styles.signalsBlock}>
@@ -179,6 +218,7 @@ function SignalChipsRow({
                 } catch { /* best-effort */ }
                 router.push('/(tabs)/hover' as never);
               }}
+              onLongPress={() => setTarget(s)}
               activeOpacity={0.7}
               style={styles.signalChip}>
               <Text style={styles.signalChipText}>{emoji} {desc}</Text>
@@ -186,6 +226,40 @@ function SignalChipsRow({
           );
         })}
       </ScrollView>
+
+      <Modal
+        visible={target != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTarget(null)}>
+        <Pressable style={styles.chipActionBackdrop} onPress={() => setTarget(null)}>
+          <Pressable style={styles.chipActionSheet} onPress={() => {}}>
+            <Text style={styles.chipActionHeader} numberOfLines={2}>
+              {target?.description || 'Signal'}
+            </Text>
+            <View style={styles.chipActionRow}>
+              <TouchableOpacity
+                onPress={() => patchState('resolved')}
+                disabled={working}
+                style={[styles.chipActionBtn, styles.chipActionDone]}>
+                <Text style={styles.chipActionDoneText}>Done ✓</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => patchState('snoozed')}
+                disabled={working}
+                style={[styles.chipActionBtn, styles.chipActionMuted]}>
+                <Text style={styles.chipActionMutedText}>Snooze</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={removeAttribution}
+                disabled={working}
+                style={[styles.chipActionBtn, styles.chipActionDanger]}>
+                <Text style={styles.chipActionDangerText}>Remove from {memberName}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -581,7 +655,7 @@ export default function CrewScreen() {
             Children
           </Text>
           {children.map((c, i) => (
-            <ChildCard key={`child-${i}`} child={c} onMenu={() => openCrewMenu(c)} />
+            <ChildCard key={`child-${i}`} child={c} onMenu={() => openCrewMenu(c)} onChanged={load} />
           ))}
         </>
       )}
@@ -590,7 +664,7 @@ export default function CrewScreen() {
         <>
           <Text style={[styles.sectionHeader, { marginTop: 32 }]}>Pets</Text>
           {pets.map((p, i) => (
-            <PetCard key={`pet-${i}`} pet={p} onMenu={() => openCrewMenu(p)} />
+            <PetCard key={`pet-${i}`} pet={p} onMenu={() => openCrewMenu(p)} onChanged={load} />
           ))}
         </>
       )}
@@ -714,7 +788,7 @@ function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) 
   );
 }
 
-function ChildCard({ child, onMenu }: { child: Child; onMenu?: () => void }) {
+function ChildCard({ child, onMenu, onChanged }: { child: Child; onMenu?: () => void; onChanged?: () => void }) {
   const name = child.name || 'Child';
   const activities = (child.activities || []).filter((a) => a && a.name);
   const events = (child.upcomingEvents || []).filter((e) => e && e.description);
@@ -793,13 +867,13 @@ function ChildCard({ child, onMenu }: { child: Child; onMenu?: () => void }) {
           })}
         </View>
       ) : null}
-      <SignalChipsRow memberName={name} signals={child.attributedSignals || []} />
+      <SignalChipsRow memberName={name} signals={child.attributedSignals || []} onChanged={onChanged} />
       <NotesEditor memberName={name} memberType="child" initial={child.notes} />
     </View>
   );
 }
 
-function PetCard({ pet, onMenu }: { pet: Pet; onMenu?: () => void }) {
+function PetCard({ pet, onMenu, onChanged }: { pet: Pet; onMenu?: () => void; onChanged?: () => void }) {
   const name = pet.name || 'Pet';
   const typeLabel =
     pet.type && pet.breed
@@ -866,7 +940,7 @@ function PetCard({ pet, onMenu }: { pet: Pet; onMenu?: () => void }) {
           })}
         </View>
       ) : null}
-      <SignalChipsRow memberName={name} signals={pet.attributedSignals || []} />
+      <SignalChipsRow memberName={name} signals={pet.attributedSignals || []} onChanged={onChanged} />
       <NotesEditor memberName={name} memberType="pet" initial={pet.notes} />
     </View>
   );
@@ -998,6 +1072,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   signalChipText: { color: OFF_WHITE, fontSize: 12 },
+  chipActionBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 22,
+  },
+  chipActionSheet: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(184,150,12,0.35)',
+    width: '100%',
+    maxWidth: 360,
+  },
+  chipActionHeader: {
+    color: OFF_WHITE,
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginBottom: 14,
+    textAlign: 'center',
+  },
+  chipActionRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  chipActionBtn: {
+    flex: 1,
+    minWidth: 80,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  chipActionDone: {
+    borderColor: 'rgba(184,150,12,0.65)',
+    backgroundColor: 'rgba(184,150,12,0.10)',
+  },
+  chipActionDoneText: { color: BRASS, fontSize: 12, fontWeight: '600' },
+  chipActionMuted: {
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  chipActionMutedText: { color: '#a8a5a0', fontSize: 12, fontWeight: '500' },
+  chipActionDanger: {
+    borderColor: 'rgba(217,119,87,0.4)',
+    backgroundColor: 'rgba(217,119,87,0.06)',
+  },
+  chipActionDangerText: { color: '#d97757', fontSize: 12 },
   cardName: {
     color: OFF_WHITE,
     fontSize: 16,
