@@ -1220,6 +1220,10 @@ export default function SettingsScreen() {
           onPress={() => router.push('/programme' as never)}
         />
         <ChevronRow
+          label="Annual Calendar"
+          onPress={() => router.push('/recurring-events' as never)}
+        />
+        <ChevronRow
           label="The Network"
           onPress={() => router.push('/network' as never)}
         />
