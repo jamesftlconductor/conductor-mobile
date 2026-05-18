@@ -7,6 +7,8 @@ import {
   Animated,
   Easing,
   FlatList,
+  Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -886,6 +888,31 @@ export default function HoverScreen() {
     })();
   }, []);
   const [viewMode, setViewMode] = useState<ViewMode>('family');
+  // Crew member filter — only active in personal view. Resets when
+  // the user toggles back to family view. Crew list fetched once on
+  // mount and refreshed when the tab regains focus.
+  const [crewFilter, setCrewFilter] = useState<string | null>(null);
+  const [crewList, setCrewList] = useState<{ name: string; photoUrl?: string | null }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `https://conductor-ivory.vercel.app/api/signals?type=crew&userId=${USER_ID}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const list = Array.isArray(data?.crew)
+          ? data.crew
+              .filter((m: any) => m && m.name)
+              .map((m: any) => ({ name: m.name, photoUrl: m.photoUrl }))
+          : [];
+        setCrewList(list);
+      } catch { /* best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [selected, setSelected] = useState<Signal | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveAnims, setResolveAnims] = useState<ResolveAnim[]>([]);
@@ -996,6 +1023,9 @@ export default function HoverScreen() {
   function toggleViewMode() {
     const next: ViewMode = viewMode === 'family' ? 'personal' : 'family';
     setViewMode(next);
+    // Toggling out of personal clears any crew filter so re-entry
+    // starts fresh.
+    if (next === 'family') setCrewFilter(null);
     AsyncStorage.setItem(VIEW_MODE_KEY, next).catch(() => {});
   }
 
@@ -1032,14 +1062,22 @@ export default function HoverScreen() {
     const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
     for (const s of signals) {
       if (animatingIds.has(String(s.id))) continue;
-      // Personal view: drop signals owned by someone other than this user.
-      // Unowned (userId null/missing) signals appear in both modes — they
-      // belong to the household, not a specific member.
-      if (viewMode === 'personal' && s.userId && s.userId !== USER_ID) continue;
+      // Crew member filter (personal view only) — when a crew name
+      // is selected, restrict to signals tagged to that member.
+      if (viewMode === 'personal' && crewFilter) {
+        const cm = (s as Signal & { crewMemberId?: string }).crewMemberId;
+        if (!cm || String(cm).toLowerCase().trim() !== crewFilter.toLowerCase().trim()) {
+          continue;
+        }
+      } else if (viewMode === 'personal' && s.userId && s.userId !== USER_ID) {
+        // Default personal view: drop signals owned by someone else.
+        // Unowned (userId null) signals appear in both modes.
+        continue;
+      }
       out[ringForSignal(s)].push(s);
     }
     return out;
-  }, [signals, resolveAnims, viewMode]);
+  }, [signals, resolveAnims, viewMode, crewFilter]);
 
   function startRest(signal: Signal) {
     const ring = ringForSignal(signal);
@@ -1219,9 +1257,59 @@ export default function HoverScreen() {
           pointerEvents="none"
           style={[styles.topHeader, { top: insets.top + 8, opacity: headerOpacity }]}>
           <Text style={styles.topHeaderText}>
-            {viewMode === 'family' ? 'Management in Motion' : `${FIRST_NAME}.`}
+            {viewMode === 'family'
+              ? 'Management in Motion'
+              : crewFilter
+              ? `${crewFilter}'s signals`
+              : `${FIRST_NAME}.`}
           </Text>
         </Animated.View>
+
+        {viewMode === 'personal' && crewList.length > 0 ? (
+          <Animated.View
+            style={[styles.crewFilterRow, { top: insets.top + 56, opacity: headerOpacity }]}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.crewFilterContent}>
+              <TouchableOpacity
+                onPress={() => setCrewFilter(null)}
+                style={[
+                  styles.crewFilterPill,
+                  !crewFilter && styles.crewFilterPillActive,
+                ]}
+                activeOpacity={0.7}>
+                <Text style={[styles.crewFilterPillText, !crewFilter && styles.crewFilterPillTextActive]}>
+                  All
+                </Text>
+              </TouchableOpacity>
+              {crewList.map((m) => (
+                <TouchableOpacity
+                  key={m.name}
+                  onPress={() => setCrewFilter(crewFilter === m.name ? null : m.name)}
+                  style={styles.crewFilterMember}
+                  activeOpacity={0.7}>
+                  <View
+                    style={[
+                      styles.crewFilterCircle,
+                      crewFilter === m.name && styles.crewFilterCircleActive,
+                    ]}>
+                    {m.photoUrl ? (
+                      <Image source={{ uri: m.photoUrl }} style={styles.crewFilterPhoto} />
+                    ) : (
+                      <Text style={styles.crewFilterInitials}>
+                        {m.name.slice(0, 1).toUpperCase()}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={styles.crewFilterName} numberOfLines={1}>
+                    {m.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        ) : null}
 
         <TouchableOpacity
           onPress={toggleViewMode}
@@ -1434,6 +1522,58 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     textTransform: 'uppercase',
     fontWeight: '500',
+  },
+  crewFilterRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 5,
+  },
+  crewFilterContent: {
+    paddingHorizontal: 18,
+    gap: 12,
+    alignItems: 'center',
+  },
+  crewFilterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    height: 32,
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  crewFilterPillActive: {
+    borderColor: '#b8960c',
+    backgroundColor: 'rgba(184,150,12,0.10)',
+  },
+  crewFilterPillText: { color: '#5a5855', fontSize: 11, letterSpacing: 0.5 },
+  crewFilterPillTextActive: { color: '#b8960c', fontWeight: '600' },
+  crewFilterMember: { alignItems: 'center', width: 50 },
+  crewFilterCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#2a2a2a',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  crewFilterCircleActive: { borderColor: '#b8960c' },
+  crewFilterPhoto: { width: '100%', height: '100%' },
+  crewFilterInitials: {
+    color: '#b8960c',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  crewFilterName: {
+    color: '#5a5855',
+    fontSize: 9,
+    marginTop: 4,
+    textAlign: 'center',
   },
   viewToggle: {
     position: 'absolute',

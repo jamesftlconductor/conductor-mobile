@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { AddCrewSheet } from '@/components/AddCrewSheet';
 import {
   ActivityIndicator,
   Alert,
@@ -64,6 +66,15 @@ type BioFields = {
   lastGrooming?: string | null;
 };
 
+type AttributedSignal = {
+  id: string | number;
+  description?: string;
+  type?: string;
+  eta?: string | null;
+  state?: string;
+  status?: string;
+};
+
 type Child = BioFields & {
   memberType: 'child';
   name?: string | null;
@@ -73,6 +84,8 @@ type Child = BioFields & {
   upcomingEvents?: UpcomingEvent[];
   birthday?: string | null;
   anniversary?: string | null;
+  attributedSignals?: AttributedSignal[];
+  attributedSignalCount?: number;
 };
 
 type Pet = BioFields & {
@@ -84,6 +97,8 @@ type Pet = BioFields & {
   upcomingEvents?: UpcomingEvent[];
   birthday?: string | null;
   anniversary?: string | null;
+  attributedSignals?: AttributedSignal[];
+  attributedSignalCount?: number;
 };
 
 type Member = BioFields & {
@@ -116,6 +131,63 @@ function initialsFor(name?: string | null): string {
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Type emojis pulled from the brief's signal type metadata. Local
+// fallback rather than importing signalTypes to keep this island
+// self-contained.
+const SIGNAL_TYPE_EMOJI: Record<string, string> = {
+  package: '📦', delivery: '🚚', food: '🍽', grocery: '🛒',
+  service: '🔧', reservation: '🗓', appointment: '📅', travel: '✈️',
+  deadline: '⚠️', anticipated: '🔄', unknown: '📍',
+};
+
+function SignalChipsRow({
+  memberName,
+  signals,
+}: {
+  memberName: string;
+  signals: AttributedSignal[];
+}) {
+  if (!signals || signals.length === 0) {
+    return (
+      <View style={styles.signalsBlock}>
+        <Text style={styles.bioSectionHeader}>SIGNALS</Text>
+        <Text style={styles.signalsEmpty}>
+          No signals yet — assign signals to {memberName} from the Finale sheet.
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.signalsBlock}>
+      <Text style={styles.bioSectionHeader}>SIGNALS</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.signalsScroll}>
+        {signals.map((s) => {
+          const emoji = SIGNAL_TYPE_EMOJI[s.type || 'unknown'] || '📍';
+          const desc = (s.description || '').slice(0, 20)
+            + ((s.description || '').length > 20 ? '…' : '');
+          return (
+            <TouchableOpacity
+              key={String(s.id)}
+              onPress={async () => {
+                try {
+                  await AsyncStorage.setItem('hover:focusSignalId', String(s.id));
+                } catch { /* best-effort */ }
+                router.push('/(tabs)/hover' as never);
+              }}
+              activeOpacity={0.7}
+              style={styles.signalChip}>
+              <Text style={styles.signalChipText}>{emoji} {desc}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 }
 
 async function patchCrewField(
@@ -309,6 +381,60 @@ type EditTarget =
 export default function CrewScreen() {
   const [crew, setCrew] = useState<CrewMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddCrew, setShowAddCrew] = useState(false);
+
+  // Per-card "···" menu — Edit / Remove / Cancel. Edit currently
+  // reuses the existing birthday/anniversary modal (the only edit
+  // surface today); Remove confirms then deletes via the new
+  // ?action=remove path.
+  function openCrewMenu(member: CrewMember) {
+    const name = (member as any).name || 'this member';
+    Alert.alert(name, undefined, [
+      {
+        text: `Edit ${name}`,
+        onPress: () => {
+          if (member.memberType === 'member') return; // already has Edit button
+          // Reuse the existing birthday/anniversary edit modal.
+          setEditing({
+            memberType: member.memberType,
+            name: (member as any).name || '',
+            birthday: (member as any).birthday || '',
+            anniversary: (member as any).anniversary || '',
+          });
+        },
+      },
+      {
+        text: `Remove ${name}`,
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert(`Remove ${name} from your crew?`, undefined, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Remove',
+              style: 'destructive',
+              onPress: async () => {
+                setCrew((prev) => prev.filter((m: any) => m?.name !== (member as any).name));
+                try {
+                  await fetch(`${API_BASE}/signals?type=crew`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      userId: USER_ID,
+                      action: 'remove',
+                      memberName: (member as any).name,
+                    }),
+                  });
+                } catch {
+                  load(); // restore on failure
+                }
+              },
+            },
+          ]);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [saving, setSaving] = useState(false);
@@ -399,13 +525,20 @@ export default function CrewScreen() {
           }}
         />
       }>
-      <TouchableOpacity
-        onPress={() => router.back()}
-        activeOpacity={0.6}
-        style={styles.topBack}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Text style={styles.topBackText}>← Return</Text>
-      </TouchableOpacity>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.topBackText}>← Return</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setShowAddCrew(true)}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.topAddText}>+</Text>
+        </TouchableOpacity>
+      </View>
       <Text style={styles.title}>Crew</Text>
       <Text style={styles.subtitle}>Who Conductor is watching over</Text>
 
@@ -448,7 +581,7 @@ export default function CrewScreen() {
             Children
           </Text>
           {children.map((c, i) => (
-            <ChildCard key={`child-${i}`} child={c} />
+            <ChildCard key={`child-${i}`} child={c} onMenu={() => openCrewMenu(c)} />
           ))}
         </>
       )}
@@ -457,7 +590,7 @@ export default function CrewScreen() {
         <>
           <Text style={[styles.sectionHeader, { marginTop: 32 }]}>Pets</Text>
           {pets.map((p, i) => (
-            <PetCard key={`pet-${i}`} pet={p} />
+            <PetCard key={`pet-${i}`} pet={p} onMenu={() => openCrewMenu(p)} />
           ))}
         </>
       )}
@@ -519,6 +652,13 @@ export default function CrewScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <AddCrewSheet
+        visible={showAddCrew}
+        userId={USER_ID}
+        onClose={() => setShowAddCrew(false)}
+        onAdded={() => load()}
+      />
     </ScrollView>
   );
 }
@@ -574,7 +714,7 @@ function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) 
   );
 }
 
-function ChildCard({ child }: { child: Child }) {
+function ChildCard({ child, onMenu }: { child: Child; onMenu?: () => void }) {
   const name = child.name || 'Child';
   const activities = (child.activities || []).filter((a) => a && a.name);
   const events = (child.upcomingEvents || []).filter((e) => e && e.description);
@@ -596,6 +736,11 @@ function ChildCard({ child }: { child: Child }) {
             <Text style={styles.cardAge}>age {child.age}</Text>
           ) : null}
         </View>
+        {onMenu ? (
+          <TouchableOpacity onPress={onMenu} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.cardMenuDots}>···</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {activities.map((a, i) => (
@@ -648,12 +793,13 @@ function ChildCard({ child }: { child: Child }) {
           })}
         </View>
       ) : null}
+      <SignalChipsRow memberName={name} signals={child.attributedSignals || []} />
       <NotesEditor memberName={name} memberType="child" initial={child.notes} />
     </View>
   );
 }
 
-function PetCard({ pet }: { pet: Pet }) {
+function PetCard({ pet, onMenu }: { pet: Pet; onMenu?: () => void }) {
   const name = pet.name || 'Pet';
   const typeLabel =
     pet.type && pet.breed
@@ -676,6 +822,11 @@ function PetCard({ pet }: { pet: Pet }) {
           <Text style={styles.cardName}>🐾 {name}</Text>
           {typeLabel ? <Text style={styles.cardAge}>{typeLabel}</Text> : null}
         </View>
+        {onMenu ? (
+          <TouchableOpacity onPress={onMenu} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.cardMenuDots}>···</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {pet.vet && pet.vet.name ? (
@@ -715,6 +866,7 @@ function PetCard({ pet }: { pet: Pet }) {
           })}
         </View>
       ) : null}
+      <SignalChipsRow memberName={name} signals={pet.attributedSignals || []} />
       <NotesEditor memberName={name} memberType="pet" initial={pet.notes} />
     </View>
   );
@@ -778,6 +930,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   cardNameWrap: { flex: 1 },
+  cardMenuDots: {
+    color: MUTED,
+    fontSize: 16,
+    letterSpacing: 2,
+    paddingHorizontal: 6,
+    lineHeight: 18,
+  },
   photoCircle: {
     width: 80,
     height: 80,
@@ -814,6 +973,31 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 4,
   },
+  signalsBlock: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  signalsEmpty: {
+    color: MUTED,
+    fontSize: 11,
+    fontStyle: 'italic',
+    paddingVertical: 6,
+  },
+  signalsScroll: { paddingVertical: 6, gap: 8 },
+  signalChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginRight: 8,
+    height: 28,
+    justifyContent: 'center',
+  },
+  signalChipText: { color: OFF_WHITE, fontSize: 12 },
   cardName: {
     color: OFF_WHITE,
     fontSize: 16,
@@ -975,5 +1159,20 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 13,
     letterSpacing: 0.3,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  topAddText: {
+    color: BRASS,
+    fontSize: 22,
+    fontWeight: '300',
+    paddingHorizontal: 6,
+    lineHeight: 26,
   },
 });
