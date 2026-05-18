@@ -51,7 +51,7 @@ const INTERSTITIAL_POLL_MS = 3000;
 const PIPELINE_START_KEY = 'onboard_pipeline_started_at';
 const STEP_KEY = 'onboardingStep';
 
-type Phase = 'language' | 'step1' | 'step2' | 'step3' | 'interstitial';
+type Phase = 'joining' | 'language' | 'step1' | 'step2' | 'step3' | 'interstitial';
 type Language = 'en' | 'es';
 
 type Who = 'solo' | 'couple' | 'family' | 'multigenerational';
@@ -136,12 +136,27 @@ const VOICE_PREVIEW: Record<string, string> = {
   'warm+thorough+no': 'Your HVAC is coming up on its annual tune-up before summer. Scheduling ahead of peak demand is worthwhile — availability and pricing are both better in spring.',
 };
 
+type HouseholdPreview = {
+  householdId: string;
+  householdName: string | null;
+  memberCount: number;
+  signalCount: number;
+  vaultCount: number;
+  crewCount: number;
+};
+
 export default function OnboardingScreen() {
+  // Initial phase is 'language' so the screen renders something
+  // immediately. The async mount effect may switch to 'joining' if
+  // it detects an invite code; until it resolves, the user sees the
+  // language picker (or saved phase) — never a blank or spinner.
   const [phase, setPhase] = useState<Phase>('language');
   const [language, setLanguage] = useState<Language>('en');
   const [who, setWho] = useState<Who | null>(null);
   const [housing, setHousing] = useState<Housing | null>(null);
   const [modifiers, setModifiers] = useState<Set<Modifier>>(new Set());
+  const [joinPreview, setJoinPreview] = useState<HouseholdPreview | null>(null);
+  const [joining, setJoining] = useState(false);
 
   const [tone, setTone] = useState<Tone>('balanced');
   const [detail, setDetail] = useState<Detail>('standard');
@@ -153,26 +168,77 @@ export default function OnboardingScreen() {
   const progress = useRef(new Animated.Value(0)).current;
   const progressMounted = useRef(false);
 
-  // Persist current phase + load pipeline-started flag on mount.
+  // Mount: fork between joining-existing flow (invite code present
+  // or joinType flag set) and full new-household onboarding. Wrapped
+  // in try/catch so an AsyncStorage failure can't take down the
+  // screen before it renders — the ErrorBoundary in _layout.tsx is
+  // the last line of defense.
   useEffect(() => {
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(STEP_KEY);
-        if (saved === 'step1' || saved === 'step2' || saved === 'step3' || saved === 'interstitial') {
-          setPhase(saved);
+        let invite: string | null = null;
+        let joinType: string | null = null;
+        let savedPhase: string | null = null;
+        try { invite = await AsyncStorage.getItem('inviteCode'); } catch { /* skip */ }
+        try { joinType = await AsyncStorage.getItem('joinType'); } catch { /* skip */ }
+        try { savedPhase = await AsyncStorage.getItem(STEP_KEY); } catch { /* skip */ }
+
+        if (joinType === 'joining_existing' || invite) {
+          // Joining flow — fetch the preview for the target household.
+          // If no householdId is known, render the joining screen with
+          // partial data; user still gets a meaningful "you're joining"
+          // moment.
+          let householdIdToJoin: string | null = null;
+          try { householdIdToJoin = await AsyncStorage.getItem('joinHouseholdId'); } catch { /* skip */ }
+          try {
+            const q = householdIdToJoin
+              ? `&householdId=${encodeURIComponent(householdIdToJoin)}`
+              : `&userId=${encodeURIComponent(USER_ID)}`;
+            const res = await fetch(`${API_BASE}/onboard?action=householdPreview${q}`);
+            const data = await res.json();
+            if (data?.ok) {
+              setJoinPreview({
+                householdId: data.householdId,
+                householdName: data.householdName || null,
+                memberCount: data.memberCount || 1,
+                signalCount: data.signalCount || 0,
+                vaultCount: data.vaultCount || 0,
+                crewCount: data.crewCount || 0,
+              });
+            }
+          } catch { /* best-effort */ }
+          setPhase('joining');
+          return;
         }
-      } catch { /* ignore */ }
+
+        // Resume mid-flow if a saved phase exists, else start at language.
+        if (
+          savedPhase === 'step1' ||
+          savedPhase === 'step2' ||
+          savedPhase === 'step3' ||
+          savedPhase === 'interstitial' ||
+          savedPhase === 'language'
+        ) {
+          setPhase(savedPhase);
+        } else {
+          setPhase('language');
+        }
+        startPipeline();
+        if (!progressMounted.current) {
+          progressMounted.current = true;
+          Animated.timing(progress, {
+            toValue: 0.9,
+            duration: PROGRESS_DURATION_MS,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: false,
+          }).start();
+        }
+      } catch {
+        // Last-resort fallback: drop into the normal language picker
+        // so the user can still continue if the detection logic blew up.
+        setPhase('language');
+      }
     })();
-    startPipeline();
-    if (!progressMounted.current) {
-      progressMounted.current = true;
-      Animated.timing(progress, {
-        toValue: 0.9,
-        duration: PROGRESS_DURATION_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -244,6 +310,22 @@ export default function OnboardingScreen() {
   }
 
   // ---------- Step handlers ----------
+
+  async function confirmJoin() {
+    if (joining) return;
+    setJoining(true);
+    try {
+      // Record the join outcome locally so Ground knows the user
+      // landed via the join path. No backend call needed — the
+      // OAuth callback already linked the user to the household.
+      await AsyncStorage.multiSet([
+        ['joinType', 'joined_existing'],
+        ['onboardingStep', 'done'],
+      ]);
+      await AsyncStorage.multiRemove(['inviteCode', PIPELINE_START_KEY]);
+    } catch { /* best-effort */ }
+    router.replace('/' as never);
+  }
 
   async function confirmStep1(w: Who, h: Housing, mods: Modifier[], name: string | null) {
     setWho(w);
@@ -327,6 +409,14 @@ export default function OnboardingScreen() {
       {pipelineReady ? <Text style={styles.readyChip}>Ready ✓</Text> : null}
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {phase === 'joining' ? (
+          <JoiningStep
+            preview={joinPreview}
+            joining={joining}
+            onJoin={confirmJoin}
+          />
+        ) : null}
+
         {phase === 'language' ? (
           <LanguageStep
             language={language}
@@ -375,10 +465,104 @@ export default function OnboardingScreen() {
           <InterstitialBlock pipelineReady={pipelineReady} />
         ) : null}
 
-        {phase !== 'interstitial' ? (
+        {phase === 'step1' || phase === 'step2' || phase === 'step3' ? (
           <StepDots active={phase === 'step1' ? 0 : phase === 'step2' ? 1 : 2} />
         ) : null}
       </ScrollView>
+    </View>
+  );
+}
+
+// ---------- Joining existing household ----------
+
+function JoiningStep({
+  preview, joining, onJoin,
+}: { preview: HouseholdPreview | null; joining: boolean; onJoin: () => void }) {
+  // Build the finding rows we'll reveal in sequence. Always include a
+  // name row (with a friendly fallback); the count rows surface only
+  // when their count is non-zero so a brand-new household doesn't
+  // show "0 signals in motion".
+  const findings = useMemo(() => {
+    if (!preview) return [];
+    const rows: { emoji: string; text: string }[] = [];
+    if (preview.signalCount > 0) {
+      rows.push({ emoji: '📦', text: `${preview.signalCount} signals in motion` });
+    }
+    if (preview.vaultCount > 0) {
+      rows.push({ emoji: '⚠️', text: `${preview.vaultCount} deadlines being watched` });
+    }
+    if (preview.crewCount > 0) {
+      rows.push({ emoji: '👥', text: `${preview.crewCount} crew members` });
+    }
+    rows.push({ emoji: '🏠', text: preview.householdName || 'A household awaits' });
+    return rows;
+  }, [preview]);
+
+  // Staggered fade-in: each row appears 800ms after the previous.
+  const opacities = useRef<Animated.Value[]>([]).current;
+  while (opacities.length < findings.length) {
+    opacities.push(new Animated.Value(0));
+  }
+
+  useEffect(() => {
+    const STAGGER_MS = 800;
+    const FADE_MS = 600;
+    findings.forEach((_, i) => {
+      Animated.timing(opacities[i], {
+        toValue: 1,
+        duration: FADE_MS,
+        delay: i * STAGGER_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findings.length]);
+
+  const titleName = preview?.householdName || 'a household';
+
+  return (
+    <View style={{ paddingTop: 24 }}>
+      <Text style={styles.title}>You&apos;re joining {titleName}</Text>
+      <Text style={[styles.subtitle, { marginBottom: 32 }]}>
+        Here&apos;s what Conductor has found
+      </Text>
+
+      <View style={{ gap: 16, marginBottom: 28 }}>
+        {findings.map((row, i) => (
+          <Animated.View
+            key={`${row.emoji}-${i}`}
+            style={[
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: SOFT_BORDER,
+                backgroundColor: 'rgba(255,255,255,0.03)',
+              },
+              { opacity: opacities[i] || new Animated.Value(0) },
+            ]}>
+            <Text style={{ fontSize: 22, marginRight: 14 }}>{row.emoji}</Text>
+            <Text style={{ color: OFF_WHITE, fontSize: 14, flex: 1 }}>{row.text}</Text>
+          </Animated.View>
+        ))}
+      </View>
+
+      <Text style={[styles.subtitle, { fontStyle: 'italic', marginBottom: 24 }]}>
+        Your voice preferences are yours — customize anytime in Your House.
+      </Text>
+
+      <TouchableOpacity
+        onPress={onJoin}
+        disabled={joining}
+        style={[styles.continueBtn, joining && { opacity: 0.5 }]}>
+        <Text style={styles.continueBtnText}>
+          {joining ? 'Joining…' : `Join ${titleName} →`}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }

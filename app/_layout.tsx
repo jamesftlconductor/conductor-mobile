@@ -1,7 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ErrorBoundary } from 'react-error-boundary';
+import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
@@ -12,16 +12,37 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-// Recovery screen — surfaces when any render below the boundary
-// throws. Replaces the blank crash with an actionable restart so a
-// user can recover from a transient OTA issue without reinstalling.
-function FallbackComponent({
-  error,
-  resetErrorBoundary,
-}: {
-  error: any;
-  resetErrorBoundary: () => void;
-}) {
+// Hand-rolled class-based ErrorBoundary. Avoids `react-error-boundary`
+// because pulling in an external package at the very root of the app
+// was itself a candidate for the launch-crash investigation. A class
+// component is part of React core, ships with React Native, and has
+// no peer-dependency surface area.
+type FallbackProps = { error: any; reset: () => void };
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode; Fallback: React.ComponentType<FallbackProps> },
+  { error: any }
+> {
+  state = { error: null as any };
+  static getDerivedStateFromError(error: any) {
+    return { error };
+  }
+  componentDidCatch(error: any, info: any) {
+    // Surfaces in dev logs and EAS log streams. Production builds can
+    // still recover via the Fallback's reset action.
+    // eslint-disable-next-line no-console
+    console.error('[AppErrorBoundary]', error?.message || error, info?.componentStack);
+  }
+  reset = () => this.setState({ error: null });
+  render() {
+    if (this.state.error) {
+      const Fallback = this.props.Fallback;
+      return <Fallback error={this.state.error} reset={this.reset} />;
+    }
+    return this.props.children as React.ReactElement;
+  }
+}
+
+function FallbackComponent({ error, reset }: FallbackProps) {
   const message = error && typeof error.message === 'string' ? error.message : null;
   return (
     <View style={fallbackStyles.container}>
@@ -32,7 +53,7 @@ function FallbackComponent({
           {message}
         </Text>
       ) : null}
-      <TouchableOpacity onPress={resetErrorBoundary} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+      <TouchableOpacity onPress={reset} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
         <Text style={fallbackStyles.cta}>Restart Conductor</Text>
       </TouchableOpacity>
     </View>
@@ -64,7 +85,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <ErrorBoundary FallbackComponent={FallbackComponent}>
+    <AppErrorBoundary Fallback={FallbackComponent}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
@@ -88,6 +109,6 @@ export default function RootLayout() {
           <StatusBar style="auto" />
         </ThemeProvider>
       </GestureHandlerRootView>
-    </ErrorBoundary>
+    </AppErrorBoundary>
   );
 }
