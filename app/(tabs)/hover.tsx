@@ -21,6 +21,7 @@ import Svg, { Circle, Line } from 'react-native-svg';
 
 import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
+import { HelpButton } from '@/components/HelpButton';
 import {
   LEGEND_ORDER,
   metaForRing,
@@ -1253,6 +1254,7 @@ export default function HoverScreen() {
   return (
     <GestureDetector gesture={composedGesture}>
       <View style={styles.container}>
+        <HelpButton cardId="radar" top={insets.top + 8} />
         <Animated.View
           pointerEvents="none"
           style={[styles.topHeader, { top: insets.top + 8, opacity: headerOpacity }]}>

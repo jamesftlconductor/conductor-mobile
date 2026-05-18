@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { HelpButton } from '@/components/HelpButton';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -474,6 +475,8 @@ export default function HorizonScreen() {
   ];
 
   return (
+    <View style={{ flex: 1, backgroundColor: BG }}>
+    <HelpButton cardId="horizon" />
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scroll}
@@ -559,6 +562,7 @@ export default function HorizonScreen() {
           ))
       )}
     </ScrollView>
+    </View>
   );
 }
 

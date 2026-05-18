@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { HelpButton } from '@/components/HelpButton';
 import { TYPE_META } from '@/components/signalTypes';
 
 const USER_ID = 'james_totalhome_gmail_com';
@@ -198,6 +199,8 @@ export default function CompassScreen() {
   }, []);
 
   return (
+    <View style={{ flex: 1, backgroundColor: BG }}>
+    <HelpButton cardId="patterns" />
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <View style={styles.topBar}>
         <TouchableOpacity
@@ -353,6 +356,7 @@ export default function CompassScreen() {
       )}
 
     </ScrollView>
+    </View>
   );
 }
 

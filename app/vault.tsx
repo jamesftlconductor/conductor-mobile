@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { SecureScreen } from '@/components/SecureScreen';
 import { CameraScanner, type ScanResult } from '@/components/CameraScanner';
+import { HelpButton } from '@/components/HelpButton';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -294,6 +295,7 @@ function VaultScreen() {
 
   return (
     <View style={styles.container}>
+      <HelpButton cardId="vault" />
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={

@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { AddCrewSheet } from '@/components/AddCrewSheet';
+import { HelpButton } from '@/components/HelpButton';
 import {
   ActivityIndicator,
   Alert,
@@ -586,6 +587,8 @@ export default function CrewScreen() {
   const isEmpty = !loading && members.length === 0 && children.length === 0 && pets.length === 0;
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
+    <HelpButton cardId="crew" />
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scroll}
@@ -734,6 +737,7 @@ export default function CrewScreen() {
         onAdded={() => load()}
       />
     </ScrollView>
+    </View>
   );
 }
 

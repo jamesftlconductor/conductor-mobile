@@ -9,6 +9,7 @@ import { ActivityIndicator, Animated, LayoutAnimation, Linking, Modal, Platform,
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
+import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
@@ -973,6 +974,7 @@ export default function TakeoffScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <HelpButton cardId="brief" />
       <GestureDetector gesture={swipeGesture}>
         <ScrollView
           style={styles.scrollFlex}

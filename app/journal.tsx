@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 
+import { HelpButton } from '@/components/HelpButton';
 import { TYPE_META } from '@/components/signalTypes';
 
 const USER_ID = 'james_totalhome_gmail_com';
@@ -136,6 +137,8 @@ function JournalScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
+    <View style={{ flex: 1, backgroundColor: BG }}>
+    <HelpButton cardId="caught" />
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <TouchableOpacity
         onPress={() => router.back()}
@@ -238,6 +241,7 @@ function JournalScreen() {
 
       <View style={{ height: 60 }} />
     </ScrollView>
+    </View>
   );
 }
 
