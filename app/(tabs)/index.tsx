@@ -16,7 +16,16 @@ import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
 import { useShakeToAsk } from '@/components/useShakeToAsk';
 import { conductorHaptics } from '@/app/haptics';
-import * as Speech from 'expo-speech';
+// Defensive native-module require: the binary running this OTA may
+// predate the expo-speech install. A top-level `import * as Speech
+// from 'expo-speech'` would crash the bundle on that binary. Defer
+// the require and swallow failures so speech is simply a no-op.
+const Speech: any = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-speech');
+  } catch { return { speak: () => {}, stop: () => {} }; }
+})();
 
 // LayoutAnimation needs an opt-in on Android; iOS supports it by default.
 // Enabling at module-load is the official pattern — re-calling per-toggle
@@ -257,7 +266,7 @@ function buildAskChips(args: {
   // Health-state pulse flags surface a readiness chip.
   const lowHealth =
     (args.pulseFlags || []).some((f) => /health|readiness|sleep|recovery|hrv/i.test(f)) ||
-    (args.pulseData?.health?.readinessScore != null && args.pulseData.health.readinessScore < 60);
+    (args.pulseData?.health?.oura?.readinessScore != null && args.pulseData.health.oura.readinessScore < 60);
   if (lowHealth) {
     chips.push('Why is my readiness low today?');
   }
@@ -1203,7 +1212,7 @@ export default function TakeoffScreen() {
                 <View style={styles.askChipsRow}>
                   {buildAskChips({
                     segments,
-                    urgentCount,
+                    urgentCount: pulseData?.urgentCount || 0,
                     pulseFlags,
                     pulseData,
                     conductorQuestion,
