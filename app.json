@@ -68,6 +68,12 @@
           "NSHealthShareUsageDescription": "Conductor reads your health data to provide personalized context in your morning brief.",
           "NSHealthUpdateUsageDescription": "Conductor does not write health data."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Conductor uses your photo library to add photos to crew member profiles."
+        }
       ]
     ],
     "experiments": {

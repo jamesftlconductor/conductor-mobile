@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import {
   ActivityIndicator,
   Alert,
@@ -16,37 +17,21 @@ import {
   View,
 } from 'react-native';
 
-// Dynamic import — expo-image-picker is a native module, only
-// available after a fresh EAS build. Until then pickAndUploadPhoto
-// alerts gracefully. This preserves the OTA path for everything
-// else in the file.
 async function pickImageBase64(): Promise<string | null> {
-  try {
-    const mod: any = await (Function('return import("expo-image-picker")') as any)();
-    const ImagePicker = mod?.default ?? mod;
-    if (!ImagePicker?.launchImageLibraryAsync) throw new Error('picker missing');
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync?.();
-    if (perm && perm.status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo library access to upload.');
-      return null;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions?.Images ?? 'Images',
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.6,
-      base64: true,
-    });
-    if (result?.canceled) return null;
-    const asset = result?.assets?.[0];
-    return asset?.base64 ? `data:image/jpeg;base64,${asset.base64}` : null;
-  } catch (err: any) {
-    Alert.alert(
-      'Coming soon',
-      'Photo uploads will work after the next app build (expo-image-picker is a native module).'
-    );
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (perm.status !== 'granted') {
+    Alert.alert('Permission needed', 'Allow photo access to add crew photos.');
     return null;
   }
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.7,
+    base64: true,
+  });
+  if (result.canceled || !result.assets?.[0]?.base64) return null;
+  return `data:image/jpeg;base64,${result.assets[0].base64}`;
 }
 
 const USER_ID = 'james_totalhome_gmail_com';
