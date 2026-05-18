@@ -610,6 +610,29 @@ function AddVaultModal({
   const [saving, setSaving] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
 
+  // Lease state — populated only when category === 'leases'. Subtype
+  // picker comes between step 1 and step 2; subtype null means we're
+  // still on the subtype picker.
+  const [leaseSubtype, setLeaseSubtype] = useState<'residential' | 'vehicle' | null>(null);
+  const [leaseAddress, setLeaseAddress] = useState('');
+  const [leaseMonthlyRent, setLeaseMonthlyRent] = useState('');
+  const [leaseStart, setLeaseStart] = useState('');
+  const [leaseEnd, setLeaseEnd] = useState('');
+  const [leaseNoticeRequired, setLeaseNoticeRequired] = useState<30 | 60 | 90>(60);
+  const [leaseLandlordName, setLeaseLandlordName] = useState('');
+  const [leaseLandlordPhone, setLeaseLandlordPhone] = useState('');
+  const [leaseAutoRenews, setLeaseAutoRenews] = useState(false);
+  // Vehicle-specific
+  const [vehMake, setVehMake] = useState('');
+  const [vehModel, setVehModel] = useState('');
+  const [vehYear, setVehYear] = useState('');
+  const [vehMonthlyPayment, setVehMonthlyPayment] = useState('');
+  const [vehAnnualMileage, setVehAnnualMileage] = useState('');
+  const [vehCurrentMileage, setVehCurrentMileage] = useState('');
+  const [vehOverageRate, setVehOverageRate] = useState('');
+  const [vehDealerName, setVehDealerName] = useState('');
+  const [vehDealerPhone, setVehDealerPhone] = useState('');
+
   // Map the scan result's documentType to a category + push extracted
   // fields into the form state. Then advance to step 2 so the user can
   // review and confirm.
@@ -648,7 +671,60 @@ function AddVaultModal({
     setPolicyNumber('');
     setNotes('');
     setSaving(false);
+    setLeaseSubtype(null);
+    setLeaseAddress('');
+    setLeaseMonthlyRent('');
+    setLeaseStart('');
+    setLeaseEnd('');
+    setLeaseNoticeRequired(60);
+    setLeaseLandlordName('');
+    setLeaseLandlordPhone('');
+    setLeaseAutoRenews(false);
+    setVehMake('');
+    setVehModel('');
+    setVehYear('');
+    setVehMonthlyPayment('');
+    setVehAnnualMileage('');
+    setVehCurrentMileage('');
+    setVehOverageRate('');
+    setVehDealerName('');
+    setVehDealerPhone('');
   }
+
+  // Compute notice deadline from leaseEnd - noticeRequired days.
+  const computedNoticeDeadline = (() => {
+    if (!leaseEnd) return null;
+    const end = new Date(leaseEnd);
+    if (isNaN(end.getTime())) return null;
+    const d = new Date(end);
+    d.setDate(d.getDate() - leaseNoticeRequired);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  // Project vehicle mileage at lease end. Returns { over: boolean, miles: number }
+  // or null when we don't have enough data.
+  const vehicleProjection = (() => {
+    const allowance = parseFloat(vehAnnualMileage);
+    const currentMi = parseFloat(vehCurrentMileage);
+    if (!leaseEnd || isNaN(allowance) || isNaN(currentMi)) return null;
+    const end = new Date(leaseEnd);
+    if (isNaN(end.getTime())) return null;
+    // Assume 3-year lease default unless leaseStart provided.
+    let yearsTotal = 3;
+    if (leaseStart) {
+      const start = new Date(leaseStart);
+      if (!isNaN(start.getTime())) {
+        yearsTotal = (end.getTime() - start.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      }
+    }
+    const yearsRemaining = (end.getTime() - Date.now()) / (365.25 * 24 * 60 * 60 * 1000);
+    const yearsElapsed = Math.max(0.01, yearsTotal - yearsRemaining);
+    const milesPerYear = currentMi / yearsElapsed;
+    const projectedAtEnd = Math.round(milesPerYear * yearsTotal);
+    const allowed = allowance * yearsTotal;
+    const overage = projectedAtEnd - allowed;
+    return { over: overage > 0, miles: Math.round(Math.abs(overage)), projected: projectedAtEnd };
+  })();
 
   function close() {
     reset();
@@ -664,30 +740,66 @@ function AddVaultModal({
       case 'medical': return 'medical';
       case 'financial': return 'financial';
       case 'home': return 'home';
+      case 'leases': return leaseSubtype === 'vehicle' ? 'lease_vehicle' : 'lease_residential';
       default: return 'other';
     }
   }
 
   async function save() {
-    if (description.trim().length === 0) return;
     setSaving(true);
     try {
+      const isLease = category === 'leases';
+      const item: any = {
+        category: displayToBackend(category),
+        source: 'manual',
+        notes: notes.trim() || null,
+      };
+      if (isLease && leaseSubtype === 'residential') {
+        item.description = `Lease — ${leaseAddress || 'residential'}`;
+        item.address = leaseAddress.trim() || null;
+        item.monthlyRent = parseFloat(leaseMonthlyRent) || null;
+        item.amount = leaseMonthlyRent.trim() ? `$${leaseMonthlyRent.trim()}` : null;
+        item.leaseStart = leaseStart.trim() || null;
+        item.leaseEnd = leaseEnd.trim() || null;
+        item.renewalDate = leaseEnd.trim() || null;
+        item.noticeRequired = leaseNoticeRequired;
+        item.landlordName = leaseLandlordName.trim() || null;
+        item.landlordPhone = leaseLandlordPhone.trim() || null;
+        item.autoRenews = leaseAutoRenews;
+        item.provider = leaseLandlordName.trim() || null;
+      } else if (isLease && leaseSubtype === 'vehicle') {
+        item.description = `${vehYear} ${vehMake} ${vehModel} lease`.trim();
+        item.vehicleMake = vehMake.trim() || null;
+        item.vehicleModel = vehModel.trim() || null;
+        item.vehicleYear = parseInt(vehYear, 10) || null;
+        item.leaseEnd = leaseEnd.trim() || null;
+        item.renewalDate = leaseEnd.trim() || null;
+        item.monthlyPayment = parseFloat(vehMonthlyPayment) || null;
+        item.amount = vehMonthlyPayment.trim() ? `$${vehMonthlyPayment.trim()}` : null;
+        item.annualMileageAllowance = parseFloat(vehAnnualMileage) || null;
+        item.currentMileageEstimate = parseFloat(vehCurrentMileage) || null;
+        item.overageCostPerMile = parseFloat(vehOverageRate.replace(/[^0-9.]/g, '')) || null;
+        item.dealerName = vehDealerName.trim() || null;
+        item.dealerPhone = vehDealerPhone.trim() || null;
+        item.provider = vehDealerName.trim() || null;
+      } else {
+        if (description.trim().length === 0) {
+          setSaving(false);
+          return;
+        }
+        item.description = description.trim();
+        item.provider = provider.trim() || null;
+        item.renewalDate = renewalDate.trim() || null;
+        item.amount = amount.trim() || null;
+        item.policyNumber = policyNumber.trim() || null;
+      }
       const res = await fetch(`${API_BASE}/signals?type=vault`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: USER_ID,
           action: 'add',
-          item: {
-            category: displayToBackend(category),
-            description: description.trim(),
-            provider: provider.trim() || null,
-            renewalDate: renewalDate.trim() || null,
-            amount: amount.trim() || null,
-            policyNumber: policyNumber.trim() || null,
-            notes: notes.trim() || null,
-            source: 'manual',
-          },
+          item,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -720,13 +832,253 @@ function AddVaultModal({
                 {DISPLAY_CATEGORIES.map((c) => (
                   <TouchableOpacity
                     key={c.key}
-                    onPress={() => { setCategory(c.key); setStep(2); }}
+                    onPress={() => {
+                      setCategory(c.key);
+                      // Leases need a subtype picker between step 1 and step 2.
+                      if (c.key === 'leases') {
+                        setLeaseSubtype(null);
+                      }
+                      setStep(2);
+                    }}
                     style={[styles.categoryTile, category === c.key && styles.categoryTileActive]}
                     activeOpacity={0.6}>
                     <Text style={styles.categoryTileEmoji}>{c.emoji}</Text>
                     <Text style={styles.categoryTileLabel}>{c.label}</Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+            </>
+          ) : step === 2 && category === 'leases' && !leaseSubtype ? (
+            <>
+              <Text style={styles.addSheetTitle}>Residential or Vehicle?</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                <TouchableOpacity
+                  onPress={() => setLeaseSubtype('residential')}
+                  style={[styles.categoryTile, { flex: 1 }]}
+                  activeOpacity={0.6}>
+                  <Text style={styles.categoryTileEmoji}>🏠</Text>
+                  <Text style={styles.categoryTileLabel}>Residential</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setLeaseSubtype('vehicle')}
+                  style={[styles.categoryTile, { flex: 1 }]}
+                  activeOpacity={0.6}>
+                  <Text style={styles.categoryTileEmoji}>🚗</Text>
+                  <Text style={styles.categoryTileLabel}>Vehicle</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.addStepRow}>
+                <TouchableOpacity onPress={() => setStep(1)} style={styles.addStepBack}>
+                  <Text style={styles.addStepBackText}>← Back</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : step === 2 && category === 'leases' && leaseSubtype === 'residential' ? (
+            <>
+              <Text style={styles.addSheetTitle}>Residential lease</Text>
+              <TextInput
+                value={leaseAddress}
+                onChangeText={setLeaseAddress}
+                placeholder="Address"
+                placeholderTextColor={MUTED}
+                style={styles.addInput}
+              />
+              <TextInput
+                value={leaseMonthlyRent}
+                onChangeText={setLeaseMonthlyRent}
+                placeholder="Monthly rent"
+                placeholderTextColor={MUTED}
+                keyboardType="numeric"
+                style={styles.addInput}
+              />
+              <TextInput
+                value={leaseStart}
+                onChangeText={setLeaseStart}
+                placeholder="Lease start (YYYY-MM-DD)"
+                placeholderTextColor={MUTED}
+                style={styles.addInput}
+              />
+              <TextInput
+                value={leaseEnd}
+                onChangeText={setLeaseEnd}
+                placeholder="Lease end (YYYY-MM-DD)"
+                placeholderTextColor={MUTED}
+                style={styles.addInput}
+              />
+              <Text style={{ color: MUTED, fontSize: 11, marginTop: 8, marginBottom: 6, letterSpacing: 1 }}>
+                NOTICE REQUIRED
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {[30, 60, 90].map((d) => (
+                  <TouchableOpacity
+                    key={d}
+                    onPress={() => setLeaseNoticeRequired(d as 30 | 60 | 90)}
+                    style={[
+                      {
+                        flex: 1, paddingVertical: 10, borderRadius: 20, alignItems: 'center',
+                        borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
+                      },
+                      leaseNoticeRequired === d && { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
+                    ]}>
+                    <Text style={{
+                      color: leaseNoticeRequired === d ? BRASS : OFF_WHITE,
+                      fontSize: 12,
+                      fontWeight: leaseNoticeRequired === d ? '600' : '400',
+                    }}>{d} days</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {computedNoticeDeadline ? (
+                <View style={{ marginTop: 14, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: BRASS }}>
+                  <Text style={{ color: BRASS, fontSize: 12, fontWeight: '500' }}>
+                    Notice deadline: {computedNoticeDeadline}
+                  </Text>
+                  <Text style={{ color: MUTED, fontSize: 10, marginTop: 2 }}>
+                    Conductor will surface this in the brief.
+                  </Text>
+                </View>
+              ) : null}
+              <TextInput
+                value={leaseLandlordName}
+                onChangeText={setLeaseLandlordName}
+                placeholder="Landlord name (optional)"
+                placeholderTextColor={MUTED}
+                style={[styles.addInput, { marginTop: 14 }]}
+              />
+              <TextInput
+                value={leaseLandlordPhone}
+                onChangeText={setLeaseLandlordPhone}
+                placeholder="Landlord phone (optional)"
+                placeholderTextColor={MUTED}
+                keyboardType="phone-pad"
+                style={styles.addInput}
+              />
+              <TouchableOpacity
+                onPress={() => setLeaseAutoRenews((v) => !v)}
+                style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 4 }}>
+                <View style={{
+                  width: 18, height: 18, borderRadius: 4, marginRight: 10,
+                  borderWidth: 1.5, borderColor: leaseAutoRenews ? BRASS : MUTED,
+                  backgroundColor: leaseAutoRenews ? BRASS : 'transparent',
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {leaseAutoRenews ? <Text style={{ color: '#0f0f0f', fontSize: 12, fontWeight: '700' }}>✓</Text> : null}
+                </View>
+                <Text style={{ color: OFF_WHITE, fontSize: 13 }}>Auto-renews</Text>
+              </TouchableOpacity>
+              <View style={styles.addStepRow}>
+                <TouchableOpacity onPress={() => setLeaseSubtype(null)} style={styles.addStepBack}>
+                  <Text style={styles.addStepBackText}>← Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={save}
+                  disabled={saving || !leaseAddress.trim()}
+                  style={[styles.addStepSave, (saving || !leaseAddress.trim()) && { opacity: 0.5 }]}>
+                  <Text style={styles.addStepSaveText}>{saving ? 'Saving…' : 'Add to Vault'}</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : step === 2 && category === 'leases' && leaseSubtype === 'vehicle' ? (
+            <>
+              <Text style={styles.addSheetTitle}>Vehicle lease</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  value={vehMake}
+                  onChangeText={setVehMake}
+                  placeholder="Make"
+                  placeholderTextColor={MUTED}
+                  style={[styles.addInput, { flex: 1 }]}
+                />
+                <TextInput
+                  value={vehModel}
+                  onChangeText={setVehModel}
+                  placeholder="Model"
+                  placeholderTextColor={MUTED}
+                  style={[styles.addInput, { flex: 1 }]}
+                />
+                <TextInput
+                  value={vehYear}
+                  onChangeText={setVehYear}
+                  placeholder="Year"
+                  placeholderTextColor={MUTED}
+                  keyboardType="numeric"
+                  style={[styles.addInput, { flex: 1 }]}
+                />
+              </View>
+              <TextInput
+                value={leaseEnd}
+                onChangeText={setLeaseEnd}
+                placeholder="Lease end (YYYY-MM-DD)"
+                placeholderTextColor={MUTED}
+                style={styles.addInput}
+              />
+              <TextInput
+                value={vehMonthlyPayment}
+                onChangeText={setVehMonthlyPayment}
+                placeholder="Monthly payment"
+                placeholderTextColor={MUTED}
+                keyboardType="numeric"
+                style={styles.addInput}
+              />
+              <TextInput
+                value={vehAnnualMileage}
+                onChangeText={setVehAnnualMileage}
+                placeholder="Annual mileage allowance"
+                placeholderTextColor={MUTED}
+                keyboardType="numeric"
+                style={styles.addInput}
+              />
+              <TextInput
+                value={vehCurrentMileage}
+                onChangeText={setVehCurrentMileage}
+                placeholder="Current mileage"
+                placeholderTextColor={MUTED}
+                keyboardType="numeric"
+                style={styles.addInput}
+              />
+              <TextInput
+                value={vehOverageRate}
+                onChangeText={setVehOverageRate}
+                placeholder="Overage rate ($ per mile)"
+                placeholderTextColor={MUTED}
+                style={styles.addInput}
+              />
+              {vehicleProjection ? (
+                <View style={{ marginTop: 14, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: BRASS }}>
+                  <Text style={{ color: vehicleProjection.over ? BRASS : MUTED, fontSize: 12, fontWeight: '500' }}>
+                    At current pace: {vehicleProjection.over ? 'over' : 'under'} by{' '}
+                    {vehicleProjection.miles.toLocaleString()} miles
+                  </Text>
+                  <Text style={{ color: MUTED, fontSize: 10, marginTop: 2 }}>
+                    Projected total: {vehicleProjection.projected.toLocaleString()} miles at lease end.
+                  </Text>
+                </View>
+              ) : null}
+              <TextInput
+                value={vehDealerName}
+                onChangeText={setVehDealerName}
+                placeholder="Dealer name (optional)"
+                placeholderTextColor={MUTED}
+                style={[styles.addInput, { marginTop: 14 }]}
+              />
+              <TextInput
+                value={vehDealerPhone}
+                onChangeText={setVehDealerPhone}
+                placeholder="Dealer phone (optional)"
+                placeholderTextColor={MUTED}
+                keyboardType="phone-pad"
+                style={styles.addInput}
+              />
+              <View style={styles.addStepRow}>
+                <TouchableOpacity onPress={() => setLeaseSubtype(null)} style={styles.addStepBack}>
+                  <Text style={styles.addStepBackText}>← Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={save}
+                  disabled={saving || !vehMake.trim()}
+                  style={[styles.addStepSave, (saving || !vehMake.trim()) && { opacity: 0.5 }]}>
+                  <Text style={styles.addStepSaveText}>{saving ? 'Saving…' : 'Add to Vault'}</Text>
+                </TouchableOpacity>
               </View>
             </>
           ) : step === 2 ? (

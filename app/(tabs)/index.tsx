@@ -227,6 +227,66 @@ const CLEARANCE_THEME = {
 //                    Takeoff prose, no separate band needed)
 //   21-22 → Clearance (one-hour evening close window)
 //   ≥ 22  → Overwatch
+// Compute contextual chips from current brief state. Returns at
+// most 7 candidates; caller takes .slice(0, 3) for display.
+function buildAskChips(args: {
+  segments: BriefSegment[];
+  urgentCount: number;
+  pulseFlags: string[];
+  pulseData: PulseData | null;
+  conductorQuestion: string | null;
+  maintenancePlanOffer: boolean;
+  modeIsTakeoff: boolean;
+}): string[] {
+  const chips: string[] = [];
+
+  // Look for a travel signal with a destination in the segments.
+  const travel = (args.segments || []).find(
+    (s) => s.type === 'signal' && /trip|flight|paris|london|nyc|destination|travel/i.test(s.content || '')
+  );
+  if (travel) {
+    const m = (travel.content || '').match(/\b(?:to|in)\s+([A-Z][a-zà-ÿ]+(?:\s+[A-Z][a-zà-ÿ]+){0,2})/);
+    if (m && m[1]) chips.push(`What do I need for ${m[1]}?`);
+  }
+
+  // Maintenance plan offer is a strong "this is on your radar" cue.
+  if (args.maintenancePlanOffer) {
+    chips.push("What's due for maintenance this month?");
+  }
+
+  // Health-state pulse flags surface a readiness chip.
+  const lowHealth =
+    (args.pulseFlags || []).some((f) => /health|readiness|sleep|recovery|hrv/i.test(f)) ||
+    (args.pulseData?.health?.readinessScore != null && args.pulseData.health.readinessScore < 60);
+  if (lowHealth) {
+    chips.push('Why is my readiness low today?');
+  }
+
+  if (args.urgentCount > 0) {
+    chips.push("What's most urgent right now?");
+  }
+
+  if (args.conductorQuestion) {
+    chips.push('Answer your question for me');
+  }
+
+  // Fallbacks — always-available chips. Filled in order until we have 3.
+  const fallbacks = [
+    'What should this cost?',
+    "What's coming up this week?",
+    'How are we doing?',
+    'Open my vault',
+    args.modeIsTakeoff ? 'What is the brief?' : 'What is the Pulse?',
+    'Show me my crew',
+  ];
+  for (const f of fallbacks) {
+    if (chips.length >= 3) break;
+    if (!chips.includes(f)) chips.push(f);
+  }
+
+  return chips;
+}
+
 function getBriefMode(hour: number) {
   if (hour < 7 || hour >= 22) return { title: 'Overwatch', endpoint: null as string | null };
   if (hour < 21) return { title: 'Takeoff', endpoint: 'brief' as string | null };
@@ -1137,11 +1197,19 @@ export default function TakeoffScreen() {
                 </TouchableOpacity>
               </View>
               {askFocused && !askAnswer && !askLoading ? (
-                // Suggestion chips for common home-services questions —
-                // tap to pre-fill the input, focus stays so the user can
-                // edit or submit immediately.
+                // Suggestion chips — derived from brief state at render
+                // time so they're contextually useful for what's
+                // actually on the user's radar today.
                 <View style={styles.askChipsRow}>
-                  {['What should this cost?', 'Who have we used before?', 'Find a contractor near me'].map((q) => (
+                  {buildAskChips({
+                    segments,
+                    urgentCount,
+                    pulseFlags,
+                    pulseData,
+                    conductorQuestion,
+                    maintenancePlanOffer,
+                    modeIsTakeoff: mode.endpoint === 'brief',
+                  }).slice(0, 3).map((q) => (
                     <TouchableOpacity
                       key={q}
                       onPress={() => {
