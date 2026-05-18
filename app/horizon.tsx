@@ -151,6 +151,7 @@ function buildItems(args: {
 
   const memberMap = new Map<string, string>();
   for (const m of crew || []) {
+    if (!m) continue;
     if (m.memberType === 'member' && m.userId && m.firstName && m.userId !== USER_ID) {
       memberMap.set(m.userId, m.firstName);
     }
@@ -169,6 +170,7 @@ function buildItems(args: {
   // since loadSignals already filters expired/resolved upstream.
   const FAR_FUTURE_MS = today.getTime() + 365 * DAY_MS; // synthetic edge-bucket anchor
   for (const s of signals || []) {
+    if (!s) continue;
     const state = (s as Signal & { state?: string }).state;
     if (state && state !== 'incoming' && state !== 'active') continue;
     const rawMs = s.eta ? ymdToMs(s.eta) : 0;
@@ -210,6 +212,7 @@ function buildItems(args: {
 
   // Vault items
   for (const v of vault || []) {
+    if (!v) continue;
     if (v.handled) continue;
     if (!v.renewalDate) continue;
     const ms = ymdToMs(v.renewalDate);
@@ -228,11 +231,12 @@ function buildItems(args: {
 
   // Crew events + birthdays + anniversaries
   for (const m of crew || []) {
+    if (!m) continue;
     const memberEmoji = m.memberType === 'pet' ? '🐾' : '👤';
     const memberName = m.firstName || m.name || '';
 
     for (const ev of m.upcomingEvents || []) {
-      if (!ev.date) continue;
+      if (!ev || !ev.date) continue;
       const ms = ymdToMs(ev.date);
       if (!ms || ms < fourteen) continue;
       items.push({
