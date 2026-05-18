@@ -369,6 +369,137 @@ function ToggleRow({
   );
 }
 
+function HouseholdNameRow() {
+  const [name, setName] = useState<string>('');
+  const [editing, setEditing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${USER_ID}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.profile?.householdName) setName(data.profile.householdName);
+      } catch { /* best-effort */ }
+      finally { if (!cancelled) setLoaded(true); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function persist() {
+    try {
+      await fetch(`${API_BASE}/signals?type=profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID, householdName: name.trim() || null }),
+      });
+    } catch { /* best-effort */ }
+    setEditing(false);
+  }
+
+  if (!loaded) return null;
+
+  if (editing) {
+    return (
+      <View style={{ paddingHorizontal: 22, paddingTop: 4, paddingBottom: 12 }}>
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          onBlur={persist}
+          autoFocus
+          placeholder="e.g. The Mounts House"
+          placeholderTextColor={MUTED}
+          style={{
+            color: OFF_WHITE,
+            fontSize: 13,
+            paddingVertical: 6,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: SOFT_BORDER,
+          }}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      onPress={() => setEditing(true)}
+      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+      style={{ paddingHorizontal: 22, paddingTop: 2, paddingBottom: 12 }}>
+      <Text style={{ color: name ? OFF_WHITE : BRASS, fontSize: 13, fontStyle: name ? 'normal' : 'italic' }}>
+        {name || 'Add a household name →'}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function LanguageRow() {
+  const [lang, setLang] = useState<'en' | 'es'>('en');
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${USER_ID}`);
+        const data = await res.json();
+        if (data?.preferences?.language === 'es') setLang('es');
+      } catch { /* skip */ }
+      finally { setLoaded(true); }
+    })();
+  }, []);
+
+  async function pick(next: 'en' | 'es') {
+    setLang(next);
+    try {
+      await fetch(`${API_BASE}/signals?type=preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID, preferences: { language: next } }),
+      });
+      // Bust takeoff cache so next brief reflects new language.
+      fetch(`${API_BASE}/brief?userId=${USER_ID}&mode=takeoff&forceFresh=1`).catch(() => {});
+    } catch { /* skip */ }
+  }
+
+  if (!loaded) return null;
+
+  return (
+    <View style={{ paddingHorizontal: 22, paddingVertical: 12 }}>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        {([
+          { id: 'en' as const, flag: '🇺🇸', label: 'English' },
+          { id: 'es' as const, flag: '🇪🇸', label: 'Español' },
+        ]).map((o) => {
+          const active = lang === o.id;
+          return (
+            <TouchableOpacity
+              key={o.id}
+              onPress={() => pick(o.id)}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 12,
+                borderRadius: 10,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: active ? BRASS : SOFT_BORDER,
+                backgroundColor: active ? 'rgba(184,150,12,0.08)' : 'rgba(255,255,255,0.03)',
+              }}>
+              <Text style={{ fontSize: 18, marginRight: 8 }}>{o.flag}</Text>
+              <Text style={{ color: active ? BRASS : OFF_WHITE, fontSize: 13, fontWeight: active ? '600' : '400' }}>
+                {o.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 type StyleTone = 'direct' | 'balanced' | 'warm';
 type StyleHumor = 'yes' | 'occasionally' | 'no';
 type StyleDetail = 'brief' | 'standard' | 'thorough';
@@ -1021,6 +1152,8 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
+        <HouseholdNameRow />
+
 
         <SecuritySection />
 
@@ -1249,6 +1382,9 @@ export default function SettingsScreen() {
             Helps Conductor detect scheduling conflicts
           </Text>
         </View>
+
+        <SectionHeader title="Language / Idioma" />
+        <LanguageRow />
 
         <SectionHeader title="Your Voice" subtext="How Conductor talks to you" />
         <VoiceStyleBlock />

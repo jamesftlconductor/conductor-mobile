@@ -50,7 +50,8 @@ const INTERSTITIAL_POLL_MS = 3000;
 const PIPELINE_START_KEY = 'onboard_pipeline_started_at';
 const STEP_KEY = 'onboardingStep';
 
-type Phase = 'step1' | 'step2' | 'step3' | 'interstitial';
+type Phase = 'language' | 'step1' | 'step2' | 'step3' | 'interstitial';
+type Language = 'en' | 'es';
 
 type Who = 'solo' | 'couple' | 'family' | 'multigenerational';
 type Housing = 'own' | 'rent' | 'living_with_family';
@@ -135,7 +136,8 @@ const VOICE_PREVIEW: Record<string, string> = {
 };
 
 export default function OnboardingScreen() {
-  const [phase, setPhase] = useState<Phase>('step1');
+  const [phase, setPhase] = useState<Phase>('language');
+  const [language, setLanguage] = useState<Language>('en');
   const [who, setWho] = useState<Who | null>(null);
   const [housing, setHousing] = useState<Housing | null>(null);
   const [modifiers, setModifiers] = useState<Set<Modifier>>(new Set());
@@ -242,7 +244,7 @@ export default function OnboardingScreen() {
 
   // ---------- Step handlers ----------
 
-  async function confirmStep1(w: Who, h: Housing, mods: Modifier[]) {
+  async function confirmStep1(w: Who, h: Housing, mods: Modifier[], name: string | null) {
     setWho(w);
     setHousing(h);
     try {
@@ -254,6 +256,7 @@ export default function OnboardingScreen() {
           who: w,
           housing: h,
           modifiers: mods,
+          householdName: name,
         }),
       });
     } catch { /* best-effort */ }
@@ -323,12 +326,29 @@ export default function OnboardingScreen() {
       {pipelineReady ? <Text style={styles.readyChip}>Ready ✓</Text> : null}
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {phase === 'language' ? (
+          <LanguageStep
+            language={language}
+            onPick={async (lang) => {
+              setLanguage(lang);
+              try {
+                await fetch(`${API_BASE}/signals?type=preferences`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: USER_ID, preferences: { language: lang } }),
+                });
+              } catch { /* best-effort */ }
+              setPhase('step1');
+            }}
+          />
+        ) : null}
+
         {phase === 'step1' ? (
           <Step1
             who={who} setWho={setWho}
             housing={housing} setHousing={setHousing}
             modifiers={modifiers} setModifiers={setModifiers}
-            onContinue={(w, h, mods) => confirmStep1(w, h, mods)}
+            onContinue={(w, h, mods, name) => confirmStep1(w, h, mods, name)}
           />
         ) : null}
 
@@ -362,6 +382,49 @@ export default function OnboardingScreen() {
   );
 }
 
+// ---------- Language picker ----------
+
+function LanguageStep({
+  language, onPick,
+}: { language: Language; onPick: (l: Language) => void }) {
+  return (
+    <>
+      <Text style={[styles.title, { marginTop: 20 }]}>Choose your language</Text>
+      <Text style={[styles.subtitle, { marginBottom: 24 }]}>Elige tu idioma</Text>
+      <View style={{ gap: 12 }}>
+        {[
+          { id: 'en' as Language, flag: '🇺🇸', label: 'English' },
+          { id: 'es' as Language, flag: '🇪🇸', label: 'Español' },
+        ].map((o) => {
+          const active = language === o.id;
+          return (
+            <TouchableOpacity
+              key={o.id}
+              onPress={() => onPick(o.id)}
+              activeOpacity={0.7}
+              style={[
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 20,
+                  paddingHorizontal: 18,
+                  borderRadius: 14,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: SOFT_BORDER,
+                  backgroundColor: 'rgba(255,255,255,0.03)',
+                },
+                active && { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
+              ]}>
+              <Text style={{ fontSize: 28, marginRight: 16 }}>{o.flag}</Text>
+              <Text style={{ color: OFF_WHITE, fontSize: 18, fontWeight: '500' }}>{o.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </>
+  );
+}
+
 // ---------- Step 1: Who + Housing + Modifiers ----------
 
 function Step1({
@@ -376,9 +439,10 @@ function Step1({
   setHousing: (h: Housing) => void;
   modifiers: Set<Modifier>;
   setModifiers: (s: Set<Modifier>) => void;
-  onContinue: (w: Who, h: Housing, mods: Modifier[]) => void;
+  onContinue: (w: Who, h: Housing, mods: Modifier[], name: string | null) => void;
 }) {
   const [showModifiers, setShowModifiers] = useState(false);
+  const [householdName, setHouseholdName] = useState('');
   const canContinue = who !== null && housing !== null;
 
   function toggleMod(id: Modifier) {
@@ -468,9 +532,37 @@ function Step1({
         </View>
       ) : null}
 
+      {who && housing ? (
+        <View style={{ marginTop: 24 }}>
+          <Text style={styles.smallTitle}>What do you call your household?</Text>
+          <Text style={[styles.subtitle, { marginBottom: 8 }]}>
+            Optional. Appears in your Week in Review and shareable cards.
+          </Text>
+          <TextInput
+            value={householdName}
+            onChangeText={setHouseholdName}
+            placeholder="e.g. The Mounts House, Apt 4B"
+            placeholderTextColor={MUTED}
+            style={{
+              color: OFF_WHITE,
+              fontSize: 14,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              backgroundColor: 'rgba(255,255,255,0.04)',
+              borderRadius: 10,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: SOFT_BORDER,
+            }}
+          />
+        </View>
+      ) : null}
+
       <TouchableOpacity
         onPress={() =>
-          who && housing && onContinue(who, housing, Array.from(modifiers))
+          who && housing && onContinue(
+            who, housing, Array.from(modifiers),
+            householdName.trim() || null
+          )
         }
         disabled={!canContinue}
         style={[styles.continueBtn, !canContinue && { opacity: 0.4 }]}>

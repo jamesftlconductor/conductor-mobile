@@ -102,6 +102,20 @@ export default function MaintenanceScreen() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [addedSignals, setAddedSignals] = useState<Record<string, boolean>>({});
+  const [isRenter, setIsRenter] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${USER_ID}`);
+        const data = await res.json();
+        const housing = data?.profile?.housing;
+        if (housing === 'rent' || housing === 'living_with_family') setIsRenter(true);
+      } catch { /* best-effort */ }
+    })();
+  }, []);
+
+  const titleText = isRenter ? 'Your Maintenance' : 'Home Maintenance';
 
   const load = useCallback(async () => {
     try {
@@ -196,7 +210,7 @@ export default function MaintenanceScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
           <Text style={styles.topBackText}>← Return</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Home Maintenance</Text>
+        <Text style={styles.title}>{titleText}</Text>
         <Text style={styles.subtitle}>No plan yet.</Text>
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyHint}>
@@ -221,9 +235,9 @@ export default function MaintenanceScreen() {
       <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
         <Text style={styles.topBackText}>← Return</Text>
       </TouchableOpacity>
-      <Text style={styles.title}>Home Maintenance</Text>
+      <Text style={styles.title}>{titleText}</Text>
       <Text style={styles.subtitle}>
-        {plan.location}{genDate ? ` · Generated ${genDate}` : ''}
+        {plan.location}{isRenter ? ' · Renter' : ''}{genDate ? ` · Generated ${genDate}` : ''}
       </Text>
 
       <View style={styles.budgetCard}>
