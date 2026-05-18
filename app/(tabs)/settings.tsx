@@ -787,6 +787,10 @@ export default function SettingsScreen() {
           onPress={() => router.push('/inventory' as never)}
         />
         <ChevronRow
+          label="Home Maintenance"
+          onPress={() => router.push('/maintenance' as never)}
+        />
+        <ChevronRow
           label="The Programme"
           // Cast: expo-router's typed-routes generator hasn't regenerated
           // since app/programme.tsx was added. The push resolves correctly

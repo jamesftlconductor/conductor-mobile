@@ -499,6 +499,9 @@ export default function TakeoffScreen() {
   // show "Acknowledged" before fading.
   const [handoff, setHandoff] = useState<{ signalId: string; message: string } | null>(null);
   const [handoffAcked, setHandoffAcked] = useState(false);
+  // Maintenance plan offer — brief returns true when inventory is
+  // rich enough + no fresh plan exists + 7-day cooldown clear.
+  const [maintenancePlanOffer, setMaintenancePlanOffer] = useState(false);
   // Quick-action popover — opened by long-press on a brief signal
   // chip. Holds the targeted signal id + content phrase so the
   // popover can render a confirmation header naming what was tapped.
@@ -721,6 +724,7 @@ export default function TakeoffScreen() {
           : null
       );
       setHandoffAcked(false);
+      setMaintenancePlanOffer(data.maintenancePlanOffer === true);
 
       // One-time tooltips — only flip on once. Signal-tap tooltip
       // shows when the brief actually has chip segments to point at;
@@ -1276,6 +1280,47 @@ export default function TakeoffScreen() {
             );
           })()}
 
+          {!loading && maintenancePlanOffer ? (
+            // Maintenance plan offer card. Appears once per 7-day
+            // window when the household has enough inventory and
+            // no fresh plan. "Build plan →" routes to /maintenance
+            // with ?generate=true to kick off generation on landing.
+            // "Not now" POSTs ?action=dismiss and hides the card
+            // for good.
+            <View style={styles.maintOfferCard}>
+              <Text style={styles.maintOfferTitle}>
+                🏠  Conductor can build your home maintenance plan
+              </Text>
+              <Text style={styles.maintOfferSub}>
+                Based on your inventory and seasonal patterns.
+              </Text>
+              <View style={styles.maintOfferRow}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setMaintenancePlanOffer(false);
+                    router.push('/maintenance?generate=true' as never);
+                  }}
+                  style={styles.maintOfferPrimary}
+                  activeOpacity={0.7}>
+                  <Text style={styles.maintOfferPrimaryText}>Build plan →</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setMaintenancePlanOffer(false);
+                    fetch('https://conductor-ivory.vercel.app/api/maintenance', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'dismiss', userId: 'james_totalhome_gmail_com' }),
+                    }).catch(() => {});
+                  }}
+                  style={styles.maintOfferSecondary}
+                  activeOpacity={0.7}>
+                  <Text style={styles.maintOfferSecondaryText}>Not now</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
           {!loading && conductorQuestion ? (
             // Conductor's one proactive question — surfaced below
             // the Took Care Of band, above the feedback row. Two
@@ -1825,6 +1870,47 @@ const styles = StyleSheet.create({
     marginTop: 14,
     letterSpacing: 0.3,
   },
+  maintOfferCard: {
+    marginTop: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingLeft: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#b8960c',
+    backgroundColor: 'rgba(184, 150, 12, 0.05)',
+    borderRadius: 6,
+  },
+  maintOfferTitle: {
+    color: '#f0ede8',
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  maintOfferSub: {
+    color: '#5a5855',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginBottom: 12,
+    lineHeight: 17,
+  },
+  maintOfferRow: { flexDirection: 'row', gap: 10 },
+  maintOfferPrimary: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(184, 150, 12, 0.55)',
+    backgroundColor: 'rgba(184, 150, 12, 0.10)',
+  },
+  maintOfferPrimaryText: { color: '#b8960c', fontSize: 12, fontWeight: '600' },
+  maintOfferSecondary: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  maintOfferSecondaryText: { color: '#5a5855', fontSize: 12 },
   conductorQWrap: {
     marginTop: 18,
     marginBottom: 6,
