@@ -60,16 +60,67 @@ const EMPTY: Inventory = {
   notes: null,
 };
 
+// Suggestion record shape from /api/signals?type=inventorySuggestions.
+type Suggestion = {
+  id: string;
+  itemType?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  year?: number | null;
+  installDate?: string | null;
+  lastServiceDate?: string | null;
+  lastServiceMileage?: number | null;
+  filterSize?: string | null;
+  serialNumber?: string | null;
+  confidence?: 'high' | 'medium' | 'low';
+  sourceDescription?: string | null;
+};
+
+const ITEM_TYPE_EMOJI: Record<string, string> = {
+  hvac: '🌡',
+  vehicle: '🚗',
+  appliance: '📦',
+  roof: '🏠',
+  water_heater: '🚿',
+  electrical: '⚡',
+  other: '📌',
+};
+
+const ITEM_TYPE_LABEL: Record<string, string> = {
+  hvac: 'HVAC',
+  vehicle: 'Vehicle',
+  appliance: 'Appliance',
+  roof: 'Roof',
+  water_heater: 'Water heater',
+  electrical: 'Electrical',
+  other: 'Other',
+};
+
+function confidenceColor(c?: string | null): string {
+  if (c === 'high') return '#7a9a6e';
+  if (c === 'medium') return '#b8960c';
+  return '#5a5855';
+}
+
 export default function InventoryScreen() {
   const [inventory, setInventory] = useState<Inventory>(EMPTY);
   const [loading, setLoading] = useState(true);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/signals?type=inventory&userId=${USER_ID}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data?.inventory) setInventory({ ...EMPTY, ...data.inventory });
+      const [invRes, sugRes] = await Promise.all([
+        fetch(`${API_BASE}/signals?type=inventory&userId=${USER_ID}`),
+        fetch(`${API_BASE}/signals?type=inventorySuggestions&userId=${USER_ID}`),
+      ]);
+      if (invRes.ok) {
+        const data = await invRes.json();
+        if (data?.inventory) setInventory({ ...EMPTY, ...data.inventory });
+      }
+      if (sugRes.ok) {
+        const data = await sugRes.json();
+        if (Array.isArray(data?.items)) setSuggestions(data.items);
+      }
     } catch { /* best-effort */ }
   }, []);
 
@@ -77,6 +128,23 @@ export default function InventoryScreen() {
     setLoading(true);
     load().finally(() => setLoading(false));
   }, [load]));
+
+  // Confirm or dismiss a suggestion. Optimistic local-state update
+  // keeps the card from lingering between API roundtrip + reload.
+  async function actOnSuggestion(s: Suggestion, confirmed: boolean) {
+    setSuggestions((prev) => prev.filter((p) => p.id !== s.id));
+    try {
+      await fetch(`${API_BASE}/signals?type=confirmInventory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID, suggestionId: s.id, confirmed }),
+      });
+      if (confirmed) load();
+    } catch {
+      // restore on error — re-fetch to reconcile
+      load();
+    }
+  }
 
   // Persist a partial update. Optimistic local merge so the rendered
   // values reflect the new state immediately; server reconciles on
@@ -122,6 +190,87 @@ export default function InventoryScreen() {
           <View style={styles.empty}><ActivityIndicator color={MUTED} /></View>
         ) : (
           <>
+            {suggestions.length > 0 && (
+              <View style={styles.foundSection}>
+                <Text style={styles.foundHeader}>CONDUCTOR FOUND</Text>
+                <Text style={styles.foundSub}>
+                  Confirm or correct what Conductor discovered.
+                </Text>
+                {suggestions.map((s) => {
+                  const type = String(s.itemType || 'other');
+                  const emoji = ITEM_TYPE_EMOJI[type] || ITEM_TYPE_EMOJI.other;
+                  const label = ITEM_TYPE_LABEL[type] || 'Item';
+                  return (
+                    <View key={s.id} style={styles.foundCard}>
+                      <View style={styles.foundCardHeader}>
+                        <Text style={styles.foundCardEmoji}>{emoji}</Text>
+                        <Text style={styles.foundCardLabel}>{label}</Text>
+                        <View
+                          style={[
+                            styles.foundConfDot,
+                            { backgroundColor: confidenceColor(s.confidence) },
+                          ]}
+                        />
+                      </View>
+                      {s.brand ? (
+                        <Text style={styles.foundRow}>
+                          <Text style={styles.foundRowLabel}>Brand </Text>
+                          {s.brand}
+                        </Text>
+                      ) : null}
+                      {s.model ? (
+                        <Text style={styles.foundRow}>
+                          <Text style={styles.foundRowLabel}>Model </Text>
+                          {s.model}
+                        </Text>
+                      ) : null}
+                      {s.year ? (
+                        <Text style={styles.foundRow}>
+                          <Text style={styles.foundRowLabel}>Year </Text>
+                          {s.year}
+                        </Text>
+                      ) : null}
+                      {s.filterSize ? (
+                        <Text style={styles.foundRow}>
+                          <Text style={styles.foundRowLabel}>Filter </Text>
+                          {s.filterSize}
+                        </Text>
+                      ) : null}
+                      {s.lastServiceDate ? (
+                        <Text style={styles.foundRow}>
+                          <Text style={styles.foundRowLabel}>Last service </Text>
+                          {s.lastServiceDate}
+                        </Text>
+                      ) : null}
+                      {s.lastServiceMileage ? (
+                        <Text style={styles.foundRow}>
+                          <Text style={styles.foundRowLabel}>Mileage </Text>
+                          {s.lastServiceMileage.toLocaleString()}
+                        </Text>
+                      ) : null}
+                      {s.sourceDescription ? (
+                        <Text style={styles.foundSource}>
+                          Found in: {s.sourceDescription}
+                        </Text>
+                      ) : null}
+                      <View style={styles.foundActions}>
+                        <TouchableOpacity
+                          onPress={() => actOnSuggestion(s, true)}
+                          style={styles.foundConfirmBtn}>
+                          <Text style={styles.foundConfirmText}>✓ Looks right</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => actOnSuggestion(s, false)}
+                          style={styles.foundDismissBtn}>
+                          <Text style={styles.foundDismissText}>Dismiss</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
             <Section emoji="🏠" label="HOME">
               <Field
                 label="Built (year)"
@@ -482,4 +631,83 @@ const styles = StyleSheet.create({
   removeLink: { color: MUTED, fontSize: 11, fontStyle: 'italic' },
   emptyInline: { color: MUTED, fontSize: 12, fontStyle: 'italic' },
   empty: { alignItems: 'center', paddingVertical: 60 },
+  foundSection: {
+    marginBottom: 28,
+    paddingTop: 8,
+  },
+  foundHeader: {
+    color: BRASS,
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  foundSub: {
+    color: MUTED,
+    fontSize: 12,
+    marginBottom: 14,
+    lineHeight: 17,
+  },
+  foundCard: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(184, 150, 12, 0.35)',
+    backgroundColor: 'rgba(184, 150, 12, 0.04)',
+    marginBottom: 12,
+  },
+  foundCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  foundCardEmoji: { fontSize: 18 },
+  foundCardLabel: {
+    color: OFF_WHITE,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  foundConfDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  foundRow: {
+    color: OFF_WHITE,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  foundRowLabel: {
+    color: MUTED,
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  foundSource: {
+    color: MUTED,
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginTop: 6,
+  },
+  foundActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  foundConfirmBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: BRASS,
+  },
+  foundConfirmText: { color: BG, fontSize: 12, fontWeight: '600' },
+  foundDismissBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  foundDismissText: { color: MUTED, fontSize: 12 },
 });
