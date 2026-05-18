@@ -15,6 +15,7 @@ import {
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { metaFor, Signal, TYPE_META } from './signalTypes';
+import { CameraScanner } from './CameraScanner';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 import { Tooltip } from './Tooltip';
 
@@ -336,6 +337,7 @@ function SingleSheet({
                     (signal as Signal & { crewMemberId?: string | null }).crewMemberId = name;
                   }}
                 />
+                <SignalPhotosRow signal={signal} userId={userId} />
               </View>
 
               {(suggestionLoading || suggestion) && (
@@ -465,6 +467,46 @@ function SingleSheet({
         </SwipeDismissSheet>
       </Pressable>
     </Modal>
+  );
+}
+
+// Signal photo attachment row. "📷 Add photo" tap opens
+// CameraScanner with scanType:'signal_photo'. On success the
+// signed proxy URL is appended to a local thumbnail list; the
+// backend already wrote the photo into signal.photos[] during
+// the /api/scan call.
+function SignalPhotosRow({ signal, userId }: { signal: Signal; userId: string }) {
+  const [showScanner, setShowScanner] = useState(false);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  return (
+    <View style={styles.photosBlock}>
+      {photoUrls.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.photoThumbs}>
+          {photoUrls.map((u, i) => (
+            <Image key={i} source={{ uri: u }} style={styles.photoThumb} />
+          ))}
+        </ScrollView>
+      ) : null}
+      <TouchableOpacity
+        onPress={() => setShowScanner(true)}
+        style={styles.addPhotoBtn}
+        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+        <Text style={styles.addPhotoText}>📷 Add photo</Text>
+      </TouchableOpacity>
+      <CameraScanner
+        visible={showScanner}
+        userId={userId}
+        scanType="signal_photo"
+        signalId={signal.id}
+        onClose={() => setShowScanner(false)}
+        onResult={(r) => {
+          if (r.photoUrl) setPhotoUrls((p) => [...p, r.photoUrl as string]);
+        }}
+      />
+    </View>
   );
 }
 
@@ -673,6 +715,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
     paddingHorizontal: 20,
+  },
+  photosBlock: {
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  photoThumbs: { gap: 8, paddingVertical: 4 },
+  photoThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  addPhotoBtn: {
+    paddingVertical: 6,
+  },
+  addPhotoText: {
+    color: '#5a5855',
+    fontSize: 12,
+    letterSpacing: 0.3,
   },
   attributionRow: {
     marginTop: 12,

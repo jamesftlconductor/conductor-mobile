@@ -457,6 +457,16 @@ export default function SettingsScreen() {
   // condition where a partial mid-edit value could be the last POST to
   // land in Redis, and stops the firehose of per-keystroke POSTs.
   const [workCalDraft, setWorkCalDraft] = useState('');
+  // Smart calendar picker — list of the user's calendars fetched
+  // from Google via /api/calendar?action=list, plus whichever one
+  // matched the isWorkCalendar heuristic. Set on focus alongside
+  // the existing settings load. Picker sheet visibility tracked
+  // separately.
+  const [calendarList, setCalendarList] = useState<
+    { id: string; summary: string; backgroundColor: string | null; isWorkCalendar: boolean; primary: boolean }[]
+  >([]);
+  const [detectedWorkCalendar, setDetectedWorkCalendar] = useState<string | null>(null);
+  const [showCalPicker, setShowCalPicker] = useState(false);
   // "Saved" confirmation flag for the work-calendar input. Animated.Value
   // holds the opacity so the affordance can fade in immediately, hold for
   // 2s, then fade out smoothly.
@@ -468,7 +478,54 @@ export default function SettingsScreen() {
       setWorkCalDraft(s.workCalendarName);
       setLoaded(true);
     });
+    // Calendar list — best-effort, populates the smart picker. If
+    // it fails (token expired etc.), the TextInput fallback still
+    // accepts a manual name.
+    (async () => {
+      try {
+        const res = await fetch(
+          `https://conductor-ivory.vercel.app/api/calendar?action=list&userId=${USER_ID}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data?.calendars)) {
+          setCalendarList(
+            data.calendars.map((c: any) => ({
+              id: c.id,
+              summary: c.summary || c.id,
+              backgroundColor: c.backgroundColor || null,
+              isWorkCalendar: !!c.isWorkCalendar,
+              primary: !!c.primary,
+            }))
+          );
+          setDetectedWorkCalendar(typeof data?.detectedWorkCalendar === 'string' ? data.detectedWorkCalendar : null);
+        }
+      } catch {
+        // ignore — fall through to TextInput
+      }
+    })();
   }, []);
+
+  async function selectWorkCalendar(name: string) {
+    setShowCalPicker(false);
+    setWorkCalDraft(name);
+    const next = { ...settings, workCalendarName: name };
+    setSettings(next);
+    try {
+      await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: USER_ID, preferences: { workCalendarName: name } }),
+      });
+      Animated.sequence([
+        Animated.timing(workCalSavedOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.delay(1200),
+        Animated.timing(workCalSavedOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+      ]).start();
+    } catch {
+      // best-effort
+    }
+  }
 
   // Refetch the missed-cues + vault counts whenever Settings gains focus, so
   // the badges reflect state after the user resolves/handles items on those
@@ -850,18 +907,52 @@ export default function SettingsScreen() {
               Saved
             </Animated.Text>
           </View>
-          <TextInput
-            value={workCalDraft}
-            onChangeText={setWorkCalDraft}
-            onBlur={commitWorkCalendarName}
-            onSubmitEditing={commitWorkCalendarName}
-            returnKeyType="done"
-            placeholder="Calendar name (e.g. Work, Office)"
-            placeholderTextColor={MUTED}
-            autoCapitalize="words"
-            autoCorrect={false}
-            style={styles.workCalInput}
-          />
+          {(() => {
+            const detected = detectedWorkCalendar
+              ? calendarList.find((c) => c.id === detectedWorkCalendar)
+              : null;
+            const userOverride = (workCalDraft || '').trim();
+            // Detected and not overridden — show the auto-detection
+            // confirmation with a Change link.
+            if (detected && !userOverride) {
+              return (
+                <View>
+                  <Text style={styles.workCalDetected}>
+                    ✓ Work calendar detected: {detected.summary}
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowCalPicker(true)}>
+                    <Text style={styles.workCalChange}>Change</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+            // Manual override OR nothing detected — show a tap-to-pick
+            // row plus the raw TextInput as a fallback for manual entry.
+            return (
+              <View>
+                <TouchableOpacity
+                  onPress={() => setShowCalPicker(true)}
+                  style={styles.workCalPickerRow}
+                  activeOpacity={0.7}>
+                  <Text style={styles.workCalPickerText}>
+                    {userOverride || 'Choose a calendar →'}
+                  </Text>
+                </TouchableOpacity>
+                <TextInput
+                  value={workCalDraft}
+                  onChangeText={setWorkCalDraft}
+                  onBlur={commitWorkCalendarName}
+                  onSubmitEditing={commitWorkCalendarName}
+                  returnKeyType="done"
+                  placeholder="Or type calendar name (e.g. Work, Office)"
+                  placeholderTextColor={MUTED}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  style={styles.workCalInput}
+                />
+              </View>
+            );
+          })()}
           <Text style={styles.workCalHelper}>
             Helps Conductor detect scheduling conflicts
           </Text>
@@ -957,6 +1048,36 @@ export default function SettingsScreen() {
               style={styles.apiKeyDoneBtn}>
               <Text style={styles.apiKeyDoneBtnText}>Done</Text>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showCalPicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowCalPicker(false)}>
+        <Pressable style={styles.calPickerBackdrop} onPress={() => setShowCalPicker(false)}>
+          <Pressable style={styles.calPickerSheet} onPress={() => {}}>
+            <Text style={styles.calPickerTitle}>Select work calendar</Text>
+            <ScrollView style={{ maxHeight: 400 }}>
+              <TouchableOpacity
+                onPress={() => selectWorkCalendar('')}
+                style={styles.calPickerRow}>
+                <View style={[styles.calPickerDot, { backgroundColor: '#3a3835' }]} />
+                <Text style={styles.calPickerName}>None</Text>
+              </TouchableOpacity>
+              {calendarList.map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  onPress={() => selectWorkCalendar(c.summary)}
+                  style={styles.calPickerRow}>
+                  <View style={[styles.calPickerDot, { backgroundColor: c.backgroundColor || '#5a5855' }]} />
+                  <Text style={styles.calPickerName} numberOfLines={1}>{c.summary}</Text>
+                  {c.isWorkCalendar && <Text style={styles.calPickerWorkBadge}>Work</Text>}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1083,6 +1204,71 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
     letterSpacing: 0.2,
+  },
+  workCalDetected: {
+    color: '#7a9a6e',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  workCalChange: {
+    color: BRASS,
+    fontSize: 12,
+    marginTop: 6,
+  },
+  workCalPickerRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SOFT_BORDER,
+    marginBottom: 8,
+  },
+  workCalPickerText: {
+    color: OFF_WHITE,
+    fontSize: 14,
+  },
+  calPickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  calPickerSheet: {
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 22,
+    paddingBottom: 36,
+  },
+  calPickerTitle: {
+    color: OFF_WHITE,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  calPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  calPickerDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  calPickerName: {
+    color: OFF_WHITE,
+    fontSize: 14,
+    flex: 1,
+  },
+  calPickerWorkBadge: {
+    color: BRASS,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   row: {
     flexDirection: 'row',

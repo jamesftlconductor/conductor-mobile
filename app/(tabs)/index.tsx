@@ -42,6 +42,11 @@ type PulseData = {
     heatIndex: number | null;
     humidity: number | null;
     conditions: string | null;
+    rainWindow?: string | null;
+    uvPeak?: { value: number; time: string } | null;
+    temperaturePeak?: { tempF: number; time: string } | null;
+    sunrise?: string | null;
+    sunset?: string | null;
   } | null;
   signalLoad: 'heavy' | 'moderate' | 'light' | 'clear';
   urgentCount: number;
@@ -346,6 +351,36 @@ function PulseHealthSection({ health }: { health: PulseData['health'] }) {
           ) : null}
         </>
       ) : null}
+    </View>
+  );
+}
+
+function PulseTimelineSection({ weather }: { weather: PulseData['weather'] }) {
+  // Today's Timeline — sunrise/peak/rain/UV/sunset. Renders only
+  // when at least one of these is present so the section doesn't
+  // appear on locations where the API returns nulls.
+  const sunrise = weather?.sunrise;
+  const sunset = weather?.sunset;
+  const peak = weather?.temperaturePeak;
+  const rain = weather?.rainWindow;
+  const uv = weather?.uvPeak;
+  if (!sunrise && !sunset && !peak && !rain && !uv) return null;
+
+  const uvLabel = uv ? `${uv.value} at ${uv.time}${uv.value > 10 ? ' — extreme' : ''}` : null;
+  const uvColor = uv && uv.value > 10 ? '#ef4444' : uv && uv.value > 7 ? '#f59e0b' : '#a8a5a0';
+
+  return (
+    <View style={styles.pulseSection}>
+      <Text style={styles.pulseSectionLabel}>TODAY&apos;S TIMELINE</Text>
+      {sunrise ? <Text style={styles.pulseRow}>🌅  Sunrise: {sunrise}</Text> : null}
+      {peak ? (
+        <Text style={styles.pulseRow}>
+          ☀️  Peak: {peak.tempF}°F at {peak.time}
+        </Text>
+      ) : null}
+      {rain ? <Text style={styles.pulseRow}>🌧  Rain: {rain}</Text> : null}
+      {uvLabel ? <Text style={[styles.pulseRow, { color: uvColor }]}>☀️  UV: {uvLabel}</Text> : null}
+      {sunset ? <Text style={styles.pulseRow}>🌅  Sunset: {sunset}</Text> : null}
     </View>
   );
 }
@@ -973,6 +1008,7 @@ export default function TakeoffScreen() {
                 <View style={styles.pulseCard}>
                   <PulseHealthSection health={pulseData.health} />
                   <PulseConditionsSection weather={pulseData.weather} />
+                  <PulseTimelineSection weather={pulseData.weather} />
                   <PulseLoadSection
                     signalLoad={pulseData.signalLoad}
                     urgentCount={pulseData.urgentCount}
