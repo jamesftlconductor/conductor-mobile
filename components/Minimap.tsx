@@ -50,6 +50,7 @@ type Signal = {
   eta?: string | null;
   type?: string;
   state?: string;
+  userId?: string | null;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -264,7 +264,7 @@ function SecuritySection() {
         <ToggleRow
           label="Face ID / Touch ID"
           value={enabled}
-          onValueChange={toggleEnabled}
+          onChange={toggleEnabled}
         />
       )}
       {enabled && (
@@ -279,7 +279,7 @@ function SecuritySection() {
           label="Protect sensitive screens"
           subtext="Vault, Inventory, Memory require auth after timeout"
           value={protectSensitive}
-          onValueChange={async (v) => {
+          onChange={async (v: boolean) => {
             setProtectLocal(v);
             await security.setProtectSensitive(v);
           }}
@@ -289,7 +289,7 @@ function SecuritySection() {
         label="Screenshot protection"
         subtext="Block screenshots on sensitive screens"
         value={screenshotProtection}
-        onValueChange={async (v) => {
+        onChange={async (v: boolean) => {
           setScreenshotLocal(v);
           await security.setScreenshotProtection(v);
         }}
@@ -298,7 +298,7 @@ function SecuritySection() {
         label="Clear clipboard after 60s"
         subtext="Auto-clear copied sensitive data"
         value={clipboardClear}
-        onValueChange={async (v) => {
+        onChange={async (v: boolean) => {
           setClipboardLocal(v);
           await security.setClipboardClear(v);
         }}

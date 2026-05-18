@@ -471,6 +471,7 @@ export default function CrewScreen() {
           if (member.memberType === 'member') return; // already has Edit button
           // Reuse the existing birthday/anniversary edit modal.
           setEditing({
+            kind: 'other',
             memberType: member.memberType,
             name: (member as any).name || '',
             birthday: (member as any).birthday || '',

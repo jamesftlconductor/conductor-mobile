@@ -1,22 +1,19 @@
 // Reusable swipe-down-to-dismiss wrapper for bottom sheets.
 //
+// Rewritten 2026-05-18 to use the v3+ Gesture API. The previous
+// implementation imported `useAnimatedGestureHandler` from
+// react-native-reanimated, but that hook was removed in v3.
+// With reanimated v4.1.1 installed, the import was `undefined`
+// at runtime — every sheet using this wrapper crashed on render.
+//
 // Usage: replace the existing Pressable/View that holds the sheet
 // content with <SwipeDismissSheet onClose={...}>{content}</SwipeDismissSheet>.
-// The wrapper:
-//   - Renders a brass-ish drag handle at the top
-//   - Tracks downward pan via PanGestureHandler
-//   - Dismisses on release if drag > 80px OR velocity > 500
-//   - Springs back to 0 otherwise
-//
-// Spring config matches the spec: { tension: 100, friction: 12 }-ish
-// via withSpring's default mass model — feels snappy.
 
 import { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
-  useAnimatedGestureHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -27,9 +24,7 @@ type Props = {
   onClose: () => void;
   style?: any;
   children: ReactNode;
-  // Pixels of drag below which we spring back. Default 80 per spec.
   threshold?: number;
-  // Velocity (pts/s) above which we dismiss regardless of distance.
   velocityThreshold?: number;
 };
 
@@ -42,38 +37,35 @@ export function SwipeDismissSheet({
 }: Props) {
   const translateY = useSharedValue(0);
 
-  const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
-    onActive: (event) => {
-      // Only track downward drags — upward should be a no-op so the
-      // sheet doesn't lift off the bottom of the screen.
+  const pan = Gesture.Pan()
+    .activeOffsetY([-1, 1])
+    .onUpdate((event) => {
+      // Only track downward drags.
       if (event.translationY > 0) {
         translateY.value = event.translationY;
       }
-    },
-    onEnd: (event) => {
+    })
+    .onEnd((event) => {
       if (event.translationY > threshold || event.velocityY > velocityThreshold) {
-        // Slide the sheet the rest of the way off-screen before
-        // unmounting so dismiss reads as a single continuous motion.
         translateY.value = withTiming(600, { duration: 180 }, () => {
           runOnJS(onClose)();
         });
       } else {
         translateY.value = withSpring(0, { damping: 12, stiffness: 100 });
       }
-    },
-  });
+    });
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
   }));
 
   return (
-    <PanGestureHandler onGestureEvent={gestureHandler} activeOffsetY={[-1, 1]}>
+    <GestureDetector gesture={pan}>
       <Animated.View style={[style, animatedStyle]}>
         <View style={styles.dragHandle} />
         {children}
       </Animated.View>
-    </PanGestureHandler>
+    </GestureDetector>
   );
 }
 

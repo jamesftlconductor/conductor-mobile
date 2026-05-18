@@ -2,13 +2,19 @@
 // to expose a Rest / Remove pair behind it. Snaps to reveal at 80px
 // of leftward drag; snaps back if released earlier. Action buttons
 // slide in from the right as the row slides left.
+//
+// Rewritten 2026-05-18 to use the v3+ Gesture API. The previous
+// implementation imported `useAnimatedGestureHandler` from
+// react-native-reanimated, but that hook was removed in v3. With
+// reanimated v4.1.1 installed, the import was `undefined` at runtime
+// and crashed every screen that rendered a SwipeableRow — including
+// Horizon.
 
 import { ReactNode } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
-  useAnimatedGestureHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -18,14 +24,13 @@ import Animated, {
 const BRASS = '#b8960c';
 const REMOVE = '#d97757';
 
-const SNAP_OPEN = -180; // distance row slides left when actions revealed
+const SNAP_OPEN = -180;
 const SNAP_THRESHOLD = -60;
 
 type Props = {
   onRest?: () => void;
   onRemove?: () => void;
   children: ReactNode;
-  // Optional override labels — defaults match the spec.
   restLabel?: string;
   removeLabel?: string;
 };
@@ -39,21 +44,22 @@ export function SwipeableRow({
 }: Props) {
   const translateX = useSharedValue(0);
 
-  const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
-    onActive: (event) => {
+  const pan = Gesture.Pan()
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-10, 10])
+    .onUpdate((event) => {
       // Clamp downward + rightward — only leftward drag reveals actions.
       if (event.translationX < 0) {
         translateX.value = Math.max(event.translationX, SNAP_OPEN);
       }
-    },
-    onEnd: (event) => {
+    })
+    .onEnd((event) => {
       if (event.translationX < SNAP_THRESHOLD || event.velocityX < -500) {
         translateX.value = withSpring(SNAP_OPEN, { damping: 18, stiffness: 180 });
       } else {
         translateX.value = withSpring(0, { damping: 18, stiffness: 180 });
       }
-    },
-  });
+    });
 
   const rowStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -90,12 +96,9 @@ export function SwipeableRow({
           </TouchableOpacity>
         ) : null}
       </View>
-      <PanGestureHandler
-        onGestureEvent={gestureHandler}
-        activeOffsetX={[-12, 12]}
-        failOffsetY={[-10, 10]}>
+      <GestureDetector gesture={pan}>
         <Animated.View style={[styles.row, rowStyle]}>{children}</Animated.View>
-      </PanGestureHandler>
+      </GestureDetector>
     </View>
   );
 }

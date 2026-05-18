@@ -77,25 +77,25 @@ export async function fetchHealthSnapshot(): Promise<HealthSnapshot | null> {
         filter: { date: { startDate: last24h, endDate: now } },
         limit: 1,
         ascending: false,
-        unit: 'ms',
+        unit: 'ms' as never,
       }),
       queryQuantitySamples('HKQuantityTypeIdentifierHeartRateVariabilitySDNN' as never, {
         filter: { date: { startDate: last7d, endDate: now } },
         limit: 0,
-        unit: 'ms',
+        unit: 'ms' as never,
       }),
       queryQuantitySamples('HKQuantityTypeIdentifierRestingHeartRate' as never, {
         filter: { date: { startDate: last24h, endDate: now } },
         limit: 1,
         ascending: false,
-        unit: 'count/min',
+        unit: 'count/min' as never,
       }),
       queryStatisticsForQuantity(
         'HKQuantityTypeIdentifierStepCount' as never,
         ['cumulativeSum'],
         {
           filter: { date: { startDate: todayStart, endDate: now } },
-          unit: 'count',
+          unit: 'count' as never,
         },
       ),
       queryStatisticsForQuantity(
@@ -103,7 +103,7 @@ export async function fetchHealthSnapshot(): Promise<HealthSnapshot | null> {
         ['cumulativeSum'],
         {
           filter: { date: { startDate: yesterdayStart, endDate: todayStart } },
-          unit: 'kcal',
+          unit: 'kcal' as never,
         },
       ),
     ]);

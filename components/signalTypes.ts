@@ -10,6 +10,10 @@ export type Signal = {
   // calculation to widen the pulse rate as a signal lingers unresolved.
   lastUpdate?: string;
   createdAt?: string;
+  // userId is set on signals the user added themselves (manual or
+  // junior-relay). Used by horizon.tsx + Minimap to display an owner
+  // tag when the signal isn't tied to the current user.
+  userId?: string | null;
 };
 
 export type TypeMeta = { emoji: string; color: string; label: string };

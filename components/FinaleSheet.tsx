@@ -330,7 +330,7 @@ function SingleSheet({
                 ) : null}
                 <CrewAttributionRow
                   signal={signal}
-                  userId={userId}
+                  userId={userId || ''}
                   onAttributed={(name) => {
                     // Stamp locally so the row reflects the change
                     // without a parent refresh. Server already
@@ -338,8 +338,8 @@ function SingleSheet({
                     (signal as Signal & { crewMemberId?: string | null }).crewMemberId = name;
                   }}
                 />
-                <SignalPhotosRow signal={signal} userId={userId} />
-                <SignalSMSLink signal={signal} userId={userId} />
+                <SignalPhotosRow signal={signal} userId={userId || ''} />
+                <SignalSMSLink signal={signal} userId={userId || ''} />
               </View>
 
               {(suggestionLoading || suggestion) && (
