@@ -52,26 +52,34 @@ const STEP_KEY = 'onboardingStep';
 
 type Phase = 'step1' | 'step2' | 'step3' | 'interstitial';
 
-type HouseholdType = 'single' | 'couple' | 'family' | 'rent_focus' | 'multigenerational' | 'roommates';
-type OwnRent = 'own' | 'rent' | 'split';
+type Who = 'solo' | 'couple' | 'family' | 'multigenerational';
+type Housing = 'own' | 'rent' | 'living_with_family';
+type Modifier = 'has_pets' | 'co_parent' | 'health_needs' | 'major_change' | 'students' | 'work_from_home';
 
 type Tone = 'direct' | 'balanced' | 'warm';
 type Detail = 'brief' | 'standard' | 'thorough';
 type Humor = 'yes' | 'sometimes' | 'no';
 
-const TYPE_CARDS: {
-  id: HouseholdType;
-  emoji: string;
-  label: string;
-  desc: string;
-  mappedType: string;
-}[] = [
-  { id: 'single', emoji: '👤', label: 'Just me', desc: 'Personal intelligence, your way', mappedType: 'single' },
-  { id: 'couple', emoji: '👫', label: 'Couple', desc: 'Coordinated household awareness', mappedType: 'couple' },
-  { id: 'family', emoji: '👨‍👩‍👧', label: 'Family with kids', desc: 'Schedules, crew, and more', mappedType: 'family' },
-  { id: 'rent_focus', emoji: '🏠', label: 'Renting', desc: 'Lease tracking and apartment life', mappedType: 'single' },
-  { id: 'multigenerational', emoji: '👴', label: 'Multiple generations', desc: 'Health-forward household intelligence', mappedType: 'multigenerational' },
-  { id: 'roommates', emoji: '🏢', label: 'Roommates', desc: 'Shared life, separate worlds', mappedType: 'roommates' },
+const WHO_CARDS: { id: Who; emoji: string; label: string; sub?: string }[] = [
+  { id: 'solo', emoji: '👤', label: 'Just me' },
+  { id: 'couple', emoji: '👫', label: 'Two adults', sub: 'Couple or partners' },
+  { id: 'family', emoji: '👨‍👩‍👧', label: 'With children', sub: 'Kids in the household' },
+  { id: 'multigenerational', emoji: '👴', label: 'Multiple generations', sub: 'Parents or grandparents too' },
+];
+
+const HOUSING_CARDS: { id: Housing; emoji: string; label: string }[] = [
+  { id: 'own', emoji: '🏠', label: 'Own' },
+  { id: 'rent', emoji: '🏢', label: 'Rent' },
+  { id: 'living_with_family', emoji: '🏡', label: 'Living with family' },
+];
+
+const MODIFIER_OPTIONS: { id: Modifier; label: string }[] = [
+  { id: 'has_pets', label: 'We have pets' },
+  { id: 'co_parent', label: 'I co-parent (shared custody)' },
+  { id: 'health_needs', label: 'Someone has ongoing health needs' },
+  { id: 'major_change', label: "We're going through a major life change" },
+  { id: 'students', label: "We're students" },
+  { id: 'work_from_home', label: 'We work from home' },
 ];
 
 const INTERSTITIAL_PHRASES = [
@@ -128,8 +136,9 @@ const VOICE_PREVIEW: Record<string, string> = {
 
 export default function OnboardingScreen() {
   const [phase, setPhase] = useState<Phase>('step1');
-  const [pickedType, setPickedType] = useState<HouseholdType | null>(null);
-  const [ownRent, setOwnRent] = useState<OwnRent | null>(null);
+  const [who, setWho] = useState<Who | null>(null);
+  const [housing, setHousing] = useState<Housing | null>(null);
+  const [modifiers, setModifiers] = useState<Set<Modifier>>(new Set());
 
   const [tone, setTone] = useState<Tone>('balanced');
   const [detail, setDetail] = useState<Detail>('standard');
@@ -233,19 +242,18 @@ export default function OnboardingScreen() {
 
   // ---------- Step handlers ----------
 
-  async function confirmStep1(t: HouseholdType, o: OwnRent) {
-    setPickedType(t);
-    if (t === 'rent_focus' && !ownRent) setOwnRent('rent');
-    else setOwnRent(o);
-    const card = TYPE_CARDS.find((c) => c.id === t);
+  async function confirmStep1(w: Who, h: Housing, mods: Modifier[]) {
+    setWho(w);
+    setHousing(h);
     try {
       await fetch(`${API_BASE}/signals?type=profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: USER_ID,
-          type: card?.mappedType || 'other',
-          ownOrRent: o === 'split' ? 'rent' : o,
+          who: w,
+          housing: h,
+          modifiers: mods,
         }),
       });
     } catch { /* best-effort */ }
@@ -317,11 +325,10 @@ export default function OnboardingScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {phase === 'step1' ? (
           <Step1
-            pickedType={pickedType}
-            setPickedType={setPickedType}
-            ownRent={ownRent}
-            setOwnRent={setOwnRent}
-            onContinue={(t, o) => confirmStep1(t, o)}
+            who={who} setWho={setWho}
+            housing={housing} setHousing={setHousing}
+            modifiers={modifiers} setModifiers={setModifiers}
+            onContinue={(w, h, mods) => confirmStep1(w, h, mods)}
           />
         ) : null}
 
@@ -355,66 +362,116 @@ export default function OnboardingScreen() {
   );
 }
 
-// ---------- Step 1: Household type ----------
+// ---------- Step 1: Who + Housing + Modifiers ----------
 
 function Step1({
-  pickedType, setPickedType,
-  ownRent, setOwnRent,
+  who, setWho,
+  housing, setHousing,
+  modifiers, setModifiers,
   onContinue,
 }: {
-  pickedType: HouseholdType | null;
-  setPickedType: (t: HouseholdType) => void;
-  ownRent: OwnRent | null;
-  setOwnRent: (o: OwnRent) => void;
-  onContinue: (t: HouseholdType, o: OwnRent) => void;
+  who: Who | null;
+  setWho: (w: Who) => void;
+  housing: Housing | null;
+  setHousing: (h: Housing) => void;
+  modifiers: Set<Modifier>;
+  setModifiers: (s: Set<Modifier>) => void;
+  onContinue: (w: Who, h: Housing, mods: Modifier[]) => void;
 }) {
-  const canContinue = pickedType !== null && ownRent !== null;
+  const [showModifiers, setShowModifiers] = useState(false);
+  const canContinue = who !== null && housing !== null;
+
+  function toggleMod(id: Modifier) {
+    const next = new Set(modifiers);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setModifiers(next);
+  }
+
   return (
     <>
       <Text style={styles.preface}>
         While Conductor reads your household — tell us a little about yourself.
       </Text>
-      <Text style={styles.title}>Which describes you best?</Text>
+
+      <Text style={styles.title}>Who lives in your household?</Text>
       <View style={styles.grid}>
-        {TYPE_CARDS.map((c) => {
-          const active = pickedType === c.id;
+        {WHO_CARDS.map((c) => {
+          const active = who === c.id;
           return (
             <TouchableOpacity
               key={c.id}
-              onPress={() => {
-                setPickedType(c.id);
-                if (c.id === 'rent_focus' && !ownRent) setOwnRent('rent');
-              }}
+              onPress={() => setWho(c.id)}
               activeOpacity={0.7}
               style={[styles.card, active && styles.cardActive]}>
               <Text style={styles.cardEmoji}>{c.emoji}</Text>
               <Text style={[styles.cardLabel, active && { color: BRASS }]}>{c.label}</Text>
-              <Text style={styles.cardDesc}>{c.desc}</Text>
+              {c.sub ? <Text style={styles.cardDesc}>{c.sub}</Text> : null}
             </TouchableOpacity>
           );
         })}
       </View>
 
-      {pickedType ? (
-        <View style={{ marginTop: 24 }}>
-          <Text style={styles.smallTitle}>Do you own or rent your home?</Text>
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-            {(['own', 'rent', 'split'] as OwnRent[]).map((o) => (
-              <TouchableOpacity
-                key={o}
-                onPress={() => setOwnRent(o)}
-                style={[styles.pill, ownRent === o && styles.pillActive]}>
-                <Text style={[styles.pillLabel, ownRent === o && { color: BRASS, fontWeight: '600' }]}>
-                  {o === 'own' ? 'Own' : o === 'rent' ? 'Rent' : 'Both'}
-                </Text>
-              </TouchableOpacity>
-            ))}
+      {who ? (
+        <View style={{ marginTop: 28 }}>
+          <Text style={styles.smallTitle}>Do you own or rent?</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            {HOUSING_CARDS.map((h) => {
+              const active = housing === h.id;
+              return (
+                <TouchableOpacity
+                  key={h.id}
+                  onPress={() => setHousing(h.id)}
+                  activeOpacity={0.7}
+                  style={[styles.housingBtn, active && styles.housingBtnActive]}>
+                  <Text style={styles.housingEmoji}>{h.emoji}</Text>
+                  <Text style={[
+                    styles.housingLabel,
+                    active && { color: BRASS, fontWeight: '600' },
+                  ]}>{h.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       ) : null}
 
+      {who && housing ? (
+        <View style={{ marginTop: 24 }}>
+          <TouchableOpacity
+            onPress={() => setShowModifiers((v) => !v)}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <Text style={styles.modifierToggle}>
+              {showModifiers ? 'Anything else? −' : 'Anything else? +'}
+            </Text>
+          </TouchableOpacity>
+          {showModifiers ? (
+            <View style={styles.modifierGrid}>
+              {MODIFIER_OPTIONS.map((m) => {
+                const active = modifiers.has(m.id);
+                return (
+                  <TouchableOpacity
+                    key={m.id}
+                    onPress={() => toggleMod(m.id)}
+                    style={[styles.modifierPill, active && styles.modifierPillActive]}>
+                    <Text style={[
+                      styles.modifierLabel,
+                      active && { color: BRASS, fontWeight: '600' },
+                    ]}>
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       <TouchableOpacity
-        onPress={() => pickedType && ownRent && onContinue(pickedType, ownRent)}
+        onPress={() =>
+          who && housing && onContinue(who, housing, Array.from(modifiers))
+        }
         disabled={!canContinue}
         style={[styles.continueBtn, !canContinue && { opacity: 0.4 }]}>
         <Text style={styles.continueBtnText}>Continue →</Text>
@@ -653,6 +710,43 @@ const styles = StyleSheet.create({
   },
   pillActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
   pillLabel: { color: FAINT, fontSize: 13 },
+
+  housingBtn: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SOFT_BORDER,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'center',
+  },
+  housingBtnActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
+  housingEmoji: { fontSize: 22, marginBottom: 6 },
+  housingLabel: { color: OFF_WHITE, fontSize: 12, textAlign: 'center', lineHeight: 16 },
+
+  modifierToggle: {
+    color: BRASS,
+    fontSize: 13,
+    fontWeight: '500',
+    paddingVertical: 4,
+  },
+  modifierGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  modifierPill: {
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SOFT_BORDER,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  modifierPillActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
+  modifierLabel: { color: OFF_WHITE, fontSize: 12 },
 
   segLabel: { color: MUTED, fontSize: 10, letterSpacing: 1.5, marginBottom: 8, fontWeight: '600' },
   segWrap: {
