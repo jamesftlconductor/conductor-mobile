@@ -1,4 +1,6 @@
 import { router } from 'expo-router';
+import { SecureScreen } from '@/components/SecureScreen';
+import { CameraScanner, type ScanResult } from '@/components/CameraScanner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -164,7 +166,15 @@ function recentPriceDelta(item: VaultItem): string | null {
   return `${sign}$${Math.abs(diff).toFixed(2).replace(/\.00$/, '')}`;
 }
 
-export default function VaultScreen() {
+export default function VaultScreenSecured() {
+  return (
+    <SecureScreen screenName="Vault">
+      <VaultScreen />
+    </SecureScreen>
+  );
+}
+
+function VaultScreen() {
   const [items, setItems] = useState<VaultItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -594,6 +604,35 @@ function AddVaultModal({
   const [policyNumber, setPolicyNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+
+  // Map the scan result's documentType to a category + push extracted
+  // fields into the form state. Then advance to step 2 so the user can
+  // review and confirm.
+  function applyScanResult(r: ScanResult) {
+    const t = r.documentType || '';
+    const f = r.extractedFields || {};
+    if (t === 'insurance_card') setCategory('protections');
+    else if (t === 'warranty') setCategory('warranties');
+    else if (t === 'vehicle_registration') setCategory('registrations');
+    else if (t === 'prescription_label') setCategory('medical');
+    else if (t === 'receipt') setCategory('financial');
+
+    const desc = (f.productName || f.policyNumber || f.medicationName || f.merchant || '') as string;
+    if (desc) setDescription(desc);
+    if (f.provider) setProvider(String(f.provider));
+    if (f.brand) setProvider(String(f.brand));
+    if (f.pharmacy) setProvider(String(f.pharmacy));
+    if (f.merchant) setProvider(String(f.merchant));
+    if (f.expiryDate) setRenewalDate(String(f.expiryDate));
+    if (f.refillDate) setRenewalDate(String(f.refillDate));
+    if (f.date) setRenewalDate(String(f.date));
+    if (f.total != null) setAmount(String(f.total));
+    if (f.policyNumber) setPolicyNumber(String(f.policyNumber));
+    if (f.serialNumber) setPolicyNumber(String(f.serialNumber));
+    if (f.memberId) setPolicyNumber(String(f.memberId));
+    setStep(2);
+  }
 
   function reset() {
     setStep(1);
@@ -667,6 +706,12 @@ function AddVaultModal({
           {step === 1 ? (
             <>
               <Text style={styles.addSheetTitle}>What kind?</Text>
+              <TouchableOpacity
+                onPress={() => setShowScanner(true)}
+                activeOpacity={0.7}
+                style={styles.scanLink}>
+                <Text style={styles.scanLinkText}>📷  Scan Document →</Text>
+              </TouchableOpacity>
               <View style={styles.categoryGrid}>
                 {DISPLAY_CATEGORIES.map((c) => (
                   <TouchableOpacity
@@ -761,6 +806,14 @@ function AddVaultModal({
           )}
         </Pressable>
       </Pressable>
+
+      <CameraScanner
+        visible={showScanner}
+        userId={USER_ID}
+        scanType="document"
+        onClose={() => setShowScanner(false)}
+        onResult={applyScanResult}
+      />
     </Modal>
   );
 }
@@ -977,6 +1030,18 @@ const styles = StyleSheet.create({
   },
   addSheetTitle: { color: OFF_WHITE, fontSize: 18, fontWeight: '600', letterSpacing: 0.3 },
   addSheetSubtext: { color: MUTED, fontSize: 12 },
+  scanLink: {
+    alignSelf: 'flex-end',
+    paddingVertical: 6,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  scanLinkText: {
+    color: BRASS,
+    fontSize: 13,
+    letterSpacing: 0.3,
+    fontWeight: '500',
+  },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   categoryTile: {
     width: '47%',

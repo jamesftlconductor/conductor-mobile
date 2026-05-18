@@ -5,6 +5,7 @@
 // small "auto" tag.
 
 import { router } from 'expo-router';
+import { SecureScreen } from '@/components/SecureScreen';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -74,7 +75,15 @@ function actionLabel(action: string): string {
   return action;
 }
 
-export default function JournalScreen() {
+export default function JournalScreenSecured() {
+  return (
+    <SecureScreen screenName="Memory">
+      <JournalScreen />
+    </SecureScreen>
+  );
+}
+
+function JournalScreen() {
   const [days, setDays] = useState<Day[]>([]);
   const [streak, setStreak] = useState<StreakData>(null);
   const [loading, setLoading] = useState(true);

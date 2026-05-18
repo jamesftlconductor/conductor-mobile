@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
+import * as security from '@/app/security';
 import { ChevronRight, Lock } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -180,6 +181,130 @@ async function loadSettings(): Promise<Settings> {
   } catch {
     return DEFAULTS;
   }
+}
+
+// Security section. Lives at the top of Settings. All state is
+// persisted via app/security.ts helpers; values are loaded on
+// mount and on focus so a change made in one place reflects
+// everywhere.
+function SecuritySection() {
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [enabled, setEnabledLocal] = useState(false);
+  const [lockAfter, setLockAfterLocal] = useState<security.LockAfterMinutes>(5);
+  const [protectSensitive, setProtectLocal] = useState(true);
+  const [screenshotProtection, setScreenshotLocal] = useState(false);
+  const [clipboardClear, setClipboardLocal] = useState(true);
+
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    (async () => {
+      const avail = await security.isAvailable();
+      const settings = await security.getSettings();
+      if (cancelled) return;
+      setAvailable(avail);
+      setEnabledLocal(settings.enabled);
+      setLockAfterLocal(settings.lockAfterMinutes);
+      setProtectLocal(settings.protectSensitive);
+      setScreenshotLocal(settings.screenshotProtection);
+      setClipboardLocal(settings.clipboardClear);
+    })();
+    return () => { cancelled = true; };
+  }, []));
+
+  async function toggleEnabled(v: boolean) {
+    if (v) {
+      // Confirm the user can actually authenticate before enabling
+      // — saves them from locking themselves out.
+      const ok = await security.authenticateAsync('Confirm to enable Face ID protection');
+      if (!ok) return;
+    }
+    setEnabledLocal(v);
+    await security.setEnabled(v);
+    await security.touchActive();
+  }
+
+  function pickLockAfter() {
+    const options: { label: string; value: security.LockAfterMinutes }[] = [
+      { label: '1 minute', value: 1 },
+      { label: '5 minutes', value: 5 },
+      { label: '15 minutes', value: 15 },
+      { label: '30 minutes', value: 30 },
+      { label: '1 hour', value: 60 },
+      { label: 'Never', value: 0 },
+    ];
+    Alert.alert(
+      'Lock after',
+      undefined,
+      [
+        ...options.map((o) => ({
+          text: o.label + (lockAfter === o.value ? '  ✓' : ''),
+          onPress: async () => {
+            setLockAfterLocal(o.value);
+            await security.setLockAfterMinutes(o.value);
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]
+    );
+  }
+
+  const lockLabel =
+    lockAfter === 0 ? 'Never'
+    : lockAfter === 60 ? '1 hour'
+    : `${lockAfter} minute${lockAfter === 1 ? '' : 's'}`;
+
+  const biometricUnavailable = available === false;
+
+  return (
+    <>
+      <SectionHeader title="Security" />
+      {biometricUnavailable ? (
+        <Row label="Face ID / Touch ID" subtext="Not available on this device" />
+      ) : (
+        <ToggleRow
+          label="Face ID / Touch ID"
+          value={enabled}
+          onValueChange={toggleEnabled}
+        />
+      )}
+      {enabled && (
+        <ChevronRow
+          label="Lock after"
+          rightText={lockLabel}
+          onPress={pickLockAfter}
+        />
+      )}
+      {enabled && (
+        <ToggleRow
+          label="Protect sensitive screens"
+          subtext="Vault, Inventory, Memory require auth after timeout"
+          value={protectSensitive}
+          onValueChange={async (v) => {
+            setProtectLocal(v);
+            await security.setProtectSensitive(v);
+          }}
+        />
+      )}
+      <ToggleRow
+        label="Screenshot protection"
+        subtext="Block screenshots on sensitive screens"
+        value={screenshotProtection}
+        onValueChange={async (v) => {
+          setScreenshotLocal(v);
+          await security.setScreenshotProtection(v);
+        }}
+      />
+      <ToggleRow
+        label="Clear clipboard after 60s"
+        subtext="Auto-clear copied sensitive data"
+        value={clipboardClear}
+        onValueChange={async (v) => {
+          setClipboardLocal(v);
+          await security.setClipboardClear(v);
+        }}
+      />
+    </>
+  );
 }
 
 function SectionHeader({ title, subtext }: { title: string; subtext?: string }) {
@@ -551,6 +676,8 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Settings</Text>
+
+        <SecuritySection />
 
         <SectionHeader title="Household" />
         <Row label="RangerOaks925" subtext="Your household" />

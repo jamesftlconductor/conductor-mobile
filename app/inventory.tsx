@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { SecureScreen } from '@/components/SecureScreen';
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -104,7 +105,15 @@ function confidenceColor(c?: string | null): string {
   return '#5a5855';
 }
 
-export default function InventoryScreen() {
+export default function InventoryScreenSecured() {
+  return (
+    <SecureScreen screenName="Inventory">
+      <InventoryScreen />
+    </SecureScreen>
+  );
+}
+
+function InventoryScreen() {
   const [inventory, setInventory] = useState<Inventory>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
