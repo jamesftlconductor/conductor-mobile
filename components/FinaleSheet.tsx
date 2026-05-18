@@ -16,6 +16,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { metaFor, Signal, TYPE_META } from './signalTypes';
 import { CameraScanner } from './CameraScanner';
+import { SMSComposerSheet } from './SMSComposerSheet';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 import { Tooltip } from './Tooltip';
 
@@ -338,6 +339,7 @@ function SingleSheet({
                   }}
                 />
                 <SignalPhotosRow signal={signal} userId={userId} />
+                <SignalSMSLink signal={signal} userId={userId} />
               </View>
 
               {(suggestionLoading || suggestion) && (
@@ -507,6 +509,30 @@ function SignalPhotosRow({ signal, userId }: { signal: Signal; userId: string })
         }}
       />
     </View>
+  );
+}
+
+// "Send text update" inline link → opens SMSComposerSheet for this
+// signal. Keeps the call-site tiny so it slots cleanly under the
+// photo attachment row without re-flowing the meta block.
+function SignalSMSLink({ signal, userId }: { signal: Signal; userId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => setOpen(true)}
+        style={styles.smsLinkBtn}
+        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+        <Text style={styles.smsLinkText}>📱 Send text update</Text>
+      </TouchableOpacity>
+      <SMSComposerSheet
+        visible={open}
+        userId={userId}
+        signalId={signal.id}
+        signalDescription={signal.description}
+        onClose={() => setOpen(false)}
+      />
+    </>
   );
 }
 
@@ -731,6 +757,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   addPhotoText: {
+    color: '#5a5855',
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  smsLinkBtn: {
+    paddingVertical: 6,
+    alignSelf: 'center',
+    marginTop: 4,
+  },
+  smsLinkText: {
     color: '#5a5855',
     fontSize: 12,
     letterSpacing: 0.3,
