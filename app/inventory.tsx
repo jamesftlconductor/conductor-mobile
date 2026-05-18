@@ -29,18 +29,20 @@ type Vehicle = {
   year?: string;
   mileage?: string;
   lastService?: string;
+  fromEmail?: boolean;
 };
 
 type Appliance = {
   name?: string;
   yearPurchased?: string;
+  fromEmail?: boolean;
 };
 
 type Inventory = {
-  roof: { material?: string | null; yearInstalled?: string | null; lastInspected?: string | null };
-  hvac: { brand?: string | null; yearInstalled?: string | null; lastServiced?: string | null; filterSize?: string | null };
-  waterHeater: { yearInstalled?: string | null; type?: string | null };
-  electrical: { panelAmps?: string | null; yearUpdated?: string | null };
+  roof: { material?: string | null; yearInstalled?: string | null; lastInspected?: string | null; fromEmail?: boolean };
+  hvac: { brand?: string | null; yearInstalled?: string | null; lastServiced?: string | null; filterSize?: string | null; fromEmail?: boolean };
+  waterHeater: { yearInstalled?: string | null; type?: string | null; fromEmail?: boolean };
+  electrical: { panelAmps?: string | null; yearUpdated?: string | null; fromEmail?: boolean };
   vehicles: Vehicle[];
   appliances: Appliance[];
   homeBuiltYear?: string | null;
@@ -288,7 +290,7 @@ export default function InventoryScreen() {
               />
             </Section>
 
-            <Section emoji="🏗" label="ROOF">
+            <Section emoji="🏗" label="ROOF" fromEmail={inventory.roof?.fromEmail}>
               <Segmented
                 label="Material"
                 options={['tile', 'shingle', 'metal']}
@@ -310,7 +312,7 @@ export default function InventoryScreen() {
               />
             </Section>
 
-            <Section emoji="❄️" label="HVAC">
+            <Section emoji="❄️" label="HVAC" fromEmail={inventory.hvac?.fromEmail}>
               <Field
                 label="Brand"
                 value={inventory.hvac?.brand ?? ''}
@@ -338,7 +340,7 @@ export default function InventoryScreen() {
               />
             </Section>
 
-            <Section emoji="💧" label="WATER HEATER">
+            <Section emoji="💧" label="WATER HEATER" fromEmail={inventory.waterHeater?.fromEmail}>
               <Segmented
                 label="Type"
                 options={['tank', 'tankless']}
@@ -354,7 +356,7 @@ export default function InventoryScreen() {
               />
             </Section>
 
-            <Section emoji="⚡" label="ELECTRICAL">
+            <Section emoji="⚡" label="ELECTRICAL" fromEmail={inventory.electrical?.fromEmail}>
               <Field
                 label="Panel amps"
                 value={inventory.electrical?.panelAmps ?? ''}
@@ -397,10 +399,23 @@ export default function InventoryScreen() {
   );
 }
 
-function Section({ emoji, label, children }: { emoji: string; label: string; children: React.ReactNode }) {
+function Section({
+  emoji,
+  label,
+  fromEmail,
+  children,
+}: {
+  emoji: string;
+  label: string;
+  fromEmail?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionHeader}>{emoji}  {label}</Text>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeader}>{emoji}  {label}</Text>
+        {fromEmail ? <Text style={styles.fromEmailBadge}>✓ from email</Text> : null}
+      </View>
       <View style={styles.sectionLine} />
       <View style={{ gap: 12 }}>{children}</View>
     </View>
@@ -504,9 +519,12 @@ function VehiclesSection({
               <Text style={styles.subCardTitle}>
                 {[v.year, v.make, v.model].filter(Boolean).join(' ') || 'New vehicle'}
               </Text>
-              <TouchableOpacity onPress={() => removeAt(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.removeLink}>Remove</Text>
-              </TouchableOpacity>
+              <View style={styles.subCardHeaderRight}>
+                {v.fromEmail ? <Text style={styles.fromEmailBadge}>✓ from email</Text> : null}
+                <TouchableOpacity onPress={() => removeAt(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.removeLink}>Remove</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <Field label="Make" value={v.make || ''} onCommit={(x) => updateAt(i, { make: x })} placeholder="e.g. Toyota" />
             <Field label="Model" value={v.model || ''} onCommit={(x) => updateAt(i, { model: x })} placeholder="e.g. Camry" />
@@ -550,9 +568,12 @@ function AppliancesSection({
           <View key={i} style={styles.subCard}>
             <View style={styles.subCardHeaderRow}>
               <Text style={styles.subCardTitle}>{a.name || 'New appliance'}</Text>
-              <TouchableOpacity onPress={() => removeAt(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.removeLink}>Remove</Text>
-              </TouchableOpacity>
+              <View style={styles.subCardHeaderRight}>
+                {a.fromEmail ? <Text style={styles.fromEmailBadge}>✓ from email</Text> : null}
+                <TouchableOpacity onPress={() => removeAt(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.removeLink}>Remove</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <Field label="Name" value={a.name || ''} onCommit={(x) => updateAt(i, { name: x })} placeholder="e.g. Refrigerator" />
             <Field label="Year purchased" value={a.yearPurchased || ''} onCommit={(x) => updateAt(i, { yearPurchased: x })} placeholder="e.g. 2020" keyboardType="numeric" />
@@ -629,6 +650,17 @@ const styles = StyleSheet.create({
   subCardTitle: { color: OFF_WHITE, fontSize: 14, fontWeight: '600' },
   addItemLink: { color: BRASS, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
   removeLink: { color: MUTED, fontSize: 11, fontStyle: 'italic' },
+  fromEmailBadge: {
+    color: MUTED,
+    fontSize: 9,
+    letterSpacing: 0.5,
+    fontWeight: '500',
+  },
+  subCardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   emptyInline: { color: MUTED, fontSize: 12, fontStyle: 'italic' },
   empty: { alignItems: 'center', paddingVertical: 60 },
   foundSection: {
