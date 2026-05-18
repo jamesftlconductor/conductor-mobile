@@ -872,7 +872,245 @@ function ChildCard({ child, onMenu, onChanged }: { child: Child; onMenu?: () => 
         </View>
       ) : null}
       <SignalChipsRow memberName={name} signals={child.attributedSignals || []} onChanged={onChanged} />
+      <CustodySection child={child} onChanged={onChanged} />
       <NotesEditor memberName={name} memberType="child" initial={child.notes} />
+    </View>
+  );
+}
+
+// Custody schedule editor — only renders when the household profile
+// includes the co_parent modifier. PATCHes /api/signals?type=crew
+// with { memberName, member: { custodySchedule } }. Today's "with us"
+// status is computed locally from the saved schedule.
+type CustodyType = 'full_time' | 'alternating_weeks' | 'custom';
+type WeekParity = 'even' | 'odd';
+
+type CustodySchedule = {
+  type: CustodyType | null;
+  withUsWeeks: WeekParity | null;
+  withUsDays: string[] | null;
+  nextTransitionDate: string | null;
+};
+
+const WEEKDAYS = [
+  { id: 'monday', short: 'Mo' },
+  { id: 'tuesday', short: 'Tu' },
+  { id: 'wednesday', short: 'We' },
+  { id: 'thursday', short: 'Th' },
+  { id: 'friday', short: 'Fr' },
+  { id: 'saturday', short: 'Sa' },
+  { id: 'sunday', short: 'Su' },
+];
+
+function isoWeekOfYear(d: Date): number {
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((d.getTime() - yearStart.getTime()) / (24 * 60 * 60 * 1000));
+  return Math.ceil((dayOfYear + yearStart.getDay() + 1) / 7);
+}
+
+function CustodySection({ child, onChanged }: { child: Child; onChanged?: () => void }) {
+  const initial: CustodySchedule = ((child as any).custodySchedule || {}) as CustodySchedule;
+  const [enabled, setEnabled] = useState<boolean>(false);
+  const [checkedProfile, setCheckedProfile] = useState(false);
+  const [type, setType] = useState<CustodyType>(initial?.type || 'full_time');
+  const [weeks, setWeeks] = useState<WeekParity | null>(initial?.withUsWeeks || null);
+  const [days, setDays] = useState<Set<string>>(new Set(initial?.withUsDays || []));
+  const [nextDate, setNextDate] = useState<string>(initial?.nextTransitionDate || '');
+  const [saving, setSaving] = useState(false);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+
+  // Gate the section on the co_parent modifier in the household
+  // profile. One fetch on mount; result cached for the lifetime of
+  // this component.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${USER_ID}`);
+        const data = await res.json();
+        const mods: string[] = Array.isArray(data?.profile?.modifiers) ? data.profile.modifiers : [];
+        if (!cancelled && mods.includes('co_parent')) setEnabled(true);
+      } catch { /* skip */ }
+      finally { if (!cancelled) setCheckedProfile(true); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!checkedProfile || !enabled) return null;
+
+  async function save() {
+    setSaving(true);
+    const payload: CustodySchedule = {
+      type,
+      withUsWeeks: type === 'alternating_weeks' ? weeks : null,
+      withUsDays: type === 'custom' ? Array.from(days) : null,
+      nextTransitionDate: nextDate.trim() || null,
+    };
+    try {
+      await fetch(`${API_BASE}/signals?type=crew`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: USER_ID,
+          action: 'edit',
+          memberName: child.name,
+          member: { custodySchedule: payload },
+        }),
+      });
+      setSavedNote('Saved ✓');
+      setTimeout(() => setSavedNote(null), 1400);
+      onChanged?.();
+    } catch { /* best-effort */ }
+    finally { setSaving(false); }
+  }
+
+  async function clearSchedule() {
+    setType('full_time');
+    setWeeks(null);
+    setDays(new Set());
+    setNextDate('');
+    try {
+      await fetch(`${API_BASE}/signals?type=crew`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: USER_ID,
+          action: 'edit',
+          memberName: child.name,
+          member: { custodySchedule: null },
+        }),
+      });
+      onChanged?.();
+    } catch { /* best-effort */ }
+  }
+
+  // Today status banner
+  const todayStatus = (() => {
+    const now = new Date();
+    if (type === 'full_time') return null;
+    if (type === 'alternating_weeks' && weeks) {
+      const week = isoWeekOfYear(now);
+      const isEven = week % 2 === 0;
+      const here = weeks === 'even' ? isEven : !isEven;
+      return { here, label: here ? 'With us this week' : 'With other parent this week' };
+    }
+    if (type === 'custom') {
+      const todayName = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
+      const here = days.has(todayName);
+      return { here, label: here ? 'With us today' : 'With other parent today' };
+    }
+    return null;
+  })();
+
+  const currentWeekParity = (() => {
+    const w = isoWeekOfYear(new Date());
+    return w % 2 === 0 ? 'even' : 'odd';
+  })();
+
+  return (
+    <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.06)' }}>
+      <Text style={styles.custodyEyebrow}>CUSTODY SCHEDULE</Text>
+
+      <View style={styles.custodyTypeRow}>
+        {(['full_time', 'alternating_weeks', 'custom'] as CustodyType[]).map((t) => {
+          const active = type === t;
+          return (
+            <TouchableOpacity
+              key={t}
+              onPress={() => setType(t)}
+              style={[styles.custodyTypePill, active && styles.custodyTypePillActive]}>
+              <Text style={[styles.custodyTypeLabel, active && { color: BRASS, fontWeight: '600' }]}>
+                {t === 'full_time' ? 'Full time' : t === 'alternating_weeks' ? 'Alt. weeks' : 'Custom'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {type === 'alternating_weeks' ? (
+        <View style={{ marginTop: 12 }}>
+          <Text style={styles.custodyLabel}>They&apos;re with us on:</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            {(['even', 'odd'] as WeekParity[]).map((p) => {
+              const active = weeks === p;
+              return (
+                <TouchableOpacity
+                  key={p}
+                  onPress={() => setWeeks(p)}
+                  style={[styles.custodyChoice, active && styles.custodyChoiceActive]}>
+                  <Text style={[styles.custodyChoiceText, active && { color: BRASS, fontWeight: '600' }]}>
+                    {p === 'even' ? 'Even weeks' : 'Odd weeks'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={styles.custodyHelper}>
+            Week {isoWeekOfYear(new Date())} of {new Date().getFullYear()} is an {currentWeekParity} week.
+          </Text>
+        </View>
+      ) : null}
+
+      {type === 'custom' ? (
+        <View style={{ marginTop: 12 }}>
+          <Text style={styles.custodyLabel}>Days with us:</Text>
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+            {WEEKDAYS.map((d) => {
+              const active = days.has(d.id);
+              return (
+                <TouchableOpacity
+                  key={d.id}
+                  onPress={() => {
+                    const next = new Set(days);
+                    if (next.has(d.id)) next.delete(d.id);
+                    else next.add(d.id);
+                    setDays(next);
+                  }}
+                  style={[styles.custodyDayPill, active && styles.custodyDayPillActive]}>
+                  <Text style={[styles.custodyDayText, active && { color: BRASS, fontWeight: '600' }]}>
+                    {d.short}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
+      {type !== 'full_time' ? (
+        <View style={{ marginTop: 14 }}>
+          <Text style={styles.custodyLabel}>Next transition:</Text>
+          <TextInput
+            value={nextDate}
+            onChangeText={setNextDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={MUTED}
+            style={styles.custodyInput}
+          />
+        </View>
+      ) : null}
+
+      {todayStatus ? (
+        <Text style={[
+          styles.custodyStatus,
+          { color: todayStatus.here ? BRASS : MUTED },
+        ]}>
+          {todayStatus.label}
+        </Text>
+      ) : null}
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 14 }}>
+        <TouchableOpacity
+          onPress={save}
+          disabled={saving}
+          style={[styles.custodySaveBtn, saving && { opacity: 0.5 }]}>
+          <Text style={styles.custodySaveText}>{saving ? 'Saving…' : 'Save schedule'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={clearSchedule} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.custodyClearLink}>Clear schedule</Text>
+        </TouchableOpacity>
+        {savedNote ? <Text style={styles.custodySaved}>{savedNote}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -951,6 +1189,70 @@ function PetCard({ pet, onMenu, onChanged }: { pet: Pet; onMenu?: () => void; on
 }
 
 const styles = StyleSheet.create({
+  custodyEyebrow: { color: MUTED, fontSize: 9, letterSpacing: 2, fontWeight: '600', marginBottom: 10 },
+  custodyTypeRow: { flexDirection: 'row', gap: 6 },
+  custodyTypePill: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'center',
+  },
+  custodyTypePillActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
+  custodyTypeLabel: { color: '#a8a5a0', fontSize: 11 },
+  custodyLabel: { color: MUTED, fontSize: 12 },
+  custodyChoice: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'center',
+  },
+  custodyChoiceActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
+  custodyChoiceText: { color: '#f0ede8', fontSize: 12 },
+  custodyDayPill: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'center',
+  },
+  custodyDayPillActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
+  custodyDayText: { color: '#f0ede8', fontSize: 11 },
+  custodyHelper: {
+    color: MUTED,
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginTop: 6,
+  },
+  custodyInput: {
+    color: '#f0ede8',
+    fontSize: 13,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.06)',
+    marginTop: 6,
+  },
+  custodyStatus: { fontSize: 12, marginTop: 12, fontWeight: '500' },
+  custodySaveBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: BRASS,
+  },
+  custodySaveText: { color: '#0f0f0f', fontSize: 12, fontWeight: '600' },
+  custodyClearLink: { color: MUTED, fontSize: 12 },
+  custodySaved: { color: BRASS, fontSize: 11, marginLeft: 'auto' },
+
   container: {
     flex: 1,
     backgroundColor: BG,
