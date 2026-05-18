@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { ThemeProvider as ConductorThemeProvider } from '@/app/theme';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -86,6 +87,7 @@ export default function RootLayout() {
 
   return (
     <AppErrorBoundary Fallback={FallbackComponent}>
+      <ConductorThemeProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
@@ -109,6 +111,7 @@ export default function RootLayout() {
           <StatusBar style="auto" />
         </ThemeProvider>
       </GestureHandlerRootView>
+      </ConductorThemeProvider>
     </AppErrorBoundary>
   );
 }

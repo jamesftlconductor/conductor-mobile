@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import * as security from '@/app/security';
+import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { ChevronRight, Lock } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -503,6 +504,103 @@ function LanguageRow() {
 type StyleTone = 'direct' | 'balanced' | 'warm';
 type StyleHumor = 'yes' | 'occasionally' | 'no';
 type StyleDetail = 'brief' | 'standard' | 'thorough';
+
+function AppearanceBlock() {
+  const { themeMode, accentKey, theme, accentColor, isDark, setThemeMode, setAccentKey } = useTheme();
+  const modes: { id: ThemeMode; label: string }[] = [
+    { id: 'dark', label: 'Dark' },
+    { id: 'light', label: 'Light' },
+    { id: 'system', label: 'System' },
+  ];
+  const accentList: { id: AccentKey; name: string; color: string }[] = (
+    Object.keys(ACCENTS) as AccentKey[]
+  ).map((key) => ({
+    id: key,
+    name: ACCENTS[key].name,
+    color: ACCENTS[key][isDark ? 'dark' : 'light'],
+  }));
+  return (
+    <View style={{ paddingHorizontal: 22, paddingVertical: 14 }}>
+      <Text style={{ color: theme.muted, fontSize: 10, letterSpacing: 1.5, marginBottom: 8, fontWeight: '600' }}>
+        THEME
+      </Text>
+      <View
+        style={{
+          flexDirection: 'row',
+          backgroundColor: theme.inputBackground,
+          borderRadius: 10,
+          padding: 3,
+          marginBottom: 18,
+        }}>
+        {modes.map((m) => {
+          const active = themeMode === m.id;
+          return (
+            <TouchableOpacity
+              key={m.id}
+              onPress={() => setThemeMode(m.id)}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: 8,
+                alignItems: 'center',
+                backgroundColor: active ? accentColor : 'transparent',
+              }}>
+              <Text
+                style={{
+                  color: active ? '#0f0f0f' : theme.muted,
+                  fontSize: 12,
+                  fontWeight: active ? '600' : '400',
+                }}>
+                {m.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <Text style={{ color: theme.muted, fontSize: 10, letterSpacing: 1.5, marginBottom: 10, fontWeight: '600' }}>
+        ACCENT COLOR
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
+        {accentList.map((a) => {
+          const active = accentKey === a.id;
+          return (
+            <TouchableOpacity
+              key={a.id}
+              onPress={() => setAccentKey(a.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: a.color,
+                borderWidth: active ? 3 : 0,
+                borderColor: theme.text,
+              }}
+            />
+          );
+        })}
+      </View>
+
+      <View
+        style={{
+          marginTop: 4,
+          padding: 14,
+          backgroundColor: theme.card,
+          borderLeftWidth: 2,
+          borderLeftColor: accentColor,
+          borderRadius: 6,
+        }}>
+        <Text style={{ color: theme.muted, fontSize: 9, letterSpacing: 2, marginBottom: 6, fontWeight: '600' }}>
+          PREVIEW
+        </Text>
+        <Text style={{ color: theme.text, fontSize: 13, lineHeight: 19 }}>
+          Your <Text style={{ color: accentColor, fontWeight: '600' }}>HVAC tune-up</Text> is due before June.
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 function VoiceStyleBlock() {
   const [tone, setTone] = useState<StyleTone>('balanced');
@@ -1154,6 +1252,8 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Your House</Text>
         <HouseholdNameRow />
 
+        <SectionHeader title="Appearance" />
+        <AppearanceBlock />
 
         <SecuritySection />
 

@@ -54,7 +54,7 @@ const STEP_KEY = 'onboardingStep';
 type Phase = 'joining' | 'language' | 'step1' | 'step2' | 'step3' | 'interstitial';
 type Language = 'en' | 'es';
 
-type Who = 'solo' | 'couple' | 'family' | 'multigenerational';
+type Who = 'solo' | 'couple' | 'family' | 'multigenerational' | 'investment_property';
 type Housing = 'own' | 'rent' | 'living_with_family';
 type Modifier = 'has_pets' | 'co_parent' | 'health_needs' | 'major_change' | 'students' | 'work_from_home';
 
@@ -67,6 +67,7 @@ const WHO_CARDS: { id: Who; emoji: string; label: string; sub?: string }[] = [
   { id: 'couple', emoji: '👫', label: 'Two adults', sub: 'Couple or partners' },
   { id: 'family', emoji: '👨‍👩‍👧', label: 'With children', sub: 'Kids in the household' },
   { id: 'multigenerational', emoji: '👴', label: 'Multiple generations', sub: 'Parents or grandparents too' },
+  { id: 'investment_property', emoji: '🏢', label: 'Investment Property', sub: 'Rental or vacation property' },
 ];
 
 const HOUSING_CARDS: { id: Housing; emoji: string; label: string }[] = [

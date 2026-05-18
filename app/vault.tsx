@@ -592,6 +592,66 @@ function InlineField({
   );
 }
 
+// 12 most common US household subscriptions. Tap to pre-fill the
+// description + amount fields. The user can still edit anything
+// after — these are seed values, not authoritative.
+const POPULAR_SUBSCRIPTIONS: { emoji: string; name: string; amount: string }[] = [
+  { emoji: '🎵', name: 'Spotify', amount: '$11.99' },
+  { emoji: '📺', name: 'Netflix', amount: '$15.49' },
+  { emoji: '📦', name: 'Amazon Prime', amount: '$14.99' },
+  { emoji: '🎬', name: 'Hulu', amount: '$17.99' },
+  { emoji: '🎯', name: 'Disney+', amount: '$13.99' },
+  { emoji: '📱', name: 'Apple One', amount: '$19.95' },
+  { emoji: '🚗', name: 'Uber One', amount: '$9.99' },
+  { emoji: '🎮', name: 'Xbox Game Pass', amount: '$14.99' },
+  { emoji: '☁️', name: 'iCloud+', amount: '$2.99' },
+  { emoji: '🎵', name: 'Apple Music', amount: '$10.99' },
+  { emoji: '📰', name: 'New York Times', amount: '$17' },
+  { emoji: '💪', name: 'Peloton', amount: '$44' },
+];
+
+function PopularSubscriptionsRow({
+  onPick,
+}: { onPick: (name: string, amount: string) => void }) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text
+        style={{
+          color: MUTED,
+          fontSize: 9,
+          letterSpacing: 2,
+          fontWeight: '600',
+          marginBottom: 8,
+        }}>
+        POPULAR SERVICES
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {POPULAR_SUBSCRIPTIONS.map((s) => (
+          <TouchableOpacity
+            key={s.name}
+            onPress={() => onPick(s.name, s.amount)}
+            style={{
+              paddingVertical: 7,
+              paddingHorizontal: 10,
+              borderRadius: 14,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: SOFT_BORDER,
+              backgroundColor: 'rgba(255,255,255,0.03)',
+            }}>
+            <Text style={{ color: OFF_WHITE, fontSize: 11 }}>
+              {s.emoji} {s.name}{' '}
+              <Text style={{ color: MUTED }}>{s.amount}/mo</Text>
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={{ color: MUTED, fontSize: 10, marginTop: 8, fontStyle: 'italic' }}>
+        Verify your actual amount and renewal date.
+      </Text>
+    </View>
+  );
+}
+
 function AddVaultModal({
   visible, onClose, onAdded,
 }: {
@@ -1084,6 +1144,15 @@ function AddVaultModal({
           ) : step === 2 ? (
             <>
               <Text style={styles.addSheetTitle}>Details</Text>
+              {category === 'subscriptions' && !description && !provider ? (
+                <PopularSubscriptionsRow
+                  onPick={(name, amt) => {
+                    setDescription(name);
+                    setProvider(name);
+                    setAmount(amt);
+                  }}
+                />
+              ) : null}
               <TextInput
                 value={description}
                 onChangeText={setDescription}

@@ -158,6 +158,71 @@ function Card({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
+type SpendData = {
+  monthlySubscriptionTotal: number;
+  subscriptionCount: number;
+  priceChangesDetected: number;
+  topCategories: { category: string; total: number }[];
+  unusedSubscriptions: { merchant: string; lastSignalDays: number }[];
+};
+
+function SpendCard() {
+  const [data, setData] = useState<SpendData | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=spend&userId=${USER_ID}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && json?.ok) setData(json as SpendData);
+      } catch { /* best-effort */ }
+      finally { if (!cancelled) setLoaded(true); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  if (!loaded) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>The Spend</Text>
+        <ActivityIndicator color={MUTED} style={{ marginTop: 8 }} />
+      </View>
+    );
+  }
+  if (!data) return null;
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardLabel}>The Spend</Text>
+      <Text style={{ color: MUTED, fontSize: 12, marginTop: 2, marginBottom: 12 }}>
+        This month&apos;s subscription picture
+      </Text>
+      <Text style={{ color: BRASS, fontSize: 24, fontWeight: '700' }}>
+        ${data.monthlySubscriptionTotal}/mo
+      </Text>
+      <Text style={{ color: MUTED, fontSize: 13, marginTop: 4 }}>
+        {data.subscriptionCount} active service{data.subscriptionCount === 1 ? '' : 's'}
+      </Text>
+      {data.priceChangesDetected > 0 ? (
+        <Text style={{ color: '#f59e0b', fontSize: 12, marginTop: 10 }}>
+          📈 {data.priceChangesDetected} price change{data.priceChangesDetected === 1 ? '' : 's'} detected
+        </Text>
+      ) : null}
+      {data.unusedSubscriptions.length > 0 ? (
+        <Text style={{ color: MUTED, fontSize: 12, fontStyle: 'italic', marginTop: 6 }}>
+          {data.unusedSubscriptions.length} service{data.unusedSubscriptions.length === 1 ? '' : 's'} with no recent signals — worth reviewing
+        </Text>
+      ) : null}
+      <TouchableOpacity
+        onPress={() => router.push('/vault?filter=subscriptions' as never)}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        style={{ marginTop: 12 }}>
+        <Text style={{ color: BRASS, fontSize: 12 }}>View subscriptions →</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 type StreakData = {
   currentStreak: number;
   longestStreak: number;
@@ -200,7 +265,9 @@ export default function CompassScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-    <HelpButton cardId="patterns" />
+    {/* Offset left so the inline "Share" text in topBar (right edge)
+        doesn't sit under the HelpButton. */}
+    <HelpButton cardId="patterns" right={64} />
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <View style={styles.topBar}>
         <TouchableOpacity
@@ -263,6 +330,8 @@ export default function CompassScreen() {
           )}
         </View>
       )}
+
+      {!loading && <SpendCard />}
 
       {!loading && data && data.householdAge >= 7 && (
         <>
