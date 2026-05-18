@@ -369,6 +369,102 @@ function ToggleRow({
   );
 }
 
+function ReferralBlock() {
+  const [data, setData] = useState<{
+    referralCode?: string;
+    referralCount?: number;
+    freeMonthsEarned?: number;
+    foundingHousehold?: boolean;
+    freeUntil?: string | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=referral&userId=${USER_ID}`);
+        const json = await res.json();
+        if (cancelled) return;
+        if (res.ok && json?.ok) setData(json);
+      } catch { /* best-effort */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function share() {
+    if (!data?.referralCode) return;
+    const message = `I've been using Conductor — a household intelligence layer that gives you a morning brief synthesizing your emails, calendar, and health. Genuinely useful. Try it free: getconductor.app/join/${data.referralCode}`;
+    try {
+      await Share.share({ message });
+    } catch { /* user cancelled */ }
+  }
+
+  if (loading) {
+    return (
+      <View style={{ paddingHorizontal: 22, paddingVertical: 16 }}>
+        <Text style={{ color: MUTED, fontSize: 12 }}>Loading…</Text>
+      </View>
+    );
+  }
+  if (!data) return null;
+
+  const freeUntilFmt = data.freeUntil
+    ? new Date(data.freeUntil).toLocaleDateString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric',
+      })
+    : null;
+
+  return (
+    <View style={{ paddingHorizontal: 22, paddingVertical: 8 }}>
+      {data.foundingHousehold ? (
+        <View style={{ marginBottom: 12 }}>
+          <Text style={{ color: BRASS, fontSize: 13, fontWeight: '600', letterSpacing: 0.4 }}>
+            ⚡ Founding Household
+          </Text>
+          {freeUntilFmt ? (
+            <Text style={{ color: MUTED, fontSize: 11, marginTop: 4 }}>
+              Free until {freeUntilFmt}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+      <Text style={{ color: MUTED, fontSize: 10, letterSpacing: 1.5, fontWeight: '600', marginBottom: 10 }}>
+        INVITE A HOUSEHOLD
+      </Text>
+      <Text
+        style={{
+          color: BRASS,
+          fontSize: 22,
+          fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+          letterSpacing: 4,
+          fontWeight: '600',
+          marginBottom: 12,
+        }}>
+        {data.referralCode || '--------'}
+      </Text>
+      <TouchableOpacity
+        onPress={share}
+        style={{
+          backgroundColor: BRASS,
+          paddingVertical: 11,
+          paddingHorizontal: 18,
+          borderRadius: 22,
+          alignSelf: 'flex-start',
+          marginBottom: 12,
+        }}>
+        <Text style={{ color: '#0f0f0f', fontSize: 13, fontWeight: '600' }}>Share →</Text>
+      </TouchableOpacity>
+      <Text style={{ color: MUTED, fontSize: 11 }}>
+        {(data.referralCount || 0)} household{(data.referralCount || 0) === 1 ? '' : 's'} joined
+        {' · '}
+        {(data.freeMonthsEarned || 0)} free month{(data.freeMonthsEarned || 0) === 1 ? '' : 's'} earned
+      </Text>
+    </View>
+  );
+}
+
 function ChevronRow({
   label,
   subtext,
@@ -986,7 +1082,21 @@ export default function SettingsScreen() {
           label="How Conductor thinks"
           onPress={() => comingSoon('How Conductor thinks')}
         />
-        <ChevronRow label="Privacy" onPress={() => comingSoon('Privacy')} />
+        <ChevronRow
+          label="Directory"
+          onPress={() => router.push('/directory' as never)}
+        />
+        <ChevronRow
+          label="Privacy & Data"
+          onPress={() => router.push('/privacy-dashboard' as never)}
+        />
+        <ChevronRow
+          label="Household profile"
+          onPress={() => router.push('/profile-setup' as never)}
+        />
+
+        <SectionHeader title="Founding Household" />
+        <ReferralBlock />
 
         <View style={{ height: 40 }} />
       </ScrollView>

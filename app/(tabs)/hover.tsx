@@ -21,7 +21,7 @@ import Svg, { Circle, Line } from 'react-native-svg';
 
 import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
-import { HelpButton } from '@/components/HelpButton';
+import { HoverHelpModal } from '@/components/HoverHelpModal';
 import {
   LEGEND_ORDER,
   metaForRing,
@@ -880,11 +880,32 @@ export default function HoverScreen() {
   const insets = useSafeAreaInsets();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [showRingsTip, setShowRingsTip] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showReveal, setShowReveal] = useState(false);
   useEffect(() => {
     (async () => {
       try {
         const seen = await AsyncStorage.getItem('tutorial_hover_rings');
         if (!seen) setShowRingsTip(true);
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  // One-time "your radar is now fully active" reveal — fires once the
+  // household has been connected ~7 days. We piggyback on a stored
+  // connectedAt timestamp written at first launch; if missing, the
+  // reveal stays silent until something else seeds it.
+  useEffect(() => {
+    (async () => {
+      try {
+        const already = await AsyncStorage.getItem('hover_full_revealed');
+        if (already) return;
+        const connectedAtStr = await AsyncStorage.getItem('connected_at');
+        if (!connectedAtStr) return;
+        const ms = Date.parse(connectedAtStr);
+        if (isNaN(ms)) return;
+        const days = (Date.now() - ms) / (24 * 60 * 60 * 1000);
+        if (days >= 7) setShowReveal(true);
       } catch { /* ignore */ }
     })();
   }, []);
@@ -1254,7 +1275,35 @@ export default function HoverScreen() {
   return (
     <GestureDetector gesture={composedGesture}>
       <View style={styles.container}>
-        <HelpButton cardId="radar" top={insets.top + 8} />
+        <TouchableOpacity
+          onPress={() => setShowHelp(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{
+            position: 'absolute',
+            top: insets.top + 8,
+            right: 22,
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            backgroundColor: 'rgba(255,255,255,0.15)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+          }}
+          activeOpacity={0.6}>
+          <Text style={{ color: '#a8a5a0', fontSize: 12, fontWeight: '500' }}>?</Text>
+        </TouchableOpacity>
+        <HoverHelpModal
+          visible={showHelp || showReveal}
+          variant={showReveal ? 'reveal' : 'help'}
+          onDismiss={() => {
+            if (showReveal) {
+              AsyncStorage.setItem('hover_full_revealed', '1').catch(() => {});
+              setShowReveal(false);
+            }
+            setShowHelp(false);
+          }}
+        />
         <Animated.View
           pointerEvents="none"
           style={[styles.topHeader, { top: insets.top + 8, opacity: headerOpacity }]}>

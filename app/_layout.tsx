@@ -29,6 +29,9 @@ export default function RootLayout() {
           <Stack.Screen name="inventory" options={{ headerShown: false, gestureEnabled: true }} />
           <Stack.Screen name="communicate" options={{ headerShown: false, gestureEnabled: true }} />
           <Stack.Screen name="directory" options={{ headerShown: false, gestureEnabled: true }} />
+          <Stack.Screen name="junior" options={{ headerShown: false, gestureEnabled: true }} />
+          <Stack.Screen name="privacy-dashboard" options={{ headerShown: false, gestureEnabled: true }} />
+          <Stack.Screen name="profile-setup" options={{ headerShown: false, gestureEnabled: true }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

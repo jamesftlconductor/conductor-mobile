@@ -552,6 +552,13 @@ export default function TakeoffScreen() {
   const [askQuestion, setAskQuestion] = useState('');
   const [askLoading, setAskLoading] = useState(false);
   const [askAnswer, setAskAnswer] = useState<string | null>(null);
+  const [askAction, setAskAction] = useState<{
+    type: string;
+    setting?: string;
+    value?: any;
+    label?: string;
+    destination?: string;
+  } | null>(null);
   const [askError, setAskError] = useState(false);
   const askInputRef = useRef<TextInput | null>(null);
   // Suggestion chips appear below the input when it's focused — give
@@ -870,6 +877,16 @@ export default function TakeoffScreen() {
         throw new Error('empty answer');
       }
       setAskAnswer(data.answer);
+      // New: action handling. NAVIGATE auto-routes after a beat;
+      // confirm_setting holds for the user to tap Yes/No (handled
+      // by askAction state below).
+      if (data?.action) {
+        if (data.action.type === 'navigate' && typeof data.action.destination === 'string') {
+          setTimeout(() => router.push(data.action.destination as any), 700);
+        } else if (data.action.type === 'confirm_setting') {
+          setAskAction(data.action);
+        }
+      }
     } catch {
       setAskError(true);
     } finally {
@@ -1088,8 +1105,43 @@ export default function TakeoffScreen() {
               {!askLoading && !askError && askAnswer ? (
                 <View style={styles.askAnswerCard}>
                   <Text style={[styles.askAnswerText, { color: theme.brief }]}>{askAnswer}</Text>
+                  {askAction?.type === 'confirm_setting' ? (
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          // Best-effort: route the user to settings for now.
+                          // A future patch endpoint would apply the setting
+                          // server-side.
+                          setAskAction(null);
+                          router.push('/settings' as never);
+                        }}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 11,
+                          borderRadius: 22,
+                          backgroundColor: '#b8960c',
+                          alignItems: 'center',
+                        }}>
+                        <Text style={{ color: '#0f0f0f', fontSize: 13, fontWeight: '600' }}>
+                          Yes, do it →
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setAskAction(null)}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 11,
+                          borderRadius: 22,
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor: 'rgba(255,255,255,0.06)',
+                          alignItems: 'center',
+                        }}>
+                        <Text style={{ color: '#5a5855', fontSize: 13 }}>No thanks</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
                   <TouchableOpacity
-                    onPress={resetAsk}
+                    onPress={() => { resetAsk(); setAskAction(null); }}
                     activeOpacity={0.6}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     style={styles.askAnotherWrap}>

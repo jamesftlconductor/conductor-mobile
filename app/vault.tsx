@@ -82,11 +82,12 @@ const DISPLAY_CATEGORIES: DisplayCategory[] = [
   { key: 'protections',   label: 'Protections',   emoji: '🛡',  order: 0 },
   { key: 'subscriptions', label: 'Subscriptions', emoji: '🔄',  order: 1 },
   { key: 'registrations', label: 'Registrations', emoji: '📋',  order: 2 },
-  { key: 'warranties',    label: 'Warranties',    emoji: '🔧',  order: 3 },
-  { key: 'medical',       label: 'Medical',       emoji: '💊',  order: 4 },
-  { key: 'financial',     label: 'Financial',     emoji: '💰',  order: 5 },
-  { key: 'home',          label: 'Home',          emoji: '🏠',  order: 6 },
-  { key: 'other',         label: 'Other',         emoji: '📌',  order: 7 },
+  { key: 'leases',        label: 'Leases',        emoji: '🔑',  order: 3 },
+  { key: 'warranties',    label: 'Warranties',    emoji: '🔧',  order: 4 },
+  { key: 'medical',       label: 'Medical',       emoji: '💊',  order: 5 },
+  { key: 'financial',     label: 'Financial',     emoji: '💰',  order: 6 },
+  { key: 'home',          label: 'Home',          emoji: '🏠',  order: 7 },
+  { key: 'other',         label: 'Other',         emoji: '📌',  order: 8 },
 ];
 const CATEGORY_BY_KEY: Record<string, DisplayCategory> = Object.fromEntries(
   DISPLAY_CATEGORIES.map((c) => [c.key, c])
@@ -100,7 +101,8 @@ function backendToDisplay(category?: string): string {
   if (c === 'warranty') return 'warranties';
   if (c === 'medical' || c === 'prescription') return 'medical';
   if (c === 'financial') return 'financial';
-  if (c === 'lease' || c === 'home') return 'home';
+  if (c === 'lease_residential' || c === 'lease_vehicle' || c === 'lease') return 'leases';
+  if (c === 'home') return 'home';
   return 'other';
 }
 
