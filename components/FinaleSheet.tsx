@@ -178,7 +178,105 @@ function SingleSheet({
   const [saving, setSaving] = useState(false);
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [attribSuggestion, setAttribSuggestion] = useState<{
+    name: string;
+    confidence: number;
+  } | null>(null);
+  const [attribAssigning, setAttribAssigning] = useState(false);
   const dimOpacity = useRef(new Animated.Value(1)).current;
+
+  // Crew attribution suggestion. Fires when the sheet opens for an
+  // unattributed signal: fetch crew, score each member against the
+  // signal's sender + description, surface the top match above the
+  // 70% confidence threshold as a tappable banner. The banner
+  // disappears after Assign — no need to re-poll the API.
+  useEffect(() => {
+    if (!visible) { setAttribSuggestion(null); return; }
+    const sigWithAttrib = signal as Signal & { crewMemberId?: string | null };
+    if (sigWithAttrib.crewMemberId) { setAttribSuggestion(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=crew&userId=${userId || ''}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const crew = Array.isArray(data?.crew) ? data.crew : [];
+        if (crew.length === 0) return;
+
+        // Score each crew member. Sender match against senderPatterns
+        // is the strongest signal; description-name match plus
+        // school/doctor name matches stack on top. type==='medical'
+        // gives a medium bump on members with prescriptions.
+        type Scored = { name: string; confidence: number };
+        const scored: Scored[] = [];
+        const desc = (signal.description || '').toLowerCase();
+        const sender = (signal.sender || '').toLowerCase();
+        for (const m of crew) {
+          if (!m || !m.name) continue;
+          let conf = 0;
+          const memberName = String(m.name).toLowerCase();
+          if (Array.isArray(m.senderPatterns)) {
+            for (const p of m.senderPatterns) {
+              const pat = String(p || '').toLowerCase().trim();
+              if (pat && sender.includes(pat)) { conf = Math.max(conf, 90); break; }
+            }
+          }
+          if (desc.includes(memberName) && memberName.length >= 3) {
+            conf = Math.max(conf, 80);
+          }
+          const schoolName = m?.school?.name ? String(m.school.name).toLowerCase() : '';
+          if (schoolName && schoolName.length >= 3 && desc.includes(schoolName)) {
+            conf = Math.max(conf, 85);
+          }
+          if (Array.isArray(m.doctors)) {
+            for (const d of m.doctors) {
+              const dn = d?.name ? String(d.name).toLowerCase() : '';
+              if (dn && dn.length >= 4 && (desc.includes(dn) || sender.includes(dn))) {
+                conf = Math.max(conf, 80);
+                break;
+              }
+            }
+          }
+          if (signal.type === 'medical' && Array.isArray(m.prescriptions) && m.prescriptions.length > 0) {
+            conf = Math.max(conf, 60);
+          }
+          if (conf > 0) scored.push({ name: m.name, confidence: conf });
+        }
+        if (cancelled) return;
+        scored.sort((a, b) => b.confidence - a.confidence);
+        if (scored[0] && scored[0].confidence > 70) {
+          setAttribSuggestion(scored[0]);
+        }
+      } catch { /* best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [visible, signal.id, signal.description, signal.sender, signal.type, userId]);
+
+  async function acceptAttribSuggestion() {
+    if (!attribSuggestion || attribAssigning) return;
+    setAttribAssigning(true);
+    try {
+      await fetch(`${API_BASE}/signals?type=crew-attribution`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          signalId: signal.id,
+          crewMemberName: attribSuggestion.name,
+        }),
+      });
+      // Stamp locally so the row reflects the change without a parent
+      // refresh — mirrors the existing CrewAttributionRow pattern.
+      (signal as Signal & { crewMemberId?: string | null }).crewMemberId =
+        attribSuggestion.name;
+      setAttribSuggestion(null);
+    } catch {
+      // Silent on failure; user can still tap the manual attribution
+      // row below.
+    } finally {
+      setAttribAssigning(false);
+    }
+  }
 
   // Suggestion engine: fetch a one-sentence contextual next-step from
   // /api/suggest when the sheet opens for a new signal. Backend caches
@@ -323,6 +421,22 @@ function SingleSheet({
                 style={[styles.sheetDescription, { opacity: dimOpacity }]}>
                 {signal.description || 'Unknown signal'}
               </Animated.Text>
+              {attribSuggestion ? (
+                <View style={styles.attribSuggestion}>
+                  <Text style={styles.attribSuggestionText} numberOfLines={2}>
+                    Looks like this might belong to {attribSuggestion.name} →
+                  </Text>
+                  <TouchableOpacity
+                    onPress={acceptAttribSuggestion}
+                    disabled={attribAssigning}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Text style={styles.attribAssignBtn}>
+                      {attribAssigning ? '...' : 'Assign'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
               <View style={styles.metaBlock}>
                 {!!signal.sender && (
                   <Text style={styles.metaLine}>From {signal.sender}</Text>
@@ -336,6 +450,20 @@ function SingleSheet({
                     🔄  Recurring — every {(signal as Signal & { recurringInterval?: number }).recurringInterval ?? '?'} days
                   </Text>
                 ) : null}
+                {(() => {
+                  // Carry-forward escalation badge. Surfaces only at the
+                  // brief.js threshold (>=3 mornings without resolving) so
+                  // a brand-new signal doesn't show a stale "carried
+                  // forward 0 days" line. Amber to read as a soft prompt,
+                  // not an alert.
+                  const bc = (signal as Signal & { briefCount?: number }).briefCount;
+                  if (typeof bc !== 'number' || bc < 3) return null;
+                  return (
+                    <Text style={styles.carryForwardLine}>
+                      ⏳  Carried forward {bc} days
+                    </Text>
+                  );
+                })()}
                 <CrewAttributionRow
                   signal={signal}
                   userId={userId || ''}
@@ -745,6 +873,42 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       letterSpacing: 0.3,
       marginTop: 4,
       fontStyle: 'italic',
+    },
+    carryForwardLine: {
+      color: '#f59e0b',
+      fontSize: 12,
+      letterSpacing: 0.3,
+      marginTop: 4,
+      fontStyle: 'italic',
+    },
+    attribSuggestion: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      // 8-digit hex suffix = alpha (1a≈10%, 4d≈30%). Keeps the banner
+      // accent-tinted regardless of which palette the user picked.
+      backgroundColor: accentColor + '1a',
+      borderColor: accentColor + '4d',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      marginTop: -10,
+      marginBottom: 16,
+      gap: 12,
+    },
+    attribSuggestionText: {
+      color: theme.text,
+      fontSize: 12,
+      letterSpacing: 0.2,
+      flex: 1,
+    },
+    attribAssignBtn: {
+      color: accentColor,
+      fontSize: 12,
+      fontWeight: '600',
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
     },
     metaLine: {
       color: theme.muted,

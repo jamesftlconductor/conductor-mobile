@@ -230,7 +230,12 @@ export default function CalendarScreen() {
             <Text style={styles.arrow}>→</Text>
           </TouchableOpacity>
         </View>
-        <View style={{ width: 60 }} />
+        <TouchableOpacity
+          onPress={() => router.push('/programme' as never)}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.weekViewLink}>2-week view →</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.weekdayRow}>
@@ -435,6 +440,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       paddingBottom: 12,
     },
     topBackText: { color: theme.muted, fontSize: 13, letterSpacing: 0.3, width: 60 },
+    weekViewLink: {
+      color: accentColor,
+      fontSize: 13,
+      letterSpacing: 0.3,
+      fontWeight: '500',
+    },
     monthSwitcher: {
       flexDirection: 'row',
       alignItems: 'center',
