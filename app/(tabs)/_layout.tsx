@@ -38,15 +38,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <SettingsIcon size={26} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="missed-cues"
-        options={{
-          // href: null hides the screen from the tab bar while keeping it
-          // routable via router.push. The bottom tab strip stays visible
-          // when this route is active so navigation feels continuous.
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }

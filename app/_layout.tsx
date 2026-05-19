@@ -107,6 +107,7 @@ export default function RootLayout() {
             <Stack.Screen name="privacy-dashboard" options={{ headerShown: false, gestureEnabled: true }} />
             <Stack.Screen name="profile-setup" options={{ headerShown: false, gestureEnabled: true }} />
             <Stack.Screen name="recurring-events" options={{ headerShown: false, gestureEnabled: true }} />
+            <Stack.Screen name="missed-cues" options={{ headerShown: false, gestureEnabled: true }} />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

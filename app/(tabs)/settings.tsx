@@ -1279,7 +1279,7 @@ export default function SettingsScreen() {
         <ChevronRow label="Invite a member" onPress={handleInviteMember} />
         <Row
           label="Missed Cues"
-          onPress={() => router.push('/(tabs)/missed-cues')}
+          onPress={() => router.push('/missed-cues')}
           right={
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {missedCuesCount > 0 && (

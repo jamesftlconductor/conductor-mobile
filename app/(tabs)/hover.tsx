@@ -692,7 +692,7 @@ const NAV_ITEMS: WheelItem[] = [
   // Vault route is a placeholder — the screen file doesn't exist yet, tap
   // will trigger an expo-router 404 until app/vault.tsx is created.
   { kind: 'nav', key: 'vault', label: 'Vault', emoji: '🗂', route: '/vault' },
-  { kind: 'nav', key: 'cues', label: 'Cues', emoji: '⚠️', route: '/(tabs)/missed-cues' },
+  { kind: 'nav', key: 'cues', label: 'Cues', emoji: '⚠️', route: '/missed-cues' },
   { kind: 'nav', key: 'horizon', label: 'Horizon', emoji: '🔭', route: '/horizon' },
   { kind: 'nav', key: 'programme', label: 'Programme', emoji: '📅', route: '/programme' },
   { kind: 'nav', key: 'compass', label: 'Compass', emoji: '🧭', route: '/compass' },
@@ -822,7 +822,7 @@ function InfiniteLedger({
       <View style={styles.deepLinkRow}>
         <TouchableOpacity
           style={styles.deepLink}
-          onPress={() => router.push('/(tabs)/missed-cues')}
+          onPress={() => router.push('/missed-cues')}
           activeOpacity={0.6}>
           <Text style={styles.missedCuesLinkText}>Missed Cues</Text>
         </TouchableOpacity>
