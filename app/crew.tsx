@@ -122,6 +122,8 @@ type Extended = BioFields & {
   associatedChildren?: string[];
   birthday?: string | null;
   anniversary?: string | null;
+  attributedSignals?: AttributedSignal[];
+  attributedSignalCount?: number;
 };
 
 type CrewMember = Child | Pet | Member | Extended;
@@ -596,10 +598,11 @@ export default function CrewScreen() {
   const members = crew.filter((m): m is Member => m.memberType === 'member');
   const children = crew.filter((m): m is Child => m.memberType === 'child');
   const pets = crew.filter((m): m is Pet => m.memberType === 'pet');
-  const isEmpty = !loading && members.length === 0 && children.length === 0 && pets.length === 0;
+  const extended = crew.filter((m): m is Extended => m.memberType === 'extended');
+  const isEmpty = !loading && members.length === 0 && children.length === 0 && pets.length === 0 && extended.length === 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
     {/* Offset left so the "+" add-crew button in the topBar (right edge)
         has clear space. */}
     <HelpButton cardId="crew" right={50} />
@@ -682,6 +685,20 @@ export default function CrewScreen() {
           <Text style={[styles.sectionHeader, { marginTop: 32 }]}>Pets</Text>
           {pets.map((p, i) => (
             <PetCard key={`pet-${i}`} pet={p} onMenu={() => openCrewMenu(p)} onChanged={load} />
+          ))}
+        </>
+      )}
+
+      {extended.length > 0 && (
+        <>
+          <Text style={[styles.sectionHeader, { marginTop: 32 }]}>Extended Family</Text>
+          {extended.map((e, i) => (
+            <ExtendedCard
+              key={`extended-${i}`}
+              ext={e}
+              onMenu={() => openCrewMenu(e)}
+              onChanged={load}
+            />
           ))}
         </>
       )}
@@ -1206,6 +1223,65 @@ function PetCard({ pet, onMenu, onChanged }: { pet: Pet; onMenu?: () => void; on
       ) : null}
       <SignalChipsRow memberName={name} signals={pet.attributedSignals || []} onChanged={onChanged} />
       <NotesEditor memberName={name} memberType="pet" initial={pet.notes} />
+    </View>
+  );
+}
+
+// Extended-family card — used for partners not connected as Members
+// (Sarah's relationship is "partner" with memberType "extended"), plus
+// in-laws, step-parents, anyone the household acknowledges without
+// granting full network access. Same shape as MemberCard but no Edit
+// button (Edit modal targets userId, which Extended members don't
+// have) — edits flow through the "···" menu instead.
+function ExtendedCard({
+  ext, onMenu, onChanged,
+}: {
+  ext: Extended;
+  onMenu?: () => void;
+  onChanged?: () => void;
+}) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const name = ext.name || 'Family member';
+  const relationship = ext.relationship || '';
+  const [photoUrl, setPhotoUrl] = useState<string | null>(ext.photoUrl || null);
+  async function onPhotoTap() {
+    const b64 = await pickImageBase64();
+    if (!b64) return;
+    setPhotoUrl(b64);
+    const final = await uploadCrewPhoto(name, 'extended', b64);
+    if (final) setPhotoUrl(final);
+  }
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <PhotoCircle photoUrl={photoUrl} name={name} onPress={onPhotoTap} />
+        <View style={styles.cardNameWrap}>
+          <Text style={styles.cardName}>{name}</Text>
+          {relationship ? (
+            <Text style={styles.cardAge}>{relationship}</Text>
+          ) : null}
+        </View>
+        {onMenu ? (
+          <TouchableOpacity onPress={onMenu} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.cardMenuDots}>···</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {ext.birthday ? (
+        <CelebrationRow emoji="🎂" label="Birthday" mmDd={ext.birthday} />
+      ) : null}
+      {ext.anniversary ? (
+        <CelebrationRow emoji="💍" label="Anniversary" mmDd={ext.anniversary} />
+      ) : null}
+
+      <SignalChipsRow
+        memberName={name}
+        signals={ext.attributedSignals || []}
+        onChanged={onChanged}
+      />
+      <NotesEditor memberName={name} memberType="extended" initial={ext.notes} />
     </View>
   );
 }
