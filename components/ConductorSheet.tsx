@@ -1,18 +1,22 @@
-// Bottom sheet opened by tapping the Minimap from any header. The
-// header line reads "{urgent} urgent · {total} signals in motion" so
-// the user knows what Conductor is seeing right now. Below: a thin
-// summary + quick links into Hover / Horizon / Programme.
+// Single, root-mounted bottom sheet opened by tapping the Minimap from
+// any header. Visibility + screen-context live in useConductorSheet so
+// any screen can open this without prop drilling.
 //
-// Designed to be cheap to mount — fetches active-signal counts on
-// open, never on mount. Closes via tap-outside or swipe-down (uses
-// SwipeDismissSheet for the standard 36×4 drag handle + 80px pan
-// threshold).
+// Header reads "{urgent} urgent · {total} signals in motion" so the
+// user knows what Conductor is seeing right now. A small breadcrumb
+// below ("Asked from Hover" / "Asked from Settings" etc.) tells them
+// which screen the sheet was invoked from.
+//
+// Designed to be cheap to mount — fetches signal counts only when
+// visibility flips to true. Closes via backdrop tap or swipe-down
+// (SwipeDismissSheet provides 36×4 drag handle + 80px pan threshold).
 
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { useTheme } from '@/app/theme';
+import { closeConductorSheet, useConductorSheetState } from '@/hooks/useConductorSheet';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 
 const USER_ID = 'james_totalhome_gmail_com';
@@ -23,11 +27,6 @@ type SignalLite = {
   state?: string;
   eta?: string | null;
   status?: string;
-};
-
-type Props = {
-  visible: boolean;
-  onClose: () => void;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -45,9 +44,40 @@ function urgentCountFrom(signals: SignalLite[]): number {
   return urgent;
 }
 
-export function ConductorSheet({ visible, onClose }: Props) {
+// Maps the screen-context slug into a human breadcrumb. Unknown values
+// fall through to a generic "Asked from your house" so the line never
+// reads as a debug label.
+const CONTEXT_LABEL: Record<string, string> = {
+  ground: 'Asked from Ground',
+  hover: 'Asked from Hover',
+  horizon: 'Asked from Horizon',
+  programme: 'Asked from Programme',
+  calendar: 'Asked from Calendar',
+  vault: 'Asked from Vault',
+  crew: 'Asked from Crew',
+  compass: 'Asked from Compass',
+  journal: 'Asked from Journal',
+  inventory: 'Asked from Inventory',
+  providers: 'Asked from Providers',
+  maintenance: 'Asked from Maintenance',
+  network: 'Asked from Network',
+  directory: 'Asked from Directory',
+  communicate: 'Asked from Communicate',
+  transition: 'Asked from Transition',
+  junior: 'Asked from Junior',
+  settings: 'Asked from Settings',
+  'privacy-dashboard': 'Asked from Privacy',
+  'recurring-events': 'Asked from Recurring',
+};
+
+function breadcrumbFor(context: string): string {
+  return CONTEXT_LABEL[context] || 'Asked from your house';
+}
+
+export function ConductorSheet() {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const { visible, context } = useConductorSheetState();
   const [signals, setSignals] = useState<SignalLite[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -81,7 +111,7 @@ export function ConductorSheet({ visible, onClose }: Props) {
   const total = activeSignals.length;
 
   function go(path: string) {
-    onClose();
+    closeConductorSheet();
     setTimeout(() => router.push(path as never), 120);
   }
 
@@ -90,15 +120,16 @@ export function ConductorSheet({ visible, onClose }: Props) {
       visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <SwipeDismissSheet style={styles.sheet} onClose={onClose}>
+      onRequestClose={closeConductorSheet}>
+      <Pressable style={styles.backdrop} onPress={closeConductorSheet}>
+        <SwipeDismissSheet style={styles.sheet} onClose={closeConductorSheet}>
           <Pressable onPress={() => {}}>
             <Text style={styles.summary}>
               {loaded
                 ? `${urgent} urgent · ${total} signal${total === 1 ? '' : 's'} in motion`
                 : 'Reading the household…'}
             </Text>
+            <Text style={styles.breadcrumb}>{breadcrumbFor(context)}</Text>
             <Text style={styles.sub}>
               {loaded && total === 0
                 ? "Conductor is watching — nothing's active right now."
@@ -141,7 +172,7 @@ export function ConductorSheet({ visible, onClose }: Props) {
             </View>
 
             <TouchableOpacity
-              onPress={onClose}
+              onPress={closeConductorSheet}
               activeOpacity={0.6}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.closeRow}>
@@ -183,6 +214,14 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       fontWeight: '700',
       letterSpacing: 0.1,
       marginTop: 4,
+    },
+    breadcrumb: {
+      color: accentColor,
+      fontSize: 10,
+      letterSpacing: 2,
+      textTransform: 'uppercase',
+      fontWeight: '600',
+      marginTop: 8,
     },
     sub: {
       color: theme.muted,

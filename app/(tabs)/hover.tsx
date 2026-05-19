@@ -22,6 +22,9 @@ import Svg, { Circle, Line } from 'react-native-svg';
 import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
 import { HoverHelpModal } from '@/components/HoverHelpModal';
+import { Minimap } from '@/components/Minimap';
+import { openConductorSheet } from '@/hooks/useConductorSheet';
+import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
   LEGEND_ORDER,
   metaForRing,
@@ -921,6 +924,7 @@ export default function HoverScreen() {
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const urgentCount = useUrgentCount();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [showRingsTip, setShowRingsTip] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -1330,6 +1334,23 @@ export default function HoverScreen() {
   return (
     <GestureDetector gesture={composedGesture}>
       <View style={styles.container}>
+        {/* Minimap at top-left — the big radar IS the same picture
+            at a larger scale, but the tap surface for ConductorSheet
+            still lives here so the affordance is universal. Keeps
+            clear of the `?` help button at top-right. */}
+        <View
+          style={{
+            position: 'absolute',
+            top: insets.top + 8,
+            left: 22,
+            zIndex: 50,
+          }}>
+          <Minimap
+            floating={false}
+            urgentCount={urgentCount}
+            onPress={() => openConductorSheet('hover')}
+          />
+        </View>
         <TouchableOpacity
           onPress={() => setShowHelp(true)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

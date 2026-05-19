@@ -11,20 +11,20 @@
 //   - rightAction sits 8px to the left of the Minimap
 //
 // The Minimap (inline mode) doubles as the universal "what's
-// Conductor watching right now" affordance — tap opens a
-// ConductorSheet with the live signal summary. The sheet state is
-// owned here so every screen gets the behavior for free.
+// Conductor watching right now" affordance — tap opens the root-
+// mounted ConductorSheet via openConductorSheet(screenContext).
 //
 // Callers pass title + optional rightAction + optional onBack
-// override. When onBack is omitted, router.back() is used.
+// override + screenContext (used for the sheet breadcrumb). When
+// onBack is omitted, router.back() is used.
 
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { useTheme } from '@/app/theme';
+import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
-import { ConductorSheet } from './ConductorSheet';
 import { Minimap } from './Minimap';
 
 type Props = {
@@ -39,6 +39,10 @@ type Props = {
   // Hide the back button (used on root screens like Settings tabs
   // that don't have a previous screen in the stack).
   hideBack?: boolean;
+  // Breadcrumb label for the ConductorSheet — tells the sheet which
+  // screen invoked it. Defaults to a generic value when omitted but
+  // every migrated screen should pass its slug.
+  screenContext?: string;
 };
 
 export function ScreenHeader({
@@ -47,10 +51,10 @@ export function ScreenHeader({
   onBack,
   rightAction,
   hideBack,
+  screenContext = 'unknown',
 }: Props) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const urgentCount = useUrgentCount();
 
   return (
@@ -79,10 +83,9 @@ export function ScreenHeader({
         <Minimap
           floating={false}
           urgentCount={urgentCount}
-          onPress={() => setSheetOpen(true)}
+          onPress={() => openConductorSheet(screenContext)}
         />
       </View>
-      <ConductorSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
     </View>
   );
 }

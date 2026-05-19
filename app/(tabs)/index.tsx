@@ -11,7 +11,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
-import { ConductorSheet } from '@/components/ConductorSheet';
+import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
@@ -649,10 +649,9 @@ export default function TakeoffScreen() {
   // params from FinaleSheet). Pairs with conductorHaptics.signalRested
   // for the haptic side of the moment.
   const [restedToast, setRestedToast] = useState(false);
-  // Conductor sheet — bottom sheet opened by tapping the Minimap.
-  // Same component used by ScreenHeader on every other screen, so the
-  // affordance is uniform.
-  const [conductorSheetOpen, setConductorSheetOpen] = useState(false);
+  // ConductorSheet is mounted once at root in app/_layout.tsx; tapping
+  // the minimap calls openConductorSheet('ground') and the sheet
+  // listens via its own hook.
   const urgentCount = useUrgentCount();
 
   // Took Care Of band — items Conductor auto-resolved or expired
@@ -1196,11 +1195,7 @@ export default function TakeoffScreen() {
           contentContainerStyle={styles.content}>
           <Minimap
             urgentCount={urgentCount}
-            onPress={() => setConductorSheetOpen(true)}
-          />
-          <ConductorSheet
-            visible={conductorSheetOpen}
-            onClose={() => setConductorSheetOpen(false)}
+            onPress={() => openConductorSheet('ground')}
           />
           <View style={styles.header}>
             <Text style={[styles.greeting, { color: bandTheme.greeting }]}>

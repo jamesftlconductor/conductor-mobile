@@ -3,6 +3,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import * as security from '@/app/security';
 import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
+import { Minimap } from '@/components/Minimap';
+import { openConductorSheet } from '@/hooks/useConductorSheet';
+import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { ChevronRight, Lock } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -955,6 +958,7 @@ async function handleInviteMember() {
 export default function SettingsScreen() {
   const { theme: t_theme, accentColor: t_accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(t_theme, t_accentColor), [t_theme, t_accentColor]);
+  const settingsUrgentCount = useUrgentCount();
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
   const [editingTime, setEditingTime] = useState<null | {
@@ -1302,6 +1306,16 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Minimap top-right — matches the universal "tap to ask
+          Conductor" affordance every screen has. Settings doesn't
+          use ScreenHeader (custom layout) so we place this manually. */}
+      <View style={{ position: 'absolute', top: 60, right: 24, zIndex: 50 }}>
+        <Minimap
+          floating={false}
+          urgentCount={settingsUrgentCount}
+          onPress={() => openConductorSheet('settings')}
+        />
+      </View>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}

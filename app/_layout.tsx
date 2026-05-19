@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider as ConductorThemeProvider } from '@/app/theme';
+import { ConductorSheet } from '@/components/ConductorSheet';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -110,6 +111,11 @@ export default function RootLayout() {
             <Stack.Screen name="missed-cues" options={{ headerShown: false, gestureEnabled: true }} />
             <Stack.Screen name="calendar" options={{ headerShown: false, gestureEnabled: true }} />
           </Stack>
+          {/* Root-mounted ConductorSheet — visibility owned by
+              useConductorSheet so any minimap from any screen opens
+              the same instance. Lives above <Stack> so it overlays
+              every route. */}
+          <ConductorSheet />
           <StatusBar style="auto" />
         </ThemeProvider>
       </GestureHandlerRootView>
