@@ -23,6 +23,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { useTheme } from '@/app/theme';
+import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { ConductorSheet } from './ConductorSheet';
 import { Minimap } from './Minimap';
 
@@ -50,6 +51,7 @@ export function ScreenHeader({
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const urgentCount = useUrgentCount();
 
   return (
     <View style={styles.wrap}>
@@ -74,7 +76,11 @@ export function ScreenHeader({
         {rightAction ? (
           <View style={styles.rightActionWrap}>{rightAction}</View>
         ) : null}
-        <Minimap floating={false} onPress={() => setSheetOpen(true)} />
+        <Minimap
+          floating={false}
+          urgentCount={urgentCount}
+          onPress={() => setSheetOpen(true)}
+        />
       </View>
       <ConductorSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
     </View>

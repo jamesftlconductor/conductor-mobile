@@ -1,8 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+
+import { useTheme } from '@/app/theme';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -226,9 +229,16 @@ type MinimapProps = {
   // setSheetOpen(true)). When omitted, falls back to the legacy
   // navigation-to-Hover behavior for backwards compat.
   onPress?: () => void;
+  // Number of signals currently warranting attention — drives the
+  // top-right badge and the inner-ring pulse. Default 0 hides both.
+  urgentCount?: number;
 };
 
-export function Minimap({ floating = true, onPress }: MinimapProps = {}) {
+const DISCOVERY_KEY = 'minimapDiscovered';
+const DISCOVERY_AUTOHIDE_MS = 4000;
+
+export function Minimap({ floating = true, onPress, urgentCount = 0 }: MinimapProps = {}) {
+  const { theme, accentColor } = useTheme();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('family');
   const tapScale = useRef(new Animated.Value(1)).current;
@@ -280,7 +290,86 @@ export function Minimap({ floating = true, onPress }: MinimapProps = {}) {
   const innerSignals = grouped.inner;
   const glowColor = innerSignals.length > 0 ? colorFor(innerSignals[0]) : null;
 
+  // Inner-ring pulse — only when urgentCount > 0. The opacity
+  // oscillates between 0.3 and 1.0 on a 2.4s cycle. When urgentCount
+  // drops to 0 the animation is stopped and reset to fully opaque.
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (urgentCount <= 0) {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 1200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1.0,
+          duration: 1200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [urgentCount, pulseAnim]);
+
+  // First-render discovery: scale-bounce 3 times, then surface a
+  // tooltip ("Tap to ask Conductor anything") for up to 4 seconds.
+  // Persisted via AsyncStorage so it only fires once per install.
+  const discoveryScale = useRef(new Animated.Value(1)).current;
+  const [discoveryTooltipVisible, setDiscoveryTooltipVisible] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const seen = await AsyncStorage.getItem(DISCOVERY_KEY);
+        if (seen === 'true' || cancelled) return;
+        const bounce = () =>
+          Animated.sequence([
+            Animated.timing(discoveryScale, {
+              toValue: 1.15,
+              duration: 250,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.timing(discoveryScale, {
+              toValue: 1.0,
+              duration: 250,
+              easing: Easing.inOut(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]);
+        Animated.sequence([bounce(), bounce(), bounce()]).start(() => {
+          if (cancelled) return;
+          setDiscoveryTooltipVisible(true);
+          setTimeout(() => {
+            setDiscoveryTooltipVisible(false);
+            AsyncStorage.setItem(DISCOVERY_KEY, 'true').catch(() => {});
+          }, DISCOVERY_AUTOHIDE_MS);
+        });
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [discoveryScale]);
+
+  function dismissDiscovery() {
+    if (!discoveryTooltipVisible) return;
+    setDiscoveryTooltipVisible(false);
+    AsyncStorage.setItem(DISCOVERY_KEY, 'true').catch(() => {});
+  }
+
   function handlePress() {
+    // Light haptic on tap — same pattern as the brief quick-action
+    // chips. Swallowed on devices without haptics support.
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    dismissDiscovery();
     Animated.sequence([
       Animated.timing(tapScale, {
         toValue: 0.9,
@@ -306,12 +395,13 @@ export function Minimap({ floating = true, onPress }: MinimapProps = {}) {
   }
 
   const ringStyle = floating ? styles.touchWrapFloating : styles.touchWrapInline;
+  const badgeLabel = urgentCount > 9 ? '9+' : String(urgentCount);
 
   return (
     <Pressable
       onPress={handlePress}
       style={ringStyle}
-      hitSlop={8}>
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
       <Animated.View
         style={[
           styles.circle,
@@ -322,12 +412,41 @@ export function Minimap({ floating = true, onPress }: MinimapProps = {}) {
             shadowOffset: { width: 0, height: 0 },
             elevation: 8,
           },
-          { transform: [{ scale: tapScale }] },
+          // tapScale + discoveryScale compose so the press-bounce and
+          // the first-render discovery bounce don't fight each other.
+          { transform: [{ scale: Animated.multiply(tapScale, discoveryScale) }] },
         ]}>
         <MinimapRing ring={RINGS.outer} signals={grouped.outer} />
         <MinimapRing ring={RINGS.middle} signals={grouped.middle} />
-        <MinimapRing ring={RINGS.inner} signals={grouped.inner} />
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.ringLayer, urgentCount > 0 && { opacity: pulseAnim }]}>
+          <MinimapRing ring={RINGS.inner} signals={grouped.inner} />
+        </Animated.View>
       </Animated.View>
+      {urgentCount > 0 ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.badge,
+            { backgroundColor: accentColor, borderColor: theme.background },
+          ]}>
+          <Text style={styles.badgeText}>{badgeLabel}</Text>
+        </View>
+      ) : null}
+      {discoveryTooltipVisible ? (
+        <Pressable onPress={dismissDiscovery}>
+          <View
+            style={[
+              styles.discoveryTooltip,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}>
+            <Text style={[styles.discoveryTooltipText, { color: theme.muted }]}>
+              Tap to ask Conductor anything
+            </Text>
+          </View>
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
@@ -360,5 +479,44 @@ const styles = StyleSheet.create({
     top: 0,
     width: SIZE,
     height: SIZE,
+  },
+  // Top-right urgent count. The 1.5px border in theme.background
+  // creates a thin gap between the badge and the minimap rings so
+  // the digit reads cleanly even when the inner ring's signal dot
+  // sits at 1 o'clock.
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 12,
+  },
+  // First-render-only tooltip. Positioned absolutely below the
+  // minimap so it doesn't reflow neighboring header content. Tap
+  // anywhere on it (or the minimap itself) to dismiss permanently.
+  discoveryTooltip: {
+    position: 'absolute',
+    top: SIZE + 8,
+    right: 0,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: 200,
+  },
+  discoveryTooltipText: {
+    fontSize: 11,
+    letterSpacing: 0.2,
   },
 });

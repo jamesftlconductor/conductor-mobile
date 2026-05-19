@@ -12,6 +12,7 @@ import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthCon
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
 import { ConductorSheet } from '@/components/ConductorSheet';
+import { useUrgentCount } from '@/hooks/useUrgentCount';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
@@ -652,6 +653,7 @@ export default function TakeoffScreen() {
   // Same component used by ScreenHeader on every other screen, so the
   // affordance is uniform.
   const [conductorSheetOpen, setConductorSheetOpen] = useState(false);
+  const urgentCount = useUrgentCount();
 
   // Took Care Of band — items Conductor auto-resolved or expired
   // in the last 48h. Collapsed by default. Per-item dismissals are
@@ -1192,7 +1194,10 @@ export default function TakeoffScreen() {
         <ScrollView
           style={styles.scrollFlex}
           contentContainerStyle={styles.content}>
-          <Minimap onPress={() => setConductorSheetOpen(true)} />
+          <Minimap
+            urgentCount={urgentCount}
+            onPress={() => setConductorSheetOpen(true)}
+          />
           <ConductorSheet
             visible={conductorSheetOpen}
             onClose={() => setConductorSheetOpen(false)}

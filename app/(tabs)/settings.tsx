@@ -967,6 +967,11 @@ export default function SettingsScreen() {
   // Oura connection state — polled on focus so the row reflects whether
   // the OAuth flow completed in Safari since the last visit.
   const [ouraConnected, setOuraConnected] = useState<boolean | null>(null);
+  // Nextdoor neighborhood connection state — same polled-on-focus
+  // pattern as Oura so the row flips to ✓ as soon as the OAuth
+  // round-trip completes in Safari.
+  const [nextdoorConnected, setNextdoorConnected] = useState<boolean | null>(null);
+  const [nextdoorNeighborhood, setNextdoorNeighborhood] = useState<string | null>(null);
   // API key modal — shows the household's API key with a copy button.
   const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
@@ -1099,6 +1104,14 @@ export default function SettingsScreen() {
           setOuraConnected(d.connected === true);
         })
         .catch(() => {});
+      fetch(`${API_BASE}/nextdoor/status?userId=${USER_ID}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled || !d) return;
+          setNextdoorConnected(d.connected === true);
+          setNextdoorNeighborhood(d.neighborhood || null);
+        })
+        .catch(() => {});
       // Household location — first hit also runs IP-based auto-detection
       // server-side, so subsequent renders show a real city even if the
       // user has never manually set it.
@@ -1127,6 +1140,33 @@ export default function SettingsScreen() {
 
   function handleConnectOura() {
     Linking.openURL(`${API_BASE}/oura/auth?userId=${USER_ID}`);
+  }
+
+  function handleConnectNextdoor() {
+    Linking.openURL(`${API_BASE}/nextdoor/auth?userId=${USER_ID}`);
+  }
+
+  async function handleDisconnectNextdoor() {
+    Alert.alert(
+      'Disconnect Nextdoor',
+      'Conductor will stop reading your neighborhood feed. Safety alerts, recommendations, and local deals from Nextdoor will no longer surface in your brief. You can reconnect anytime.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await fetch(`${API_BASE}/nextdoor/disconnect?userId=${USER_ID}`, { method: 'GET' });
+              setNextdoorConnected(false);
+              setNextdoorNeighborhood(null);
+            } catch {
+              // best-effort
+            }
+          },
+        },
+      ]
+    );
   }
 
   async function handleDisconnectOura() {
@@ -1441,6 +1481,31 @@ export default function SettingsScreen() {
             <View style={styles.ouraConnectRow}>
               <Text style={styles.ouraConnectLabel}>Oura Ring</Text>
               <Text style={styles.ouraConnectAction}>Connect Oura Ring →</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+        {/* Nextdoor neighborhood intelligence — connects via OAuth so
+            safety alerts and recommendations surface in the brief. */}
+        {nextdoorConnected === true ? (
+          <Row
+            label="🏘️ Nextdoor"
+            subtext={nextdoorNeighborhood ? `Connected — ${nextdoorNeighborhood}` : 'Connected'}
+            right={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Text style={styles.ouraConnectedText}>✓</Text>
+                <TouchableOpacity
+                  onPress={handleDisconnectNextdoor}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={styles.ouraDisconnectLink}>Disconnect</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        ) : (
+          <TouchableOpacity onPress={handleConnectNextdoor} activeOpacity={0.6}>
+            <View style={styles.ouraConnectRow}>
+              <Text style={styles.ouraConnectLabel}>🏘️ Nextdoor</Text>
+              <Text style={styles.ouraConnectAction}>Connect Nextdoor →</Text>
             </View>
           </TouchableOpacity>
         )}
