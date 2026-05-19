@@ -214,23 +214,53 @@ async function registerForPushNotifications() {
   }
 }
 
-const TAKEOFF_THEME = {
-  bg: '#0f0f0f',
-  title: '#f0ede8',
-  brief: '#f0ede8',
-  greeting: '#6b6865',
-  divider: 'rgba(255,255,255,0.12)',
-  timestamp: '#5a5855',
-};
+// Helper for theme-aware brass-tinted rgba values. The codebase had
+// dozens of `rgba(184,150,12,0.X)` literals — these are the brass
+// accent at varied alpha for borders, soft fills, dividers. Now the
+// accent comes from the user's chosen palette (brass / amber / copper /
+// forest / navy), so we parse its hex and emit rgba() at the desired
+// opacity.
+function accentRgba(accentColor: string, opacity: number): string {
+  const hex = accentColor.replace('#', '');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
 
-const CLEARANCE_THEME = {
-  bg: '#080808',
-  title: '#c8c5c0',
-  brief: '#d4d1cc',
-  greeting: '#4a4845',
-  divider: 'rgba(255,255,255,0.05)',
-  timestamp: '#3a3835',
+// Band themes were module-level constants tied to the dark palette.
+// They're now factories so they pick up the current theme + accent.
+// Clearance is intentionally a quieter variant of the same palette
+// (uses surface for bg, slightly muted text) — same evening-mood
+// design intent but rendered in whatever theme the user picked.
+type BandTheme = {
+  bg: string;
+  title: string;
+  brief: string;
+  greeting: string;
+  divider: string;
+  timestamp: string;
 };
+function makeTakeoffTheme(theme: { background: string; text: string; muted: string }): BandTheme {
+  return {
+    bg: theme.background,
+    title: theme.text,
+    brief: theme.text,
+    greeting: theme.muted,
+    divider: 'rgba(255,255,255,0.12)',
+    timestamp: theme.muted,
+  };
+}
+function makeClearanceTheme(theme: { background: string; surface: string; text: string; muted: string }): BandTheme {
+  return {
+    bg: theme.surface,
+    title: theme.text,
+    brief: theme.text,
+    greeting: theme.muted,
+    divider: 'rgba(255,255,255,0.05)',
+    timestamp: theme.muted,
+  };
+}
 
 // Time bands:
 //   < 7   → Overwatch (overnight idle screen)
@@ -358,7 +388,7 @@ function PulseHealthSection({ health }: { health: PulseData['health'] }) {
       </View>
     );
   }
-  const sleepColor = sleep != null && sleep < 6 ? '#b8960c' : '#a8a5a0';
+  const sleepColor = sleep != null && sleep < 6 ? accentColor : '#a8a5a0';
   let hrvBelowPct: number | null = null;
   if (hrv?.current != null && hrv?.baseline7d) {
     hrvBelowPct = Math.round((1 - hrv.current / hrv.baseline7d) * 100);
@@ -520,7 +550,7 @@ function PulseLoadSection({
   const safeUrgent = typeof urgentCount === 'number' ? urgentCount : 0;
   let loadColor = '#a8a5a0';
   if (safeLoad === 'heavy') loadColor = '#f59e0b';
-  else if (safeLoad === 'moderate') loadColor = '#b8960c';
+  else if (safeLoad === 'moderate') loadColor = accentColor;
   return (
     <View style={styles.pulseSection}>
       <Text style={styles.pulseSectionLabel}>SIGNAL LOAD</Text>
@@ -554,8 +584,8 @@ function PulseFlagsSection({ flags }: { flags: string[] }) {
 }
 
 export default function TakeoffScreen() {
-  const { theme: t_theme, accentColor: t_accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(t_theme, t_accentColor), [t_theme, t_accentColor]);
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
   const [transparency, setTransparency] = useState<string | null>(null);
@@ -1133,10 +1163,10 @@ export default function TakeoffScreen() {
       }
     });
 
-  const theme = mode.title === 'Takeoff' ? TAKEOFF_THEME : CLEARANCE_THEME;
+  const bandTheme = mode.title === 'Takeoff' ? makeTakeoffTheme(theme) : makeClearanceTheme(theme);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+    <View style={[styles.container, { backgroundColor: bandTheme.bg }]}>
       {/* Positioned to the left of the Minimap (40x40 at right: 20, top: 60).
           Minimap's left edge is 60px from screen right; HelpButton's right
           edge sits at 68px to give an 8px gap. */}
@@ -1147,10 +1177,10 @@ export default function TakeoffScreen() {
           contentContainerStyle={styles.content}>
           <Minimap />
           <View style={styles.header}>
-            <Text style={[styles.greeting, { color: theme.greeting }]}>
+            <Text style={[styles.greeting, { color: bandTheme.greeting }]}>
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
             </Text>
-            <Text style={[styles.title, { color: theme.title }]}>{mode.title}</Text>
+            <Text style={[styles.title, { color: bandTheme.title }]}>{mode.title}</Text>
           </View>
 
           {pulse ? (
@@ -1206,7 +1236,7 @@ export default function TakeoffScreen() {
                   onFocus={() => setAskFocused(true)}
                   onBlur={() => setAskFocused(false)}
                   placeholder="Ask Conductor..."
-                  placeholderTextColor="#5a5855"
+                  placeholderTextColor={theme.muted}
                   returnKeyType="send"
                   editable={!askLoading}
                   blurOnSubmit={false}
@@ -1261,10 +1291,10 @@ export default function TakeoffScreen() {
               ) : null}
               {!askLoading && !askError && askAnswer ? (
                 <View style={styles.askAnswerCard}>
-                  <Text style={[styles.askAnswerText, { color: theme.brief }]}>{askAnswer}</Text>
+                  <Text style={[styles.askAnswerText, { color: bandTheme.brief }]}>{askAnswer}</Text>
                   {speechActive ? (
                     <TouchableOpacity onPress={stopSpeech} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                      <Text style={{ color: '#5a5855', fontSize: 11, marginTop: 8 }}>■ Stop</Text>
+                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 8 }}>■ Stop</Text>
                     </TouchableOpacity>
                   ) : null}
                   {askAction?.type === 'confirm_setting' ? (
@@ -1281,10 +1311,10 @@ export default function TakeoffScreen() {
                           flex: 1,
                           paddingVertical: 11,
                           borderRadius: 22,
-                          backgroundColor: '#b8960c',
+                          backgroundColor: accentColor,
                           alignItems: 'center',
                         }}>
-                        <Text style={{ color: '#0f0f0f', fontSize: 13, fontWeight: '600' }}>
+                        <Text style={{ color: theme.background, fontSize: 13, fontWeight: '600' }}>
                           Yes, do it →
                         </Text>
                       </TouchableOpacity>
@@ -1295,10 +1325,10 @@ export default function TakeoffScreen() {
                           paddingVertical: 11,
                           borderRadius: 22,
                           borderWidth: StyleSheet.hairlineWidth,
-                          borderColor: 'rgba(255,255,255,0.06)',
+                          borderColor: theme.inputBackground,
                           alignItems: 'center',
                         }}>
-                        <Text style={{ color: '#5a5855', fontSize: 13 }}>No thanks</Text>
+                        <Text style={{ color: theme.muted, fontSize: 13 }}>No thanks</Text>
                       </TouchableOpacity>
                     </View>
                   ) : null}
@@ -1316,7 +1346,7 @@ export default function TakeoffScreen() {
 
           <Text style={styles.inFlowDate}>{date}</Text>
 
-          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
+          <View style={[styles.divider, { backgroundColor: bandTheme.divider }]} />
 
           <TouchableOpacity
             onPress={() => setShowYesterday(true)}
@@ -1326,12 +1356,12 @@ export default function TakeoffScreen() {
 
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator color={theme.brief} />
+              <ActivityIndicator color={bandTheme.brief} />
               <Text style={styles.loadingText}>Generating your brief...</Text>
             </View>
           ) : (
             <View style={styles.briefContainer}>
-              <Text style={[styles.brief, { color: theme.brief }]}>
+              <Text style={[styles.brief, { color: bandTheme.brief }]}>
                 {(segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment]).map((seg, i) => {
                   if (seg.type === 'signal') {
                     const color = (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
@@ -1615,7 +1645,7 @@ export default function TakeoffScreen() {
             <View style={styles.yearInReviewWrap}>
               <View style={styles.yearInReviewBrassLine} />
               <Text style={styles.yearInReviewLabel}>THIS YEAR</Text>
-              <Text style={[styles.yearInReviewText, { color: theme.brief }]}>
+              <Text style={[styles.yearInReviewText, { color: bandTheme.brief }]}>
                 {yearInReview}
               </Text>
               <Text style={styles.yearInReviewFooter}>
@@ -1632,7 +1662,7 @@ export default function TakeoffScreen() {
             <View style={styles.weekInReviewWrap}>
               <View style={styles.weekInReviewBrassLine} />
               <Text style={styles.weekInReviewLabel}>THIS WEEK</Text>
-              <Text style={[styles.weekInReviewText, { color: theme.brief }]}>
+              <Text style={[styles.weekInReviewText, { color: bandTheme.brief }]}>
                 {weekInReview}
               </Text>
             </View>
@@ -1645,7 +1675,7 @@ export default function TakeoffScreen() {
             <View style={styles.weekInReviewWrap}>
               <View style={styles.weekInReviewBrassLine} />
               <Text style={styles.weekInReviewLabel}>THIS MONTH</Text>
-              <Text style={[styles.weekInReviewText, { color: theme.brief }]}>
+              <Text style={[styles.weekInReviewText, { color: bandTheme.brief }]}>
                 {monthInReview}
               </Text>
             </View>
@@ -1671,7 +1701,7 @@ export default function TakeoffScreen() {
                 <Animated.Text
                   style={[
                     styles.theReadText,
-                    { color: theme.brief, opacity: theReadOpacity },
+                    { color: bandTheme.brief, opacity: theReadOpacity },
                   ]}>
                   {theRead}
                 </Animated.Text>
@@ -1706,7 +1736,7 @@ export default function TakeoffScreen() {
                   style={[
                     styles.feedbackSigX,
                     {
-                      color: feedback === 'down' ? '#f0ede8' : '#5a5855',
+                      color: feedback === 'down' ? theme.text : theme.muted,
                       opacity: feedback === 'up' ? 0.2 : 1,
                     },
                   ]}>
@@ -1847,7 +1877,7 @@ export default function TakeoffScreen() {
   );
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string };
+type ThemeColors = { background: string; surface: string; text: string; muted: string; border: string; inputBackground: string };
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
   container: {
@@ -1865,7 +1895,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 16,
   },
   pulseLabel: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 9,
     letterSpacing: 2,
     textTransform: 'uppercase',
@@ -1884,13 +1914,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(184, 150, 12, 0.18)',
+    borderTopColor: accentRgba(accentColor, 0.18),
   },
   pulseSection: {
     marginBottom: 14,
   },
   pulseSectionLabel: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 9,
     letterSpacing: 2,
     textTransform: 'uppercase',
@@ -1902,7 +1932,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 2,
   },
   pulseEmpty: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 12,
     fontStyle: 'italic',
     lineHeight: 18,
@@ -1917,7 +1947,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: theme.inputBackground,
     paddingTop: 12,
   },
   askInput: {
@@ -1927,12 +1957,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 6,
   },
   askSend: {
-    color: '#b8960c',
+    color: accentColor,
     fontSize: 16,
     paddingLeft: 12,
   },
   askThinking: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 12,
     fontStyle: 'italic',
     marginTop: 8,
@@ -1951,11 +1981,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'rgba(184, 150, 12, 0.4)',
+    borderColor: accentRgba(accentColor, 0.4),
     borderRadius: 14,
   },
   askChipText: {
-    color: '#b8960c',
+    color: accentColor,
     fontSize: 11,
     letterSpacing: 0.3,
   },
@@ -1964,7 +1994,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingLeft: 12,
     paddingVertical: 10,
     borderLeftWidth: 2,
-    borderLeftColor: '#b8960c',
+    borderLeftColor: accentColor,
   },
   askAnswerText: {
     fontSize: 14,
@@ -1975,7 +2005,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     alignSelf: 'flex-start',
   },
   askAnother: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 11,
     letterSpacing: 0.3,
   },
@@ -1984,7 +2014,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   // because the older theme.timestamp pull rendered it darker on
   // Clearance than the spec wanted.
   inFlowDate: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 12,
     letterSpacing: 0.3,
     textAlign: 'right',
@@ -1995,7 +2025,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   // is the wrapping TouchableOpacity; the Text style only handles
   // visual placement.
   inFlowYesterday: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 11,
     letterSpacing: 0.5,
     textAlign: 'right',
@@ -2011,20 +2041,20 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 32,
   },
   greeting: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 16,
     letterSpacing: 0.5,
     marginBottom: 6,
   },
   title: {
-    color: '#f0ede8',
+    color: theme.text,
     fontSize: 42,
     fontWeight: '700',
     letterSpacing: -1,
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: theme.border,
     // No marginBottom — the in-flow Yesterday's Programme link sits
     // directly below the divider with its own marginTop:8 +
     // marginBottom:16, which together produce the gap to the brief.
@@ -2044,7 +2074,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginTop: 16,
   },
   brief: {
-    color: '#f0ede8',
+    color: theme.text,
     fontSize: 20,
     lineHeight: 32,
     fontWeight: '300',
@@ -2058,7 +2088,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   weekInReviewBrassLine: {
     height: 1,
-    backgroundColor: 'rgba(184, 150, 12, 0.2)',
+    backgroundColor: accentRgba(accentColor, 0.2),
     marginBottom: 16,
   },
   yearInReviewWrap: {
@@ -2067,11 +2097,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   yearInReviewBrassLine: {
     height: 2,
-    backgroundColor: 'rgba(184, 150, 12, 0.4)',
+    backgroundColor: accentRgba(accentColor, 0.4),
     marginBottom: 18,
   },
   yearInReviewLabel: {
-    color: '#b8960c',
+    color: accentColor,
     fontSize: 10,
     letterSpacing: 3,
     fontWeight: '600',
@@ -2082,7 +2112,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     lineHeight: 24,
   },
   yearInReviewFooter: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 10,
     fontStyle: 'italic',
     marginTop: 14,
@@ -2094,18 +2124,18 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 14,
     paddingLeft: 16,
     borderLeftWidth: 3,
-    borderLeftColor: '#b8960c',
-    backgroundColor: 'rgba(184, 150, 12, 0.05)',
+    borderLeftColor: accentColor,
+    backgroundColor: accentRgba(accentColor, 0.05),
     borderRadius: 6,
   },
   maintOfferTitle: {
-    color: '#f0ede8',
+    color: theme.text,
     fontSize: 13,
     fontWeight: '500',
     marginBottom: 4,
   },
   maintOfferSub: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 12,
     fontStyle: 'italic',
     marginBottom: 12,
@@ -2117,10 +2147,10 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(184, 150, 12, 0.55)',
-    backgroundColor: 'rgba(184, 150, 12, 0.10)',
+    borderColor: accentRgba(accentColor, 0.55),
+    backgroundColor: accentRgba(accentColor, 0.10),
   },
-  maintOfferPrimaryText: { color: '#b8960c', fontSize: 12, fontWeight: '600' },
+  maintOfferPrimaryText: { color: accentColor, fontSize: 12, fontWeight: '600' },
   maintOfferSecondary: {
     paddingVertical: 7,
     paddingHorizontal: 14,
@@ -2128,23 +2158,23 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.10)',
   },
-  maintOfferSecondaryText: { color: '#5a5855', fontSize: 12 },
+  maintOfferSecondaryText: { color: theme.muted, fontSize: 12 },
   conductorQWrap: {
     marginTop: 18,
     marginBottom: 6,
     paddingTop: 14,
     paddingBottom: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(184, 150, 12, 0.18)',
+    borderTopColor: accentRgba(accentColor, 0.18),
   },
   conductorQLabel: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 9,
     letterSpacing: 2,
     marginBottom: 8,
   },
   conductorQText: {
-    color: '#f0ede8',
+    color: theme.text,
     fontSize: 13,
     fontStyle: 'italic',
     lineHeight: 19,
@@ -2161,11 +2191,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     borderWidth: StyleSheet.hairlineWidth,
   },
   conductorQOnIt: {
-    borderColor: 'rgba(184, 150, 12, 0.55)',
-    backgroundColor: 'rgba(184, 150, 12, 0.08)',
+    borderColor: accentRgba(accentColor, 0.55),
+    backgroundColor: accentRgba(accentColor, 0.08),
   },
   conductorQOnItText: {
-    color: '#b8960c',
+    color: accentColor,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -2173,11 +2203,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     borderColor: 'rgba(255,255,255,0.10)',
   },
   conductorQRemoveText: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 12,
   },
   conductorQAckedText: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 12,
     fontStyle: 'italic',
     paddingVertical: 4,
@@ -2191,7 +2221,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 4,
   },
   autoResHeaderText: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 11,
     letterSpacing: 0.3,
   },
@@ -2199,7 +2229,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: theme.inputBackground,
   },
   autoResRow: {
     flexDirection: 'row',
@@ -2213,12 +2243,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontSize: 13,
   },
   autoResLabel: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 11,
     fontStyle: 'italic',
   },
   autoResDismiss: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 14,
     paddingHorizontal: 4,
   },
@@ -2227,7 +2257,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 6,
   },
   autoResDismissAllText: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 10,
   },
   autoResFooter: {
@@ -2237,7 +2267,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingTop: 6,
   },
   autoResViewAllText: {
-    color: '#b8960c',
+    color: accentColor,
     fontSize: 11,
     letterSpacing: 0.3,
   },
@@ -2252,23 +2282,23 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 7,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(184, 150, 12, 0.55)',
-    backgroundColor: 'rgba(184, 150, 12, 0.07)',
+    borderColor: accentRgba(accentColor, 0.55),
+    backgroundColor: accentRgba(accentColor, 0.07),
   },
   handoffBtnText: {
-    color: '#b8960c',
+    color: accentColor,
     fontSize: 12,
     letterSpacing: 0.3,
     fontWeight: '500',
   },
   handoffAckedText: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 12,
     fontStyle: 'italic',
     paddingVertical: 7,
   },
   weekInReviewLabel: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 9,
     letterSpacing: 2,
     textTransform: 'uppercase',
@@ -2285,7 +2315,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     height: 1,
     // Brass (#b8960c) at 20% opacity — a thin warm line that
     // separates the brief proper from the overflow trigger.
-    backgroundColor: 'rgba(184, 150, 12, 0.2)',
+    backgroundColor: accentRgba(accentColor, 0.2),
   },
   theReadTrigger: {
     alignSelf: 'flex-start',
@@ -2293,7 +2323,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 4,
   },
   theReadTriggerText: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 10,
     letterSpacing: 2,
   },
@@ -2314,12 +2344,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginTop: 12,
   },
   feedbackSigPrompt: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 11,
     letterSpacing: 0.3,
   },
   feedbackSigCheck: {
-    color: '#f0ede8',
+    color: theme.text,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
@@ -2336,7 +2366,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 4,
   },
   transparencyLinkText: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 11,
     letterSpacing: 0.5,
     textAlign: 'center',
@@ -2353,17 +2383,17 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 22,
   },
   quickActionSheet: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: theme.surface,
     borderRadius: 14,
     paddingVertical: 18,
     paddingHorizontal: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(184, 150, 12, 0.35)',
+    borderColor: accentRgba(accentColor, 0.35),
     width: '100%',
     maxWidth: 360,
   },
   quickActionHeader: {
-    color: '#f0ede8',
+    color: theme.text,
     fontSize: 13,
     fontStyle: 'italic',
     marginBottom: 14,
@@ -2383,11 +2413,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     borderWidth: StyleSheet.hairlineWidth,
   },
   quickActionDone: {
-    borderColor: 'rgba(184, 150, 12, 0.65)',
-    backgroundColor: 'rgba(184, 150, 12, 0.10)',
+    borderColor: accentRgba(accentColor, 0.65),
+    backgroundColor: accentRgba(accentColor, 0.10),
   },
   quickActionDoneText: {
-    color: '#b8960c',
+    color: accentColor,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -2415,14 +2445,14 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     justifyContent: 'flex-end',
   },
   transparencySheet: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: theme.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 24,
     paddingBottom: 36,
   },
   transparencyHeader: {
-    color: '#f0ede8',
+    color: theme.text,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.2,
@@ -2436,20 +2466,20 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     letterSpacing: 0.2,
   },
   transparencyCloseBtn: {
-    backgroundColor: '#f0ede8',
+    backgroundColor: theme.text,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
   transparencyCloseBtnText: {
-    color: '#0f0f0f',
+    color: theme.background,
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
   onboarding: {
     flex: 1,
-    backgroundColor: '#0f0f0f',
+    backgroundColor: theme.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
@@ -2458,25 +2488,25 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     width: 64,
     height: 64,
     borderRadius: 16,
-    backgroundColor: '#f0ede8',
+    backgroundColor: theme.text,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
   logoMark: {
-    color: '#0f0f0f',
+    color: theme.background,
     fontSize: 32,
     fontWeight: '700',
   },
   onboardingTitle: {
-    color: '#f0ede8',
+    color: theme.text,
     fontSize: 32,
     fontWeight: '700',
     letterSpacing: -1,
     marginBottom: 8,
   },
   onboardingSubtitle: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 16,
     letterSpacing: 0.3,
     marginBottom: 32,
@@ -2484,7 +2514,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   onboardingDivider: {
     width: '100%',
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: theme.border,
     marginBottom: 32,
   },
   onboardingBody: {
@@ -2495,7 +2525,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 40,
   },
   connectButton: {
-    backgroundColor: '#f0ede8',
+    backgroundColor: theme.text,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 12,
@@ -2504,13 +2534,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     alignItems: 'center',
   },
   connectButtonText: {
-    color: '#0f0f0f',
+    color: theme.background,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
   onboardingPrivacy: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 12,
     textAlign: 'center',
     letterSpacing: 0.3,
