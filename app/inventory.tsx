@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from './theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -187,17 +188,8 @@ function InventoryScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}>
+      <ScreenHeader title="Home Inventory" subtitle="What Conductor knows about your home" />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.6}
-          style={styles.topBack}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.topBackText}>← Return</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title}>Home Inventory</Text>
-        <Text style={styles.subtitle}>What Conductor knows about your home</Text>
 
         {loading ? (
           <View style={styles.empty}><ActivityIndicator color={MUTED} /></View>
@@ -608,7 +600,7 @@ function AppliancesSection({
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
-    scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 80 },
+    scroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 80 },
     topBack: {
       alignSelf: 'flex-start',
       paddingVertical: 6,

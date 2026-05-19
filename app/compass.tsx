@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { HelpButton } from '@/components/HelpButton';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { TYPE_META } from '@/components/signalTypes';
 import { useTheme } from './theme';
 
@@ -279,26 +280,22 @@ export default function CompassScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-    {/* Offset left so the inline "Share" text in topBar (right edge)
-        doesn't sit under the HelpButton. */}
-    <HelpButton cardId="patterns" right={64} />
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.6}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.topBackText}>← Return</Text>
-        </TouchableOpacity>
+    <ScreenHeader
+      title="Compass"
+      subtitle="What Conductor has learned about your household"
+      rightAction={
         <TouchableOpacity
           onPress={() => router.push('/summary-card?period=week' as never)}
           activeOpacity={0.6}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={styles.topShareText}>Share</Text>
         </TouchableOpacity>
-      </View>
-      <Text style={styles.title}>Compass</Text>
-      <Text style={styles.subtitle}>What Conductor has learned about your household</Text>
+      }
+    />
+    {/* Offset left so the HelpButton doesn't sit under the Minimap
+        (right edge of the new ScreenHeader). */}
+    <HelpButton cardId="patterns" right={64} />
+    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
 
       {loading && (
         <View style={styles.loading}>
@@ -446,7 +443,7 @@ export default function CompassScreen() {
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
-    scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+    scroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 60 },
     title: {
       color: theme.text,
       fontSize: 28,

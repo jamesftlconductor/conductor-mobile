@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 
 import { HelpButton } from '@/components/HelpButton';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { TYPE_META } from '@/components/signalTypes';
 import { useTheme } from './theme';
 
@@ -141,17 +142,9 @@ function JournalScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ScreenHeader title="Memory" subtitle="What Conductor has handled" />
     <HelpButton cardId="caught" />
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <TouchableOpacity
-        onPress={() => router.back()}
-        activeOpacity={0.6}
-        style={styles.topBack}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Text style={styles.topBackText}>← Return</Text>
-      </TouchableOpacity>
-      <Text style={styles.title}>Memory</Text>
-      <Text style={styles.subtitle}>What Conductor has handled</Text>
 
       {streak && streak.currentStreak >= 0 && (
         <View style={styles.streakCard}>
@@ -255,7 +248,7 @@ function JournalScreen() {
 function makeStyles(theme: { background: string; text: string; muted: string }, accentColor: string) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
-    scroll: { paddingHorizontal: 22, paddingTop: 60 },
+    scroll: { paddingHorizontal: 22, paddingTop: 8 },
     topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
     topBackText: { color: theme.muted, fontSize: 13, letterSpacing: 0.3 },
     title: { color: theme.text, fontSize: 28, fontWeight: '300', marginTop: 14, letterSpacing: 0.2 },

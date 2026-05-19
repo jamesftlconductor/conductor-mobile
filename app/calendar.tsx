@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 
 import { AddSignalSheet } from '@/components/AddSignalSheet';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { metaForRing, type Signal, TYPE_META } from '@/components/signalTypes';
 import { useTheme } from './theme';
@@ -211,31 +212,27 @@ export default function CalendarScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
+      <ScreenHeader
+        title={monthLabel(year, month0)}
+        rightAction={
+          <TouchableOpacity
+            onPress={() => router.push('/programme' as never)}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.weekViewLink}>2-week →</Text>
+          </TouchableOpacity>
+        }
+      />
+      <View style={styles.monthSwitcher}>
         <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.6}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.topBackText}>← Return</Text>
+          onPress={() => shiftMonth(-1)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={styles.arrow}>← Previous</Text>
         </TouchableOpacity>
-        <View style={styles.monthSwitcher}>
-          <TouchableOpacity
-            onPress={() => shiftMonth(-1)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.arrow}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.monthLabel}>{monthLabel(year, month0)}</Text>
-          <TouchableOpacity
-            onPress={() => shiftMonth(1)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.arrow}>→</Text>
-          </TouchableOpacity>
-        </View>
         <TouchableOpacity
-          onPress={() => router.push('/programme' as never)}
-          activeOpacity={0.6}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.weekViewLink}>2-week view →</Text>
+          onPress={() => shiftMonth(1)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={styles.arrow}>Next →</Text>
         </TouchableOpacity>
       </View>
 
@@ -469,7 +466,10 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     monthSwitcher: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
+      justifyContent: 'space-between',
+      paddingHorizontal: 22,
+      paddingVertical: 4,
+      paddingBottom: 8,
     },
     monthLabel: {
       color: theme.text,

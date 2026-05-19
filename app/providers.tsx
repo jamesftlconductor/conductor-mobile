@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from './theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 
 const USER_ID = 'james_totalhome_gmail_com';
@@ -119,31 +120,23 @@ export default function ProvidersScreen() {
 
   return (
     <View style={styles.container}>
+      <ScreenHeader
+        title="Service Providers"
+        subtitle="Who Conductor has found and saved"
+        rightAction={
+          <TouchableOpacity
+            onPress={() => setAddModalVisible(true)}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.addLink}>+ Add</Text>
+          </TouchableOpacity>
+        }
+      />
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={MUTED} />
         }>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.6}
-          style={styles.topBack}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.topBackText}>← Return</Text>
-        </TouchableOpacity>
-
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Service Providers</Text>
-            <Text style={styles.subtitle}>Who Conductor has found and saved</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setAddModalVisible(true)}
-            activeOpacity={0.6}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.addLink}>+ Add</Text>
-          </TouchableOpacity>
-        </View>
 
         {loading ? (
           <View style={styles.empty}>
@@ -301,7 +294,7 @@ function AddProviderModal({
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
-    scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+    scroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 60 },
     topBack: {
       alignSelf: 'flex-start',
       paddingVertical: 6,

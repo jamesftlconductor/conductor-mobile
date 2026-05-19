@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { HelpButton } from '@/components/HelpButton';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -488,6 +489,7 @@ export default function HorizonScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ScreenHeader title="The Horizon" subtitle="What Conductor is watching ahead" />
     <HelpButton cardId="horizon" />
     <ScrollView
       style={styles.container}
@@ -496,16 +498,6 @@ export default function HorizonScreen() {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={MUTED} />
       }>
-      <TouchableOpacity
-        onPress={() => router.back()}
-        activeOpacity={0.6}
-        style={styles.topBack}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Text style={styles.topBackText}>← Return</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>The Horizon</Text>
-      <Text style={styles.subtitle}>What Conductor is watching ahead</Text>
 
       <ScrollView
         horizontal
@@ -716,7 +708,7 @@ function HorizonItemRow({
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
-    scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+    scroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 60 },
     topBack: {
       alignSelf: 'flex-start',
       paddingVertical: 6,

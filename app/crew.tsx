@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { AddCrewSheet } from '@/components/AddCrewSheet';
 import { HelpButton } from '@/components/HelpButton';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import {
   ActivityIndicator,
   Alert,
@@ -603,8 +604,18 @@ export default function CrewScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-    {/* Offset left so the "+" add-crew button in the topBar (right edge)
-        has clear space. */}
+    <ScreenHeader
+      title="Crew"
+      subtitle="Who Conductor is watching over"
+      rightAction={
+        <TouchableOpacity
+          onPress={() => setShowAddCrew(true)}
+          activeOpacity={0.6}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={styles.topAddText}>+</Text>
+        </TouchableOpacity>
+      }
+    />
     <HelpButton cardId="crew" right={50} />
     <ScrollView
       style={styles.container}
@@ -619,22 +630,6 @@ export default function CrewScreen() {
           }}
         />
       }>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.6}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.topBackText}>← Return</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setShowAddCrew(true)}
-          activeOpacity={0.6}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.topAddText}>+</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.title}>Crew</Text>
-      <Text style={styles.subtitle}>Who Conductor is watching over</Text>
 
       {loading && (
         <View style={styles.loading}>
@@ -1362,7 +1357,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     backgroundColor: BG,
   },
   scroll: {
-    paddingTop: 60,
+    paddingTop: 4,
     paddingHorizontal: 24,
     paddingBottom: 48,
   },

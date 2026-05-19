@@ -215,7 +215,20 @@ function PulsingDot({
   );
 }
 
-export function Minimap() {
+type MinimapProps = {
+  // 'floating' (default) keeps the legacy absolute-positioned widget
+  // used on Ground. 'inline' drops the position styles so the
+  // minimap can sit inside a ScreenHeader row at the far right.
+  floating?: boolean;
+  // Override the default tap behavior. Floating Ground minimap opens
+  // ConductorSheet; inline header minimap on every other screen also
+  // opens ConductorSheet. Callers pass their own onPress (typically
+  // setSheetOpen(true)). When omitted, falls back to the legacy
+  // navigation-to-Hover behavior for backwards compat.
+  onPress?: () => void;
+};
+
+export function Minimap({ floating = true, onPress }: MinimapProps = {}) {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('family');
   const tapScale = useRef(new Animated.Value(1)).current;
@@ -282,13 +295,22 @@ export function Minimap() {
         useNativeDriver: true,
       }),
     ]).start();
-    setTimeout(() => router.push('/(tabs)/hover'), 120);
+    // Custom onPress overrides the legacy nav-to-Hover behavior.
+    // Wait 120ms before firing so the press-down animation gets a
+    // visible bounce before whatever the parent does next.
+    if (onPress) {
+      setTimeout(onPress, 120);
+    } else {
+      setTimeout(() => router.push('/(tabs)/hover'), 120);
+    }
   }
+
+  const ringStyle = floating ? styles.touchWrapFloating : styles.touchWrapInline;
 
   return (
     <Pressable
       onPress={handlePress}
-      style={styles.touchWrap}
+      style={ringStyle}
       hitSlop={8}>
       <Animated.View
         style={[
@@ -311,11 +333,19 @@ export function Minimap() {
 }
 
 const styles = StyleSheet.create({
-  touchWrap: {
+  // Legacy floating behavior — used on Ground where the minimap
+  // sits absolutely top-right above the brief content.
+  touchWrapFloating: {
     position: 'absolute',
     top: 60,
     right: 20,
     zIndex: 10,
+  },
+  // Inline behavior — used inside ScreenHeader rows on every other
+  // screen. No absolute positioning; the parent flex layout decides
+  // where it goes.
+  touchWrapInline: {
+    // intentionally empty — flex parent positions it
   },
   circle: {
     width: SIZE,

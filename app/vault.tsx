@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { SecureScreen } from '@/components/SecureScreen';
 import { CameraScanner, type ScanResult } from '@/components/CameraScanner';
 import { HelpButton } from '@/components/HelpButton';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -302,22 +303,15 @@ function VaultScreen() {
   return (
     <View style={styles.container}>
       <HelpButton cardId="vault" />
+      <ScreenHeader title="Vault" />
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={MUTED} />
         }
         keyboardShouldPersistTaps="handled">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.6}
-          style={styles.topBack}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.topBackText}>← Return</Text>
-        </TouchableOpacity>
 
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Vault</Text>
           <View style={styles.sortPills}>
             {(['urgency', 'category', 'amount', 'added'] as SortKey[]).map((k) => (
               <TouchableOpacity
@@ -1266,7 +1260,7 @@ function AddVaultModal({
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 80 },
+  scroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 80 },
   topBack: {
     alignSelf: 'flex-start',
     paddingVertical: 6,

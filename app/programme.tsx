@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { metaFor, type Signal } from '@/components/signalTypes';
 import { useTheme } from './theme';
 
@@ -365,30 +366,24 @@ export default function ProgrammeScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scroll}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={MUTED} />
-      }>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.6}
-          style={styles.topBack}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.topBackText}>← Return</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => router.push('/calendar' as never)}
-          activeOpacity={0.6}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.monthLink}>Month view →</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.title}>The Programme</Text>
-      <Text style={styles.subtitle}>Everything in motion</Text>
+    <View style={styles.container}>
+      <ScreenHeader
+        title="The Programme"
+        subtitle="Everything in motion"
+        rightAction={
+          <TouchableOpacity
+            onPress={() => router.push('/calendar' as never)}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.monthLink}>Month →</Text>
+          </TouchableOpacity>
+        }
+      />
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={MUTED} />
+        }>
 
       {loading && (
         <View style={styles.empty}>
@@ -431,7 +426,8 @@ export default function ProgrammeScreen() {
             ))}
           </View>
         ))}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

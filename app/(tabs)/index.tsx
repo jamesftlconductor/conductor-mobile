@@ -11,6 +11,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
+import { ConductorSheet } from '@/components/ConductorSheet';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
@@ -647,6 +648,10 @@ export default function TakeoffScreen() {
   // params from FinaleSheet). Pairs with conductorHaptics.signalRested
   // for the haptic side of the moment.
   const [restedToast, setRestedToast] = useState(false);
+  // Conductor sheet — bottom sheet opened by tapping the Minimap.
+  // Same component used by ScreenHeader on every other screen, so the
+  // affordance is uniform.
+  const [conductorSheetOpen, setConductorSheetOpen] = useState(false);
 
   // Took Care Of band — items Conductor auto-resolved or expired
   // in the last 48h. Collapsed by default. Per-item dismissals are
@@ -1187,7 +1192,11 @@ export default function TakeoffScreen() {
         <ScrollView
           style={styles.scrollFlex}
           contentContainerStyle={styles.content}>
-          <Minimap />
+          <Minimap onPress={() => setConductorSheetOpen(true)} />
+          <ConductorSheet
+            visible={conductorSheetOpen}
+            onClose={() => setConductorSheetOpen(false)}
+          />
           <View style={styles.header}>
             <Text style={[styles.greeting, { color: bandTheme.greeting }]}>
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
