@@ -21,18 +21,18 @@ import {
   View,
 } from 'react-native';
 
+import { useTheme } from './theme';
+
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
 const FAINT = '#3a3835';
-const BRASS = '#b8960c';
 const AMBER = '#f59e0b';
 const RED = '#ef4444';
 const SAGE = '#86efac';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
+
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -113,12 +113,12 @@ function daysOut(renewalDate?: string | null): number | null {
   return Math.round((ms - Date.now()) / DAY_MS);
 }
 
-function urgencyColor(days: number | null): string {
-  if (days == null) return MUTED;
+function urgencyColor(days: number | null, mutedColor: string, accentColor: string): string {
+  if (days == null) return mutedColor;
   if (days < 14) return RED;
   if (days <= 60) return AMBER;
-  if (days <= 90) return BRASS;
-  return MUTED;
+  if (days <= 90) return accentColor;
+  return mutedColor;
 }
 
 function formatDays(days: number | null): string {
@@ -178,6 +178,9 @@ export default function VaultScreenSecured() {
 }
 
 function VaultScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
   const [items, setItems] = useState<VaultItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -410,6 +413,8 @@ function VaultScreen() {
 }
 
 function VaultEmptyState({ onAddManually }: { onAddManually: () => void }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <View style={styles.emptyStateWrap}>
       <Text style={styles.emptyHeadline}>Nothing in your Vault yet.</Text>
@@ -448,9 +453,11 @@ function VaultItemRow({
   onHandled: () => void;
   onRemove: () => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const cat = CATEGORY_BY_KEY[backendToDisplay(item.category)];
   const days = daysOut(item.renewalDate);
-  const dColor = urgencyColor(days);
+  const dColor = urgencyColor(days, theme.muted, accentColor);
   const delta = recentPriceDelta(item);
   const isAuto = item.source === 'auto-detected';
 
@@ -575,6 +582,8 @@ function InlineField({
   multiline?: boolean;
   keyboardType?: 'default' | 'phone-pad' | 'email-address';
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <View style={styles.inlineField}>
       <Text style={styles.inlineLabel}>{label}</Text>
@@ -613,6 +622,9 @@ const POPULAR_SUBSCRIPTIONS: { emoji: string; name: string; amount: string }[] =
 function PopularSubscriptionsRow({
   onPick,
 }: { onPick: (name: string, amount: string) => void }) {
+  const { theme } = useTheme();
+  const MUTED = theme.muted;
+  const OFF_WHITE = theme.text;
   return (
     <View style={{ marginBottom: 14 }}>
       <Text
@@ -659,6 +671,11 @@ function AddVaultModal({
   onClose: () => void;
   onAdded: (item: VaultItem) => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
+  const BRASS = accentColor;
+  const OFF_WHITE = theme.text;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [category, setCategory] = useState<string>('subscriptions');
   const [description, setDescription] = useState('');
@@ -1243,8 +1260,9 @@ function AddVaultModal({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 80 },
   topBack: {
     alignSelf: 'flex-start',
@@ -1252,7 +1270,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginBottom: 8,
   },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
+  topBackText: { color: theme.muted, fontSize: 13, letterSpacing: 0.3 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -1260,7 +1278,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   title: {
-    color: OFF_WHITE,
+    color: theme.text,
     fontSize: 28,
     fontWeight: '700',
     letterSpacing: -0.5,
@@ -1273,7 +1291,7 @@ const styles = StyleSheet.create({
     maxWidth: 220,
   },
   sortPill: {
-    color: MUTED,
+    color: theme.muted,
     fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -1282,8 +1300,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   sortPillActive: {
-    color: BG,
-    backgroundColor: BRASS,
+    color: theme.background,
+    backgroundColor: accentColor,
     fontWeight: '700',
   },
   searchRow: {
@@ -1296,8 +1314,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 20,
   },
-  searchIcon: { fontSize: 14, color: MUTED },
-  searchInput: { flex: 1, color: OFF_WHITE, fontSize: 13, padding: 0 },
+  searchIcon: { fontSize: 14, color: theme.muted },
+  searchInput: { flex: 1, color: theme.text, fontSize: 13, padding: 0 },
   section: { marginBottom: 24 },
   sharedSection: {
     marginTop: 28,
@@ -1306,7 +1324,7 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.06)',
   },
   sharedHeader: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 10,
     letterSpacing: 2,
     marginBottom: 8,
@@ -1324,24 +1342,24 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sharedDesc: {
-    color: '#f0ede8',
+    color: theme.text,
     fontSize: 13,
     lineHeight: 18,
   },
   sharedFromBadge: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 9,
     letterSpacing: 0.5,
     marginTop: 6,
     textTransform: 'uppercase',
   },
   sharedMeta: {
-    color: '#5a5855',
+    color: theme.muted,
     fontSize: 11,
     marginTop: 4,
   },
   sectionHeader: {
-    color: BRASS,
+    color: accentColor,
     fontSize: 10,
     letterSpacing: 3,
     fontWeight: '600',
@@ -1360,11 +1378,11 @@ const styles = StyleSheet.create({
   itemHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   itemEmoji: { fontSize: 22, lineHeight: 26, width: 30 },
   itemBody: { flex: 1, gap: 3 },
-  itemDescription: { color: OFF_WHITE, fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  itemProvider: { color: MUTED, fontSize: 12 },
+  itemDescription: { color: theme.text, fontSize: 15, fontWeight: '600', lineHeight: 20 },
+  itemProvider: { color: theme.muted, fontSize: 12 },
   itemMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 2 },
   itemDays: { fontSize: 12, letterSpacing: 0.3 },
-  itemAmount: { color: MUTED, fontSize: 11 },
+  itemAmount: { color: theme.muted, fontSize: 11 },
   itemBadgeAuto: { color: AMBER, fontSize: 9, letterSpacing: 0.5, fontWeight: '600' },
   itemBadgePrice: { color: AMBER, fontSize: 11, fontWeight: '600' },
   itemBadgeHandled: { color: SAGE, fontSize: 14 },
@@ -1375,13 +1393,13 @@ const styles = StyleSheet.create({
   },
   inlineField: { gap: 3 },
   inlineLabel: {
-    color: MUTED,
+    color: theme.muted,
     fontSize: 10,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
   inlineInput: {
-    color: OFF_WHITE,
+    color: theme.text,
     fontSize: 13,
     paddingVertical: 4,
     paddingHorizontal: 0,
@@ -1390,22 +1408,22 @@ const styles = StyleSheet.create({
   },
   inlineMultiline: { minHeight: 50 },
   priceHistoryBlock: { gap: 2, marginTop: 4 },
-  priceHistoryLine: { color: MUTED, fontSize: 11, lineHeight: 16 },
-  sourceLine: { color: MUTED, fontSize: 11, fontStyle: 'italic', marginTop: 6 },
+  priceHistoryLine: { color: theme.muted, fontSize: 11, lineHeight: 16 },
+  sourceLine: { color: theme.muted, fontSize: 11, fontStyle: 'italic', marginTop: 6 },
   actionRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   actionBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
-  actionHandled: { backgroundColor: BRASS },
+  actionHandled: { backgroundColor: accentColor },
   shareNetworkLink: {
     alignSelf: 'flex-start',
     marginTop: 10,
     paddingVertical: 4,
   },
   shareNetworkLinkText: {
-    color: BRASS,
+    color: accentColor,
     fontSize: 12,
     letterSpacing: 0.3,
   },
-  actionHandledText: { color: BG, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  actionHandledText: { color: theme.background, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
   actionRemove: { paddingVertical: 8, paddingHorizontal: 14 },
   actionRemoveText: {
     color: RED,
@@ -1419,13 +1437,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: BRASS,
+    borderColor: accentColor,
     borderRadius: 10,
   },
-  addFooterBtnText: { color: BRASS, fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
+  addFooterBtnText: { color: accentColor, fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
   empty: { alignItems: 'center', paddingVertical: 60 },
   emptyStateWrap: { gap: 14, paddingVertical: 20 },
-  emptyHeadline: { color: OFF_WHITE, fontSize: 16, marginBottom: 8 },
+  emptyHeadline: { color: theme.text, fontSize: 16, marginBottom: 8 },
   emptyCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1438,23 +1456,23 @@ const styles = StyleSheet.create({
   },
   emptyCardEmoji: { fontSize: 22, width: 32 },
   emptyCardBody: { flex: 1, gap: 2 },
-  emptyCardTitle: { color: OFF_WHITE, fontSize: 14, fontWeight: '600' },
-  emptyCardSubtext: { color: MUTED, fontSize: 12 },
+  emptyCardTitle: { color: theme.text, fontSize: 14, fontWeight: '600' },
+  emptyCardSubtext: { color: theme.muted, fontSize: 12 },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
   addSheet: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: theme.surface,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 24,
     paddingBottom: 36,
     gap: 14,
   },
-  addSheetTitle: { color: OFF_WHITE, fontSize: 18, fontWeight: '600', letterSpacing: 0.3 },
-  addSheetSubtext: { color: MUTED, fontSize: 12 },
+  addSheetTitle: { color: theme.text, fontSize: 18, fontWeight: '600', letterSpacing: 0.3 },
+  addSheetSubtext: { color: theme.muted, fontSize: 12 },
   scanLink: {
     alignSelf: 'flex-end',
     paddingVertical: 6,
@@ -1462,14 +1480,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   scanLinkText: {
-    color: BRASS,
+    color: accentColor,
     fontSize: 13,
     letterSpacing: 0.3,
     fontWeight: '500',
   },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   categoryTile: {
-    width: '47%',
+    width: '47%' as const,
     paddingVertical: 16,
     paddingHorizontal: 12,
     borderWidth: 1,
@@ -1478,13 +1496,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   categoryTileActive: {
-    borderColor: BRASS,
+    borderColor: accentColor,
     backgroundColor: 'rgba(184, 150, 12, 0.08)',
   },
   categoryTileEmoji: { fontSize: 22 },
-  categoryTileLabel: { color: OFF_WHITE, fontSize: 13, fontWeight: '600' },
+  categoryTileLabel: { color: theme.text, fontSize: 13, fontWeight: '600' },
   addInput: {
-    color: OFF_WHITE,
+    color: theme.text,
     fontSize: 14,
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -1498,19 +1516,20 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   addStepBack: { padding: 6 },
-  addStepBackText: { color: MUTED, fontSize: 13 },
+  addStepBackText: { color: theme.muted, fontSize: 13 },
   addStepNext: {
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: BRASS,
+    backgroundColor: accentColor,
     borderRadius: 8,
   },
-  addStepNextText: { color: BG, fontSize: 13, fontWeight: '700' },
+  addStepNextText: { color: theme.background, fontSize: 13, fontWeight: '700' },
   addStepSave: {
     paddingVertical: 10,
     paddingHorizontal: 24,
-    backgroundColor: BRASS,
+    backgroundColor: accentColor,
     borderRadius: 8,
   },
-  addStepSaveText: { color: BG, fontSize: 14, fontWeight: '700' },
-});
+  addStepSaveText: { color: theme.background, fontSize: 14, fontWeight: '700' },
+  });
+}

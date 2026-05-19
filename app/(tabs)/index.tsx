@@ -16,6 +16,8 @@ import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
 import { useShakeToAsk } from '@/components/useShakeToAsk';
 import { conductorHaptics } from '@/app/haptics';
+import { useTheme } from '@/app/theme';
+import { useMemo } from 'react';
 // Defensive native-module require: the binary running this OTA may
 // predate the expo-speech install. A top-level `import * as Speech
 // from 'expo-speech'` would crash the bundle on that binary. Defer
@@ -331,6 +333,8 @@ function roundInt(n: number | null | undefined): string {
 }
 
 function PulseHealthSection({ health }: { health: PulseData['health'] }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   if (!health) {
     return (
       <View style={styles.pulseSection}>
@@ -429,6 +433,8 @@ function PulseHealthSection({ health }: { health: PulseData['health'] }) {
 }
 
 function PulseTimelineSection({ weather }: { weather: PulseData['weather'] }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   // Today's Timeline — sunrise/peak/rain/UV/sunset. Renders only
   // when at least one of these is present so the section doesn't
   // appear on locations where the API returns nulls.
@@ -459,6 +465,8 @@ function PulseTimelineSection({ weather }: { weather: PulseData['weather'] }) {
 }
 
 function PulseConditionsSection({ weather }: { weather: PulseData['weather'] }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   // Always show the header even when individual fields are absent, to mark
   // the section's place in the card structure. Individual rows guard on
   // null so a missing humidity reading just drops that one line.
@@ -503,17 +511,23 @@ function PulseLoadSection({
   signalLoad: PulseData['signalLoad'];
   urgentCount: number;
 }) {
-  const loadLabel = signalLoad.charAt(0).toUpperCase() + signalLoad.slice(1);
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  // Defensive: signalLoad comes from /api/brief and could be missing
+  // on a malformed payload. signalLoad.charAt would crash.
+  const safeLoad = typeof signalLoad === 'string' && signalLoad.length > 0 ? signalLoad : 'unknown';
+  const loadLabel = safeLoad.charAt(0).toUpperCase() + safeLoad.slice(1);
+  const safeUrgent = typeof urgentCount === 'number' ? urgentCount : 0;
   let loadColor = '#a8a5a0';
-  if (signalLoad === 'heavy') loadColor = '#f59e0b';
-  else if (signalLoad === 'moderate') loadColor = '#b8960c';
+  if (safeLoad === 'heavy') loadColor = '#f59e0b';
+  else if (safeLoad === 'moderate') loadColor = '#b8960c';
   return (
     <View style={styles.pulseSection}>
       <Text style={styles.pulseSectionLabel}>SIGNAL LOAD</Text>
       <Text style={[styles.pulseRow, { color: loadColor }]}>{loadLabel}</Text>
-      {urgentCount > 0 ? (
+      {safeUrgent > 0 ? (
         <Text style={[styles.pulseRow, { color: '#ef4444' }]}>
-          {urgentCount} urgent
+          {safeUrgent} urgent
         </Text>
       ) : null}
     </View>
@@ -521,6 +535,8 @@ function PulseLoadSection({
 }
 
 function PulseFlagsSection({ flags }: { flags: string[] }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const phrased = (flags || [])
     .map((f) => PULSE_FLAG_PHRASES[f])
     .filter((p): p is string => typeof p === 'string' && p.length > 0);
@@ -538,6 +554,8 @@ function PulseFlagsSection({ flags }: { flags: string[] }) {
 }
 
 export default function TakeoffScreen() {
+  const { theme: t_theme, accentColor: t_accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(t_theme, t_accentColor), [t_theme, t_accentColor]);
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
   const [transparency, setTransparency] = useState<string | null>(null);
@@ -1119,7 +1137,10 @@ export default function TakeoffScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <HelpButton cardId="brief" />
+      {/* Positioned to the left of the Minimap (40x40 at right: 20, top: 60).
+          Minimap's left edge is 60px from screen right; HelpButton's right
+          edge sits at 68px to give an 8px gap. */}
+      <HelpButton cardId="brief" right={68} />
       <GestureDetector gesture={swipeGesture}>
         <ScrollView
           style={styles.scrollFlex}
@@ -1826,10 +1847,12 @@ export default function TakeoffScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f0f',
+    backgroundColor: theme.background,
   },
   scrollFlex: {
     flex: 1,
@@ -2492,4 +2515,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.3,
   },
-});
+  });
+}

@@ -11,15 +11,14 @@ import {
 } from 'react-native';
 
 import { metaFor, type Signal } from '@/components/signalTypes';
+import { useTheme } from './theme';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
+
+type ThemeColors = { background: string; text: string; muted: string };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HORIZON_DAYS = 14;
@@ -134,8 +133,10 @@ function buildItems(args: {
   calendar: CalendarEvent[];
   today: Date;
   horizonEnd: Date;
+  accentColor: string;
 }): { items: ProgrammeItem[]; memberMap: Map<string, string> } {
-  const { signals, vault, crew, calendar, today, horizonEnd } = args;
+  const { signals, vault, crew, calendar, today, horizonEnd, accentColor } = args;
+  const BRASS = accentColor;
   const items: ProgrammeItem[] = [];
   const startMs = startOfLocalDay(today).getTime();
   const endMs = startOfLocalDay(horizonEnd).getTime() + DAY_MS - 1;
@@ -281,6 +282,9 @@ function buildItems(args: {
 // --- screen ---
 
 export default function ProgrammeScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
   const [signals, setSignals] = useState<Signal[]>([]);
   const [vault, setVault] = useState<VaultItem[]>([]);
   const [crew, setCrew] = useState<CrewMember[]>([]);
@@ -330,7 +334,7 @@ export default function ProgrammeScreen() {
   const grouped = useMemo(() => {
     const today = new Date();
     const horizonEnd = new Date(today.getTime() + (HORIZON_DAYS - 1) * DAY_MS);
-    const { items } = buildItems({ signals, vault, crew, calendar, today, horizonEnd });
+    const { items } = buildItems({ signals, vault, crew, calendar, today, horizonEnd, accentColor });
 
     // Bucket by YMD, preserving the sorted order produced above.
     const buckets = new Map<string, ProgrammeItem[]>();
@@ -349,7 +353,7 @@ export default function ProgrammeScreen() {
       days.push({ ymd: key, date: d, header: dayHeader(d, today), items });
     }
     return days;
-  }, [signals, vault, crew, calendar]);
+  }, [signals, vault, crew, calendar, accentColor]);
 
   function handleItemTap(item: ProgrammeItem) {
     // Signals navigate to Hover with the signal pre-selected — same flow
@@ -423,87 +427,89 @@ export default function ProgrammeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
-  topBack: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  topBackText: {
-    color: MUTED,
-    fontSize: 13,
-    letterSpacing: 0.3,
-  },
-  title: {
-    color: OFF_WHITE,
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: MUTED,
-    fontSize: 13,
-    paddingBottom: 24,
-    letterSpacing: 0.2,
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-  },
-  emptyText: {
-    color: MUTED,
-    fontSize: 14,
-    letterSpacing: 0.3,
-  },
-  dayBlock: {
-    marginBottom: 20,
-  },
-  dayHeader: {
-    color: BRASS,
-    fontSize: 11,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  dayDivider: {
-    height: 1,
-    backgroundColor: SOFT_BORDER,
-    marginBottom: 8,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    gap: 12,
-  },
-  itemEmoji: {
-    fontSize: 20,
-    lineHeight: 24,
-    width: 28,
-  },
-  itemBody: {
-    flex: 1,
-    gap: 2,
-  },
-  itemDescription: {
-    color: OFF_WHITE,
-    fontSize: 14,
-    lineHeight: 19,
-  },
-  itemOwner: {
-    color: MUTED,
-    fontSize: 11,
-    letterSpacing: 0.3,
-  },
-  itemTime: {
-    color: MUTED,
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-});
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+    topBack: {
+      alignSelf: 'flex-start',
+      paddingVertical: 6,
+      paddingHorizontal: 4,
+      marginBottom: 8,
+    },
+    topBackText: {
+      color: theme.muted,
+      fontSize: 13,
+      letterSpacing: 0.3,
+    },
+    title: {
+      color: theme.text,
+      fontSize: 28,
+      fontWeight: '700',
+      letterSpacing: -0.5,
+      marginBottom: 6,
+    },
+    subtitle: {
+      color: theme.muted,
+      fontSize: 13,
+      paddingBottom: 24,
+      letterSpacing: 0.2,
+    },
+    empty: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 80,
+    },
+    emptyText: {
+      color: theme.muted,
+      fontSize: 14,
+      letterSpacing: 0.3,
+    },
+    dayBlock: {
+      marginBottom: 20,
+    },
+    dayHeader: {
+      color: accentColor,
+      fontSize: 11,
+      letterSpacing: 2,
+      textTransform: 'uppercase',
+      fontWeight: '600',
+      marginBottom: 6,
+    },
+    dayDivider: {
+      height: 1,
+      backgroundColor: SOFT_BORDER,
+      marginBottom: 8,
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+      gap: 12,
+    },
+    itemEmoji: {
+      fontSize: 20,
+      lineHeight: 24,
+      width: 28,
+    },
+    itemBody: {
+      flex: 1,
+      gap: 2,
+    },
+    itemDescription: {
+      color: theme.text,
+      fontSize: 14,
+      lineHeight: 19,
+    },
+    itemOwner: {
+      color: theme.muted,
+      fontSize: 11,
+      letterSpacing: 0.3,
+    },
+    itemTime: {
+      color: theme.muted,
+      fontSize: 12,
+      letterSpacing: 0.3,
+    },
+  });
+}

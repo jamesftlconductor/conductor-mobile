@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTheme } from './theme';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -152,6 +153,8 @@ function SignalChipsRow({
   signals: AttributedSignal[];
   onChanged?: () => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   // Long-press target — when non-null, render a centered popover
   // over the screen with three actions: Done / Snooze / Remove
   // attribution. Tap-outside dismisses. All actions fire-and-forget
@@ -322,6 +325,8 @@ function PhotoCircle({
   name?: string | null;
   onPress: () => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const src = photoUrl || fallbackPicture || null;
   return (
     <TouchableOpacity
@@ -350,6 +355,8 @@ function NotesEditor({
   memberType?: string;
   initial?: string | null;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [value, setValue] = useState<string>(initial || '');
   const [saved, setSaved] = useState<string>(initial || '');
   return (
@@ -428,6 +435,8 @@ function CelebrationRow({
   label: string;
   mmDd: string;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const days = daysUntilMMDD(mmDd);
   const isUpcoming = days != null && days <= 30;
   return (
@@ -454,6 +463,8 @@ type EditTarget =
   | { kind: 'other'; memberType: string; name: string; birthday: string; anniversary: string };
 
 export default function CrewScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [crew, setCrew] = useState<CrewMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddCrew, setShowAddCrew] = useState(false);
@@ -589,7 +600,9 @@ export default function CrewScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
-    <HelpButton cardId="crew" />
+    {/* Offset left so the "+" add-crew button in the topBar (right edge)
+        has clear space. */}
+    <HelpButton cardId="crew" right={50} />
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scroll}
@@ -743,6 +756,8 @@ export default function CrewScreen() {
 }
 
 function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const display = member.name || member.fullName || 'Member';
   const joinedLabel = (() => {
     if (!member.joinedAt) return 'Connected';
@@ -794,6 +809,8 @@ function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) 
 }
 
 function ChildCard({ child, onMenu, onChanged }: { child: Child; onMenu?: () => void; onChanged?: () => void }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const name = child.name || 'Child';
   const activities = (child.activities || []).filter((a) => a && a.name);
   const events = (child.upcomingEvents || []).filter((e) => e && e.description);
@@ -910,6 +927,8 @@ function isoWeekOfYear(d: Date): number {
 }
 
 function CustodySection({ child, onChanged }: { child: Child; onChanged?: () => void }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const initial: CustodySchedule = ((child as any).custodySchedule || {}) as CustodySchedule;
   const [enabled, setEnabled] = useState<boolean>(false);
   const [checkedProfile, setCheckedProfile] = useState(false);
@@ -1117,6 +1136,8 @@ function CustodySection({ child, onChanged }: { child: Child; onChanged?: () => 
 }
 
 function PetCard({ pet, onMenu, onChanged }: { pet: Pet; onMenu?: () => void; onChanged?: () => void }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const name = pet.name || 'Pet';
   const typeLabel =
     pet.type && pet.breed
@@ -1189,7 +1210,13 @@ function PetCard({ pet, onMenu, onChanged }: { pet: Pet; onMenu?: () => void; on
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BRASS = accentColor;
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  return StyleSheet.create({
   custodyEyebrow: { color: MUTED, fontSize: 9, letterSpacing: 2, fontWeight: '600', marginBottom: 10 },
   custodyTypeRow: { flexDirection: 'row', gap: 6 },
   custodyTypePill: {
@@ -1603,4 +1630,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     lineHeight: 26,
   },
-});
+  });
+}

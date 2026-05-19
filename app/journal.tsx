@@ -6,7 +6,7 @@
 
 import { router } from 'expo-router';
 import { SecureScreen } from '@/components/SecureScreen';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
@@ -19,14 +19,14 @@ import {
 
 import { HelpButton } from '@/components/HelpButton';
 import { TYPE_META } from '@/components/signalTypes';
+import { useTheme } from './theme';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const BRASS = '#b8960c';
+// Module-level fallbacks — only used for ActivityIndicator color prop
+// and other non-StyleSheet refs that don't need theme reactivity. The
+// real theming happens through makeStyles(theme, accent) below.
 const FAINT = '#a8a5a0';
 
 type Entry = {
@@ -85,6 +85,9 @@ export default function JournalScreenSecured() {
 }
 
 function JournalScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
   const [days, setDays] = useState<Day[]>([]);
   const [streak, setStreak] = useState<StreakData>(null);
   const [loading, setLoading] = useState(true);
@@ -137,7 +140,7 @@ function JournalScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
-    <View style={{ flex: 1, backgroundColor: BG }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
     <HelpButton cardId="caught" />
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <TouchableOpacity
@@ -245,124 +248,130 @@ function JournalScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 22, paddingTop: 60 },
-  topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  title: { color: OFF_WHITE, fontSize: 28, fontWeight: '300', marginTop: 14, letterSpacing: 0.2 },
-  subtitle: { color: MUTED, fontSize: 13, marginTop: 6, marginBottom: 20 },
-  streakCard: {
-    alignItems: 'center',
-    paddingTop: 18,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    marginBottom: 22,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(184, 150, 12, 0.35)',
-    backgroundColor: 'rgba(184, 150, 12, 0.03)',
-  },
-  streakNumber: { color: BRASS, fontSize: 30, fontWeight: '700', lineHeight: 36 },
-  streakUnit: { color: MUTED, fontSize: 11, marginTop: 2, letterSpacing: 0.3 },
-  loading: { paddingVertical: 60, alignItems: 'center' },
-  empty: { color: MUTED, fontSize: 14, fontStyle: 'italic', textAlign: 'center', paddingVertical: 80 },
-  dayBlock: { marginBottom: 18 },
-  dayHeader: {
-    color: BRASS,
-    fontSize: 10,
-    letterSpacing: 2,
-    marginBottom: 10,
-    fontWeight: '600',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    gap: 10,
-    borderRadius: 6,
-  },
-  rowCaught: {
-    borderLeftWidth: 2,
-    borderLeftColor: BRASS,
-    backgroundColor: 'rgba(184, 150, 12, 0.04)',
-  },
-  emoji: { fontSize: 16, width: 22, textAlign: 'center' },
-  rowMain: { flex: 1 },
-  desc: { color: OFF_WHITE, fontSize: 13, lineHeight: 18 },
-  badgeRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  badgeCaught: {
-    color: BRASS,
-    fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  badgeAuto: {
-    color: MUTED,
-    fontSize: 9,
-    letterSpacing: 0.5,
-    fontStyle: 'italic',
-  },
-  actionLabel: {
-    color: FAINT,
-    fontSize: 11,
-    fontStyle: 'italic',
-    minWidth: 50,
-    textAlign: 'right',
-  },
-  pastYearsBlock: {
-    marginTop: 28,
-    paddingTop: 18,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(184, 150, 12, 0.18)',
-  },
-  pastYearsLabel: {
-    color: BRASS,
-    fontSize: 10,
-    letterSpacing: 2,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  pastYearRow: {
-    paddingVertical: 8,
-  },
-  pastYearText: {
-    color: OFF_WHITE,
-    fontSize: 14,
-  },
-  selectedYearWrap: {
-    marginTop: 22,
-  },
-  selectedYearDivider: {
-    height: 2,
-    backgroundColor: 'rgba(184, 150, 12, 0.4)',
-    marginBottom: 16,
-  },
-  selectedYearLabel: {
-    color: BRASS,
-    fontSize: 11,
-    letterSpacing: 3,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  selectedYearText: {
-    color: OFF_WHITE,
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  selectedYearEmpty: {
-    color: MUTED,
-    fontSize: 13,
-    fontStyle: 'italic',
-  },
-  selectedYearClose: {
-    marginTop: 14,
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-  },
-  selectedYearCloseText: {
-    color: MUTED,
-    fontSize: 12,
-  },
-});
+// makeStyles produces a fresh StyleSheet from the current theme. The
+// rgba accent overlays (border / soft fills) are kept as literals
+// because they read fine in both modes — the 3–4% alpha makes them
+// nearly identical when laid over either background.
+function makeStyles(theme: { background: string; text: string; muted: string }, accentColor: string) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scroll: { paddingHorizontal: 22, paddingTop: 60 },
+    topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
+    topBackText: { color: theme.muted, fontSize: 13, letterSpacing: 0.3 },
+    title: { color: theme.text, fontSize: 28, fontWeight: '300', marginTop: 14, letterSpacing: 0.2 },
+    subtitle: { color: theme.muted, fontSize: 13, marginTop: 6, marginBottom: 20 },
+    streakCard: {
+      alignItems: 'center',
+      paddingTop: 18,
+      paddingBottom: 16,
+      paddingHorizontal: 16,
+      marginBottom: 22,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(184, 150, 12, 0.35)',
+      backgroundColor: 'rgba(184, 150, 12, 0.03)',
+    },
+    streakNumber: { color: accentColor, fontSize: 30, fontWeight: '700', lineHeight: 36 },
+    streakUnit: { color: theme.muted, fontSize: 11, marginTop: 2, letterSpacing: 0.3 },
+    loading: { paddingVertical: 60, alignItems: 'center' },
+    empty: { color: theme.muted, fontSize: 14, fontStyle: 'italic', textAlign: 'center', paddingVertical: 80 },
+    dayBlock: { marginBottom: 18 },
+    dayHeader: {
+      color: accentColor,
+      fontSize: 10,
+      letterSpacing: 2,
+      marginBottom: 10,
+      fontWeight: '600',
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 8,
+      gap: 10,
+      borderRadius: 6,
+    },
+    rowCaught: {
+      borderLeftWidth: 2,
+      borderLeftColor: accentColor,
+      backgroundColor: 'rgba(184, 150, 12, 0.04)',
+    },
+    emoji: { fontSize: 16, width: 22, textAlign: 'center' },
+    rowMain: { flex: 1 },
+    desc: { color: theme.text, fontSize: 13, lineHeight: 18 },
+    badgeRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+    badgeCaught: {
+      color: accentColor,
+      fontSize: 9,
+      fontWeight: '600',
+      letterSpacing: 0.5,
+    },
+    badgeAuto: {
+      color: theme.muted,
+      fontSize: 9,
+      letterSpacing: 0.5,
+      fontStyle: 'italic',
+    },
+    actionLabel: {
+      color: FAINT,
+      fontSize: 11,
+      fontStyle: 'italic',
+      minWidth: 50,
+      textAlign: 'right',
+    },
+    pastYearsBlock: {
+      marginTop: 28,
+      paddingTop: 18,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: 'rgba(184, 150, 12, 0.18)',
+    },
+    pastYearsLabel: {
+      color: accentColor,
+      fontSize: 10,
+      letterSpacing: 2,
+      fontWeight: '600',
+      marginBottom: 12,
+    },
+    pastYearRow: {
+      paddingVertical: 8,
+    },
+    pastYearText: {
+      color: theme.text,
+      fontSize: 14,
+    },
+    selectedYearWrap: {
+      marginTop: 22,
+    },
+    selectedYearDivider: {
+      height: 2,
+      backgroundColor: 'rgba(184, 150, 12, 0.4)',
+      marginBottom: 16,
+    },
+    selectedYearLabel: {
+      color: accentColor,
+      fontSize: 11,
+      letterSpacing: 3,
+      fontWeight: '600',
+      marginBottom: 12,
+    },
+    selectedYearText: {
+      color: theme.text,
+      fontSize: 14,
+      lineHeight: 22,
+    },
+    selectedYearEmpty: {
+      color: theme.muted,
+      fontSize: 13,
+      fontStyle: 'italic',
+    },
+    selectedYearClose: {
+      marginTop: 14,
+      alignSelf: 'flex-start',
+      paddingVertical: 6,
+    },
+    selectedYearCloseText: {
+      color: theme.muted,
+      fontSize: 12,
+    },
+  });
+}

@@ -32,6 +32,7 @@ import {
 } from '@/components/signalTypes';
 import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
+import { useTheme } from '../theme';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -254,6 +255,8 @@ function ExpandedRingMarkers({
   cx: number;
   cy: number;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const labelRadius = EXPANDED_RADIUS + 18;
 
   let markers: { label: string; angleDeg: number }[] = [];
@@ -559,6 +562,8 @@ function SignalDot({
   freshlyAdded?: boolean;
   onPress: () => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const scale = useRef(new Animated.Value(1)).current;
   const pausedRef = useRef(paused);
   const highlightRef = useRef(highlight);
@@ -702,6 +707,8 @@ function InfiniteLedger({
   onYesterday: () => void;
   onAddSignal: () => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   // 500x repeated data; start at the center. Practically infinite in either
   // direction, so no boundary detection / jump needed.
   const repeated = useMemo(() => {
@@ -875,7 +882,20 @@ const FIRST_NAME = (() => {
   return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
 })();
 
+// Crew avatar accent palette — referenced defensively here in case any
+// render path expects it. Kept as a stable export-shape constant so
+// future code can pull a deterministic color per crew index without
+// importing from elsewhere.
+const CREW_COLORS = [
+  '#b8960c', '#7c9e87', '#8b7355', '#6b8cae',
+  '#a67c9e', '#ae7c7c', '#7c9eae', '#ae9e7c',
+];
+const crewColor = (index: number): string =>
+  CREW_COLORS[Math.max(0, index ?? 0) % CREW_COLORS.length];
+
 export default function HoverScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [signals, setSignals] = useState<Signal[]>([]);
@@ -1316,7 +1336,7 @@ export default function HoverScreen() {
           </Text>
         </Animated.View>
 
-        {viewMode === 'personal' && crewList.length > 0 ? (
+        {viewMode === 'personal' && Array.isArray(crewList) && crewList.length > 0 ? (
           <Animated.View
             style={[styles.crewFilterRow, { top: insets.top + 56, opacity: headerOpacity }]}>
             <ScrollView
@@ -1334,30 +1354,38 @@ export default function HoverScreen() {
                   All
                 </Text>
               </TouchableOpacity>
-              {crewList.map((m) => (
-                <TouchableOpacity
-                  key={m.name}
-                  onPress={() => setCrewFilter(crewFilter === m.name ? null : m.name)}
-                  style={styles.crewFilterMember}
-                  activeOpacity={0.7}>
-                  <View
-                    style={[
-                      styles.crewFilterCircle,
-                      crewFilter === m.name && styles.crewFilterCircleActive,
-                    ]}>
-                    {m.photoUrl ? (
-                      <Image source={{ uri: m.photoUrl }} style={styles.crewFilterPhoto} />
-                    ) : (
-                      <Text style={styles.crewFilterInitials}>
-                        {m.name.slice(0, 1).toUpperCase()}
-                      </Text>
-                    )}
-                  </View>
-                  <Text style={styles.crewFilterName} numberOfLines={1}>
-                    {m.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {crewList?.map((m, i) => {
+                if (!m || !m.name) return null;
+                const initial = m.name.charAt(0).toUpperCase() || '?';
+                const hasPhoto = typeof m.photoUrl === 'string' && m.photoUrl.length > 0;
+                return (
+                  <TouchableOpacity
+                    key={`${m.name}-${i}`}
+                    onPress={() => setCrewFilter(crewFilter === m.name ? null : m.name)}
+                    style={styles.crewFilterMember}
+                    activeOpacity={0.7}>
+                    <View
+                      style={[
+                        styles.crewFilterCircle,
+                        { borderColor: crewColor(i) },
+                        crewFilter === m.name && styles.crewFilterCircleActive,
+                      ]}>
+                      {hasPhoto ? (
+                        <Image
+                          source={{ uri: m.photoUrl as string }}
+                          style={styles.crewFilterPhoto}
+                          onError={() => { /* swallow — fall through to initials on next render */ }}
+                        />
+                      ) : (
+                        <Text style={styles.crewFilterInitials}>{initial}</Text>
+                      )}
+                    </View>
+                    <Text style={styles.crewFilterName} numberOfLines={1}>
+                      {m.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </Animated.View>
         ) : null}
@@ -1555,7 +1583,12 @@ export default function HoverScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BRASS = accentColor;
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: BG,
@@ -1767,4 +1800,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-});
+  });
+}

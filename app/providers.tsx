@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
@@ -14,15 +14,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTheme } from './theme';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
+
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
 
 type Provider = {
   _key?: string;
@@ -72,6 +71,9 @@ function formatLastUsed(p: Provider): string {
 }
 
 export default function ProvidersScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -200,6 +202,9 @@ function AddProviderModal({
   onClose: () => void;
   onAdded: (p: Provider) => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
   const [serviceType, setServiceType] = useState('hvac');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -290,84 +295,86 @@ function AddProviderModal({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
-  topBack: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  title: { color: OFF_WHITE, fontSize: 28, fontWeight: '700', letterSpacing: -0.5, marginBottom: 6 },
-  subtitle: { color: MUTED, fontSize: 13, letterSpacing: 0.2 },
-  addLink: { color: BRASS, fontSize: 14, fontWeight: '600', marginTop: 10 },
-  section: { marginBottom: 24 },
-  sectionHeader: {
-    color: BRASS,
-    fontSize: 10,
-    letterSpacing: 3,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  sectionLine: { height: 1, backgroundColor: 'rgba(184, 150, 12, 0.25)', marginBottom: 8 },
-  providerCard: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: SOFT_BORDER,
-    gap: 12,
-  },
-  providerEmoji: { fontSize: 22, lineHeight: 26, width: 28 },
-  providerBody: { flex: 1, gap: 3 },
-  providerName: { color: OFF_WHITE, fontSize: 15, fontWeight: '600' },
-  providerPhone: { color: BRASS, fontSize: 12, letterSpacing: 0.3 },
-  providerMeta: { color: MUTED, fontSize: 11, letterSpacing: 0.3 },
-  empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 16 },
-  emptyText: { color: MUTED, fontSize: 13, letterSpacing: 0.3, textAlign: 'center' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 24,
-    paddingBottom: 36,
-    gap: 12,
-    maxHeight: '90%',
-  },
-  sheetTitle: { color: OFF_WHITE, fontSize: 18, fontWeight: '600', letterSpacing: 0.3, marginBottom: 4 },
-  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  typeTile: {
-    width: '30%',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderWidth: 1,
-    borderColor: SOFT_BORDER,
-    borderRadius: 10,
-    alignItems: 'center',
-    gap: 4,
-  },
-  typeTileActive: { borderColor: BRASS, backgroundColor: 'rgba(184, 150, 12, 0.08)' },
-  typeTileEmoji: { fontSize: 18 },
-  typeTileLabel: { color: OFF_WHITE, fontSize: 11 },
-  input: {
-    color: OFF_WHITE,
-    fontSize: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
-  },
-  sheetActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginTop: 8 },
-  cancelBtn: { padding: 8 },
-  cancelBtnText: { color: MUTED, fontSize: 13 },
-  saveBtn: { backgroundColor: BRASS, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
-  saveBtnText: { color: BG, fontSize: 14, fontWeight: '700' },
-});
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+    topBack: {
+      alignSelf: 'flex-start',
+      paddingVertical: 6,
+      paddingHorizontal: 4,
+      marginBottom: 8,
+    },
+    topBackText: { color: theme.muted, fontSize: 13, letterSpacing: 0.3 },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      marginBottom: 20,
+    },
+    title: { color: theme.text, fontSize: 28, fontWeight: '700', letterSpacing: -0.5, marginBottom: 6 },
+    subtitle: { color: theme.muted, fontSize: 13, letterSpacing: 0.2 },
+    addLink: { color: accentColor, fontSize: 14, fontWeight: '600', marginTop: 10 },
+    section: { marginBottom: 24 },
+    sectionHeader: {
+      color: accentColor,
+      fontSize: 10,
+      letterSpacing: 3,
+      fontWeight: '600',
+      marginBottom: 6,
+    },
+    sectionLine: { height: 1, backgroundColor: 'rgba(184, 150, 12, 0.25)', marginBottom: 8 },
+    providerCard: {
+      flexDirection: 'row',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: SOFT_BORDER,
+      gap: 12,
+    },
+    providerEmoji: { fontSize: 22, lineHeight: 26, width: 28 },
+    providerBody: { flex: 1, gap: 3 },
+    providerName: { color: theme.text, fontSize: 15, fontWeight: '600' },
+    providerPhone: { color: accentColor, fontSize: 12, letterSpacing: 0.3 },
+    providerMeta: { color: theme.muted, fontSize: 11, letterSpacing: 0.3 },
+    empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 16 },
+    emptyText: { color: theme.muted, fontSize: 13, letterSpacing: 0.3, textAlign: 'center' },
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+    sheet: {
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      padding: 24,
+      paddingBottom: 36,
+      gap: 12,
+      maxHeight: '90%',
+    },
+    sheetTitle: { color: theme.text, fontSize: 18, fontWeight: '600', letterSpacing: 0.3, marginBottom: 4 },
+    typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    typeTile: {
+      width: '30%',
+      paddingVertical: 12,
+      paddingHorizontal: 4,
+      borderWidth: 1,
+      borderColor: SOFT_BORDER,
+      borderRadius: 10,
+      alignItems: 'center',
+      gap: 4,
+    },
+    typeTileActive: { borderColor: accentColor, backgroundColor: 'rgba(184, 150, 12, 0.08)' },
+    typeTileEmoji: { fontSize: 18 },
+    typeTileLabel: { color: theme.text, fontSize: 11 },
+    input: {
+      color: theme.text,
+      fontSize: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      borderRadius: 8,
+    },
+    sheetActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginTop: 8 },
+    cancelBtn: { padding: 8 },
+    cancelBtnText: { color: theme.muted, fontSize: 13 },
+    saveBtn: { backgroundColor: accentColor, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
+    saveBtnText: { color: theme.background, fontSize: 14, fontWeight: '700' },
+  });
+}

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -11,17 +11,16 @@ import {
 
 import { HelpButton } from '@/components/HelpButton';
 import { TYPE_META } from '@/components/signalTypes';
+import { useTheme } from './theme';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const BRASS = '#b8960c';
 const SAGE = '#86efac';
 const ORANGE = '#f59e0b';
 const RED = '#ef4444';
+
+type ThemeColors = { background: string; text: string; muted: string };
 
 type CompassData = {
   household: string;
@@ -54,6 +53,8 @@ function firstSeenDate(daysAgo: number): string {
 // One row of the "Top Signal Sources" list. Bar width is the sender's share
 // of the largest count in the list, so the heaviest sender always fills.
 function SenderRow({ sender, count, max }: { sender: string; count: number; max: number }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const pct = max > 0 ? Math.max(0.05, count / max) : 0;
   return (
     <View style={styles.senderRow}>
@@ -79,6 +80,8 @@ function TypeRow({
   data: { resolved: number; held: number; expired: number };
   globalMax: number;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const meta = TYPE_META[type];
   const total = data.resolved + data.held + data.expired;
   const totalPct = globalMax > 0 ? Math.max(0.05, total / globalMax) : 0;
@@ -123,6 +126,8 @@ const DAY_SHORT: Record<string, string> = {
 };
 
 function PeakDaysChart({ peakDays }: { peakDays: { day: string; count: number }[] }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const max = Math.max(...peakDays.map((p) => p.count), 1);
   const ordered = DAY_ORDER.map(
     (d) => peakDays.find((p) => p.day === d) || { day: d, count: 0 },
@@ -150,6 +155,8 @@ function PeakDaysChart({ peakDays }: { peakDays: { day: string; count: number }[
 }
 
 function Card({ label, children }: { label: string; children: React.ReactNode }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <View style={styles.card}>
       <Text style={styles.cardLabel}>{label}</Text>
@@ -167,6 +174,10 @@ type SpendData = {
 };
 
 function SpendCard() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
+  const BRASS = accentColor;
   const [data, setData] = useState<SpendData | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
@@ -232,6 +243,9 @@ type StreakData = {
 };
 
 export default function CompassScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
   const [data, setData] = useState<CompassData | null>(null);
   const [streak, setStreak] = useState<StreakData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -264,7 +278,7 @@ export default function CompassScreen() {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: BG }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
     {/* Offset left so the inline "Share" text in topBar (right edge)
         doesn't sit under the HelpButton. */}
     <HelpButton cardId="patterns" right={64} />
@@ -429,293 +443,295 @@ export default function CompassScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
-  title: {
-    color: OFF_WHITE,
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: MUTED,
-    fontSize: 13,
-    paddingBottom: 24,
-    letterSpacing: 0.2,
-  },
-  loading: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-  },
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+    title: {
+      color: theme.text,
+      fontSize: 28,
+      fontWeight: '700',
+      letterSpacing: -0.5,
+      marginBottom: 6,
+    },
+    subtitle: {
+      color: theme.muted,
+      fontSize: 13,
+      paddingBottom: 24,
+      letterSpacing: 0.2,
+    },
+    loading: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 80,
+    },
 
-  streakCard: {
-    alignItems: 'center',
-    paddingTop: 26,
-    paddingBottom: 22,
-    paddingHorizontal: 20,
-    marginBottom: 18,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(184, 150, 12, 0.35)',
-    backgroundColor: 'rgba(184, 150, 12, 0.03)',
-  },
-  streakNumber: {
-    color: BRASS,
-    fontSize: 48,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    lineHeight: 56,
-  },
-  streakUnit: {
-    color: MUTED,
-    fontSize: 14,
-    marginTop: 2,
-  },
-  streakDivider: {
-    width: 40,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(184, 150, 12, 0.4)',
-    marginVertical: 14,
-  },
-  streakLine: {
-    color: OFF_WHITE,
-    fontSize: 13,
-    fontStyle: 'italic',
-    marginBottom: 8,
-  },
-  streakMeta: {
-    color: MUTED,
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  streakEmpty: {
-    color: MUTED,
-    fontSize: 13,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingHorizontal: 12,
-  },
+    streakCard: {
+      alignItems: 'center',
+      paddingTop: 26,
+      paddingBottom: 22,
+      paddingHorizontal: 20,
+      marginBottom: 18,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(184, 150, 12, 0.35)',
+      backgroundColor: 'rgba(184, 150, 12, 0.03)',
+    },
+    streakNumber: {
+      color: accentColor,
+      fontSize: 48,
+      fontWeight: '700',
+      letterSpacing: -0.5,
+      lineHeight: 56,
+    },
+    streakUnit: {
+      color: theme.muted,
+      fontSize: 14,
+      marginTop: 2,
+    },
+    streakDivider: {
+      width: 40,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: 'rgba(184, 150, 12, 0.4)',
+      marginVertical: 14,
+    },
+    streakLine: {
+      color: theme.text,
+      fontSize: 13,
+      fontStyle: 'italic',
+      marginBottom: 8,
+    },
+    streakMeta: {
+      color: theme.muted,
+      fontSize: 11,
+      lineHeight: 16,
+    },
+    streakEmpty: {
+      color: theme.muted,
+      fontSize: 13,
+      fontStyle: 'italic',
+      textAlign: 'center',
+      paddingHorizontal: 12,
+    },
 
-  earlyWrap: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    gap: 24,
-  },
-  earlyTitle: {
-    color: OFF_WHITE,
-    fontSize: 16,
-    lineHeight: 24,
-    textAlign: 'center',
-    letterSpacing: 0.2,
-  },
-  earlyEmoji: {
-    fontSize: 36,
-  },
-  earlyDays: {
-    color: BRASS,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontWeight: '600',
-  },
+    earlyWrap: {
+      alignItems: 'center',
+      paddingVertical: 60,
+      gap: 24,
+    },
+    earlyTitle: {
+      color: theme.text,
+      fontSize: 16,
+      lineHeight: 24,
+      textAlign: 'center',
+      letterSpacing: 0.2,
+    },
+    earlyEmoji: {
+      fontSize: 36,
+    },
+    earlyDays: {
+      color: accentColor,
+      fontSize: 12,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      fontWeight: '600',
+    },
 
-  card: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1,
-    borderColor: BRASS + '55',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardLabel: {
-    color: BRASS,
-    fontSize: 10,
-    letterSpacing: 3,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
-  cardHeadline: {
-    color: OFF_WHITE,
-    fontSize: 15,
-    lineHeight: 22,
-    letterSpacing: 0.1,
-  },
-  cardSub: {
-    color: MUTED,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 6,
-    letterSpacing: 0.2,
-  },
-  cardEmpty: {
-    color: MUTED,
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
+    card: {
+      backgroundColor: 'rgba(255,255,255,0.03)',
+      borderWidth: 1,
+      borderColor: accentColor + '55',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+    },
+    cardLabel: {
+      color: accentColor,
+      fontSize: 10,
+      letterSpacing: 3,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      marginBottom: 12,
+    },
+    cardHeadline: {
+      color: theme.text,
+      fontSize: 15,
+      lineHeight: 22,
+      letterSpacing: 0.1,
+    },
+    cardSub: {
+      color: theme.muted,
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: 6,
+      letterSpacing: 0.2,
+    },
+    cardEmpty: {
+      color: theme.muted,
+      fontSize: 12,
+      fontStyle: 'italic',
+    },
 
-  // Sender list
-  senderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    gap: 10,
-  },
-  senderName: {
-    color: OFF_WHITE,
-    fontSize: 13,
-    width: 110,
-  },
-  senderBarTrack: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    overflow: 'hidden',
-  },
-  senderBarFill: {
-    height: '100%',
-    backgroundColor: BRASS,
-  },
-  senderCount: {
-    color: MUTED,
-    fontSize: 12,
-    width: 24,
-    textAlign: 'right',
-  },
+    // Sender list
+    senderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 6,
+      gap: 10,
+    },
+    senderName: {
+      color: theme.text,
+      fontSize: 13,
+      width: 110,
+    },
+    senderBarTrack: {
+      flex: 1,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      overflow: 'hidden',
+    },
+    senderBarFill: {
+      height: '100%',
+      backgroundColor: accentColor,
+    },
+    senderCount: {
+      color: theme.muted,
+      fontSize: 12,
+      width: 24,
+      textAlign: 'right',
+    },
 
-  // Type breakdown
-  typeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    gap: 10,
-  },
-  typeLabelGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 110,
-    gap: 6,
-  },
-  typeEmoji: {
-    fontSize: 14,
-  },
-  typeLabel: {
-    color: OFF_WHITE,
-    fontSize: 12,
-    letterSpacing: 0.2,
-  },
-  typeBarOuter: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    overflow: 'hidden',
-  },
-  typeBarInner: {
-    height: '100%',
-    flexDirection: 'row',
-  },
-  typeSegment: {
-    height: '100%',
-  },
-  typeCount: {
-    color: MUTED,
-    fontSize: 12,
-    width: 24,
-    textAlign: 'right',
-  },
-  legend: {
-    flexDirection: 'row',
-    gap: 14,
-    marginTop: 12,
-    flexWrap: 'wrap',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    color: MUTED,
-    fontSize: 11,
-    letterSpacing: 0.2,
-  },
+    // Type breakdown
+    typeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 6,
+      gap: 10,
+    },
+    typeLabelGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      width: 110,
+      gap: 6,
+    },
+    typeEmoji: {
+      fontSize: 14,
+    },
+    typeLabel: {
+      color: theme.text,
+      fontSize: 12,
+      letterSpacing: 0.2,
+    },
+    typeBarOuter: {
+      flex: 1,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      overflow: 'hidden',
+    },
+    typeBarInner: {
+      height: '100%',
+      flexDirection: 'row',
+    },
+    typeSegment: {
+      height: '100%',
+    },
+    typeCount: {
+      color: theme.muted,
+      fontSize: 12,
+      width: 24,
+      textAlign: 'right',
+    },
+    legend: {
+      flexDirection: 'row',
+      gap: 14,
+      marginTop: 12,
+      flexWrap: 'wrap',
+    },
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    legendDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    legendText: {
+      color: theme.muted,
+      fontSize: 11,
+      letterSpacing: 0.2,
+    },
 
-  // Peak days chart
-  daysRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 80,
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  dayColumn: {
-    flex: 1,
-    alignItems: 'center',
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  dayBarTrack: {
-    width: 14,
-    height: 60,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 3,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  dayBarFill: {
-    width: '100%',
-    backgroundColor: BRASS,
-  },
-  dayLabel: {
-    color: MUTED,
-    fontSize: 10,
-    marginTop: 6,
-    letterSpacing: 0.5,
-  },
+    // Peak days chart
+    daysRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-end',
+      height: 80,
+      marginTop: 16,
+      marginBottom: 4,
+    },
+    dayColumn: {
+      flex: 1,
+      alignItems: 'center',
+      height: '100%',
+      justifyContent: 'flex-end',
+    },
+    dayBarTrack: {
+      width: 14,
+      height: 60,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      borderRadius: 3,
+      justifyContent: 'flex-end',
+      overflow: 'hidden',
+    },
+    dayBarFill: {
+      width: '100%',
+      backgroundColor: accentColor,
+    },
+    dayLabel: {
+      color: theme.muted,
+      fontSize: 10,
+      marginTop: 6,
+      letterSpacing: 0.5,
+    },
 
-  topBack: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  topBackText: {
-    color: MUTED,
-    fontSize: 13,
-    letterSpacing: 0.3,
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  viewMemoryBtn: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-  },
-  viewMemoryText: {
-    color: BRASS,
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  topShareText: {
-    color: BRASS,
-    fontSize: 13,
-    letterSpacing: 0.3,
-    fontWeight: '500',
-  },
-});
+    topBack: {
+      alignSelf: 'flex-start',
+      paddingVertical: 6,
+      paddingHorizontal: 4,
+      marginBottom: 8,
+    },
+    topBackText: {
+      color: theme.muted,
+      fontSize: 13,
+      letterSpacing: 0.3,
+    },
+    topBar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 4,
+      marginBottom: 8,
+    },
+    viewMemoryBtn: {
+      marginTop: 12,
+      alignSelf: 'flex-start',
+    },
+    viewMemoryText: {
+      color: accentColor,
+      fontSize: 12,
+      letterSpacing: 0.3,
+    },
+    topShareText: {
+      color: accentColor,
+      fontSize: 13,
+      letterSpacing: 0.3,
+      fontWeight: '500',
+    },
+  });
+}

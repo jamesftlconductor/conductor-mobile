@@ -19,19 +19,18 @@ import {
 } from 'react-native';
 
 import { metaFor, type Signal } from '@/components/signalTypes';
+import { useTheme } from './theme';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
 const FAINT = '#3a3835';
-const BRASS = '#b8960c';
 const AMBER = '#f59e0b';
 const RED = '#ef4444';
 const SAGE = '#86efac';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
+
+type ThemeColors = { background: string; text: string; muted: string };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -107,11 +106,17 @@ function bucketFor(days: number): 'coming' | 'further' | 'edge' | null {
   return null;
 }
 
-function bucketColor(bucket: 'coming' | 'further' | 'edge', days: number, daysOverdue?: boolean): string {
+function bucketColor(
+  bucket: 'coming' | 'further' | 'edge',
+  days: number,
+  accentColor: string,
+  mutedColor: string,
+  daysOverdue?: boolean
+): string {
   if (daysOverdue) return RED;
   if (bucket === 'coming') return AMBER;
-  if (bucket === 'further') return BRASS;
-  return MUTED;
+  if (bucket === 'further') return accentColor;
+  return mutedColor;
 }
 
 // Progress (0-1) within the bucket's day window. Used to draw the
@@ -308,6 +313,9 @@ function matchesFilter(item: Item, filter: FilterKey): boolean {
 // ---------- screen ----------
 
 export default function HorizonScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
   const [signals, setSignals] = useState<Signal[]>([]);
   const [vault, setVault] = useState<VaultItem[]>([]);
   const [crew, setCrew] = useState<CrewMember[]>([]);
@@ -479,7 +487,7 @@ export default function HorizonScreen() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: BG }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
     <HelpButton cardId="horizon" />
     <ScrollView
       style={styles.container}
@@ -583,8 +591,10 @@ function HorizonItemRow({
   onRest: () => void;
   relatedSignals: Signal[];
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const days = daysUntil(item.dateMs);
-  const color = bucketColor(bucket, days);
+  const color = bucketColor(bucket, days, accentColor, theme.muted);
   const progress = progressWithinBucket(bucket, days);
   const noted = !!item.notedAt;
 
@@ -703,136 +713,138 @@ function HorizonItemRow({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
-  topBack: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  title: {
-    color: OFF_WHITE,
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: MUTED,
-    fontSize: 13,
-    paddingBottom: 16,
-    letterSpacing: 0.2,
-  },
-  filterRow: {
-    paddingVertical: 4,
-    gap: 8,
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  filterPill: {
-    color: MUTED,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: SOFT_BORDER,
-  },
-  filterPillActive: {
-    color: BG,
-    backgroundColor: BRASS,
-    borderColor: BRASS,
-    fontWeight: '700',
-  },
-  section: { marginBottom: 24 },
-  sectionLabel: {
-    color: BRASS,
-    fontSize: 10,
-    letterSpacing: 3,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  sectionSub: { color: MUTED, fontSize: 11, fontStyle: 'italic', marginBottom: 6 },
-  sectionLine: {
-    height: 1,
-    backgroundColor: 'rgba(184, 150, 12, 0.25)',
-    marginBottom: 8,
-  },
-  itemRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: SOFT_BORDER,
-  },
-  itemHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  itemEmoji: { fontSize: 20, lineHeight: 24, width: 28 },
-  itemBody: { flex: 1, gap: 2 },
-  itemDescription: { color: OFF_WHITE, fontSize: 14, lineHeight: 19 },
-  itemOwner: { color: MUTED, fontSize: 11, letterSpacing: 0.3 },
-  itemMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 2 },
-  itemDays: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
-  itemSourceBadge: { color: MUTED, fontSize: 9, letterSpacing: 0.5, fontWeight: '600' },
-  itemNotedBadge: { color: SAGE, fontSize: 11, letterSpacing: 0.3 },
-  itemDate: { color: MUTED, fontSize: 12, letterSpacing: 0.3 },
-  progressTrack: {
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    marginTop: 8,
-    marginLeft: 40,
-    borderRadius: 1,
-    overflow: 'hidden',
-  },
-  progressFill: { height: 2 },
-  expandedBlock: {
-    paddingTop: 14,
-    paddingLeft: 40,
-    gap: 10,
-  },
-  inlineField: { gap: 3 },
-  inlineLabel: {
-    color: MUTED,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
-  inlineInput: {
-    color: OFF_WHITE,
-    fontSize: 13,
-    paddingVertical: 4,
-    paddingHorizontal: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: SOFT_BORDER,
-  },
-  inlineMultiline: { minHeight: 50 },
-  relatedBlock: { gap: 2, marginTop: 6 },
-  relatedLabel: {
-    color: MUTED,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  relatedLine: { color: MUTED, fontSize: 12, lineHeight: 17 },
-  notedHistory: { color: SAGE, fontSize: 11, fontStyle: 'italic' },
-  nonSignalNote: { color: MUTED, fontSize: 12, fontStyle: 'italic' },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-    flexWrap: 'wrap',
-  },
-  actionBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
-  actionNoted: { backgroundColor: BRASS },
-  actionNotedText: { color: BG, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
-  actionVault: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: SOFT_BORDER },
-  actionVaultText: { color: MUTED, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
-  actionRest: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
-  actionRestText: { color: RED, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, opacity: 0.7 },
-  empty: { alignItems: 'center', paddingVertical: 80, gap: 8 },
-  emptyText: { color: MUTED, fontSize: 14, letterSpacing: 0.3 },
-  emptySubtext: { color: MUTED, fontSize: 12, letterSpacing: 0.3, textAlign: 'center', paddingHorizontal: 24 },
-});
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+    topBack: {
+      alignSelf: 'flex-start',
+      paddingVertical: 6,
+      paddingHorizontal: 4,
+      marginBottom: 8,
+    },
+    topBackText: { color: theme.muted, fontSize: 13, letterSpacing: 0.3 },
+    title: {
+      color: theme.text,
+      fontSize: 28,
+      fontWeight: '700',
+      letterSpacing: -0.5,
+      marginBottom: 6,
+    },
+    subtitle: {
+      color: theme.muted,
+      fontSize: 13,
+      paddingBottom: 16,
+      letterSpacing: 0.2,
+    },
+    filterRow: {
+      paddingVertical: 4,
+      gap: 8,
+      flexDirection: 'row',
+      marginBottom: 16,
+    },
+    filterPill: {
+      color: theme.muted,
+      fontSize: 11,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: SOFT_BORDER,
+    },
+    filterPillActive: {
+      color: theme.background,
+      backgroundColor: accentColor,
+      borderColor: accentColor,
+      fontWeight: '700',
+    },
+    section: { marginBottom: 24 },
+    sectionLabel: {
+      color: accentColor,
+      fontSize: 10,
+      letterSpacing: 3,
+      fontWeight: '600',
+      marginBottom: 2,
+    },
+    sectionSub: { color: theme.muted, fontSize: 11, fontStyle: 'italic', marginBottom: 6 },
+    sectionLine: {
+      height: 1,
+      backgroundColor: 'rgba(184, 150, 12, 0.25)',
+      marginBottom: 8,
+    },
+    itemRow: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: SOFT_BORDER,
+    },
+    itemHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    itemEmoji: { fontSize: 20, lineHeight: 24, width: 28 },
+    itemBody: { flex: 1, gap: 2 },
+    itemDescription: { color: theme.text, fontSize: 14, lineHeight: 19 },
+    itemOwner: { color: theme.muted, fontSize: 11, letterSpacing: 0.3 },
+    itemMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 2 },
+    itemDays: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
+    itemSourceBadge: { color: theme.muted, fontSize: 9, letterSpacing: 0.5, fontWeight: '600' },
+    itemNotedBadge: { color: SAGE, fontSize: 11, letterSpacing: 0.3 },
+    itemDate: { color: theme.muted, fontSize: 12, letterSpacing: 0.3 },
+    progressTrack: {
+      height: 2,
+      backgroundColor: 'rgba(255,255,255,0.05)',
+      marginTop: 8,
+      marginLeft: 40,
+      borderRadius: 1,
+      overflow: 'hidden',
+    },
+    progressFill: { height: 2 },
+    expandedBlock: {
+      paddingTop: 14,
+      paddingLeft: 40,
+      gap: 10,
+    },
+    inlineField: { gap: 3 },
+    inlineLabel: {
+      color: theme.muted,
+      fontSize: 10,
+      letterSpacing: 1.5,
+      textTransform: 'uppercase',
+    },
+    inlineInput: {
+      color: theme.text,
+      fontSize: 13,
+      paddingVertical: 4,
+      paddingHorizontal: 0,
+      borderBottomWidth: 1,
+      borderBottomColor: SOFT_BORDER,
+    },
+    inlineMultiline: { minHeight: 50 },
+    relatedBlock: { gap: 2, marginTop: 6 },
+    relatedLabel: {
+      color: theme.muted,
+      fontSize: 10,
+      letterSpacing: 1.5,
+      textTransform: 'uppercase',
+      marginBottom: 2,
+    },
+    relatedLine: { color: theme.muted, fontSize: 12, lineHeight: 17 },
+    notedHistory: { color: SAGE, fontSize: 11, fontStyle: 'italic' },
+    nonSignalNote: { color: theme.muted, fontSize: 12, fontStyle: 'italic' },
+    actionRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 10,
+      flexWrap: 'wrap',
+    },
+    actionBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
+    actionNoted: { backgroundColor: accentColor },
+    actionNotedText: { color: theme.background, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+    actionVault: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: SOFT_BORDER },
+    actionVaultText: { color: theme.muted, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
+    actionRest: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
+    actionRestText: { color: RED, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, opacity: 0.7 },
+    empty: { alignItems: 'center', paddingVertical: 80, gap: 8 },
+    emptyText: { color: theme.muted, fontSize: 14, letterSpacing: 0.3 },
+    emptySubtext: { color: theme.muted, fontSize: 12, letterSpacing: 0.3, textAlign: 'center', paddingHorizontal: 24 },
+  });
+}

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import * as security from '@/app/security';
 import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { ChevronRight, Lock } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -189,6 +189,8 @@ async function loadSettings(): Promise<Settings> {
 // mount and on focus so a change made in one place reflects
 // everywhere.
 function SecuritySection() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [enabled, setEnabledLocal] = useState(false);
   const [lockAfter, setLockAfterLocal] = useState<security.LockAfterMinutes>(5);
@@ -309,6 +311,8 @@ function SecuritySection() {
 }
 
 function SectionHeader({ title, subtext }: { title: string; subtext?: string }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <View style={styles.sectionHeaderWrap}>
       <Text style={styles.sectionHeader}>{title}</Text>
@@ -330,6 +334,8 @@ function Row({
   onPress?: () => void;
   disabled?: boolean;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const Wrap: React.ComponentType<any> = onPress && !disabled ? TouchableOpacity : View;
   return (
     <Wrap style={styles.row} onPress={onPress} activeOpacity={0.6}>
@@ -371,6 +377,8 @@ function ToggleRow({
 }
 
 function HouseholdNameRow() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [name, setName] = useState<string>('');
   const [editing, setEditing] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -437,6 +445,8 @@ function HouseholdNameRow() {
 }
 
 function LanguageRow() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [lang, setLang] = useState<'en' | 'es'>('en');
   const [loaded, setLoaded] = useState(false);
 
@@ -507,6 +517,7 @@ type StyleDetail = 'brief' | 'standard' | 'thorough';
 
 function AppearanceBlock() {
   const { themeMode, accentKey, theme, accentColor, isDark, setThemeMode, setAccentKey } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const modes: { id: ThemeMode; label: string }[] = [
     { id: 'dark', label: 'Dark' },
     { id: 'light', label: 'Light' },
@@ -603,6 +614,8 @@ function AppearanceBlock() {
 }
 
 function VoiceStyleBlock() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [tone, setTone] = useState<StyleTone>('balanced');
   const [humor, setHumor] = useState<StyleHumor>('occasionally');
   const [detail, setDetail] = useState<StyleDetail>('standard');
@@ -897,6 +910,8 @@ function ChevronRow({
   rightText?: string;
   onPress: () => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <Row
       label={label}
@@ -938,6 +953,8 @@ async function handleInviteMember() {
 }
 
 export default function SettingsScreen() {
+  const { theme: t_theme, accentColor: t_accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(t_theme, t_accentColor), [t_theme, t_accentColor]);
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
   const [editingTime, setEditingTime] = useState<null | {
@@ -1688,7 +1705,13 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BRASS = accentColor;
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: BG,
@@ -2038,4 +2061,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: 8,
   },
-});
+  });
+}

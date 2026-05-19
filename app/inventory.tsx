@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SecureScreen } from '@/components/SecureScreen';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
@@ -13,16 +13,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTheme } from './theme';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
 const FAINT = '#3a3835';
-const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
+
+type ThemeColors = { background: string; text: string; muted: string };
 
 type Vehicle = {
   make?: string;
@@ -114,6 +113,9 @@ export default function InventoryScreenSecured() {
 }
 
 function InventoryScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
   const [inventory, setInventory] = useState<Inventory>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -419,6 +421,8 @@ function Section({
   fromEmail?: boolean;
   children: React.ReactNode;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
@@ -441,6 +445,8 @@ function Field({
   multiline?: boolean;
   keyboardType?: 'default' | 'numeric' | 'phone-pad';
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [draft, setDraft] = useState(value);
   // Keep draft in sync when parent updates (after server reconcile or
   // sibling edit). Only resets when the parent value actually differs
@@ -476,6 +482,8 @@ function Segmented({
   value: string | null;
   onChange: (v: string | null) => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <View>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -502,6 +510,8 @@ function VehiclesSection({
   vehicles: Vehicle[];
   onChange: (next: Vehicle[]) => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   function updateAt(i: number, patch: Partial<Vehicle>) {
     const next = vehicles.slice();
     next[i] = { ...next[i], ...patch };
@@ -553,6 +563,8 @@ function AppliancesSection({
   appliances: Appliance[];
   onChange: (next: Appliance[]) => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   function updateAt(i: number, patch: Partial<Appliance>) {
     const next = appliances.slice();
     next[i] = { ...next[i], ...patch };
@@ -593,162 +605,164 @@ function AppliancesSection({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 80 },
-  topBack: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  title: { color: OFF_WHITE, fontSize: 28, fontWeight: '700', letterSpacing: -0.5, marginBottom: 6 },
-  subtitle: { color: MUTED, fontSize: 13, paddingBottom: 24, letterSpacing: 0.2 },
-  section: { marginBottom: 24 },
-  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionHeader: {
-    color: BRASS,
-    fontSize: 11,
-    letterSpacing: 2,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  sectionLine: { height: 1, backgroundColor: 'rgba(184, 150, 12, 0.25)', marginBottom: 12 },
-  fieldLabel: {
-    color: MUTED,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  input: {
-    color: OFF_WHITE,
-    fontSize: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
-  },
-  segmentedRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  segmentTile: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: SOFT_BORDER,
-    borderRadius: 8,
-  },
-  segmentTileActive: {
-    borderColor: BRASS,
-    backgroundColor: 'rgba(184, 150, 12, 0.08)',
-  },
-  segmentText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  segmentTextActive: { color: OFF_WHITE, fontWeight: '600' },
-  subCard: {
-    padding: 12,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    borderRadius: 10,
-    marginBottom: 10,
-    gap: 10,
-  },
-  subCardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  subCardTitle: { color: OFF_WHITE, fontSize: 14, fontWeight: '600' },
-  addItemLink: { color: BRASS, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
-  removeLink: { color: MUTED, fontSize: 11, fontStyle: 'italic' },
-  fromEmailBadge: {
-    color: MUTED,
-    fontSize: 9,
-    letterSpacing: 0.5,
-    fontWeight: '500',
-  },
-  subCardHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  emptyInline: { color: MUTED, fontSize: 12, fontStyle: 'italic' },
-  empty: { alignItems: 'center', paddingVertical: 60 },
-  foundSection: {
-    marginBottom: 28,
-    paddingTop: 8,
-  },
-  foundHeader: {
-    color: BRASS,
-    fontSize: 10,
-    letterSpacing: 2,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  foundSub: {
-    color: MUTED,
-    fontSize: 12,
-    marginBottom: 14,
-    lineHeight: 17,
-  },
-  foundCard: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(184, 150, 12, 0.35)',
-    backgroundColor: 'rgba(184, 150, 12, 0.04)',
-    marginBottom: 12,
-  },
-  foundCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  foundCardEmoji: { fontSize: 18 },
-  foundCardLabel: {
-    color: OFF_WHITE,
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 1,
-  },
-  foundConfDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  foundRow: {
-    color: OFF_WHITE,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  foundRowLabel: {
-    color: MUTED,
-    fontSize: 11,
-    letterSpacing: 0.3,
-  },
-  foundSource: {
-    color: MUTED,
-    fontSize: 10,
-    fontStyle: 'italic',
-    marginTop: 6,
-  },
-  foundActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-  foundConfirmBtn: {
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: BRASS,
-  },
-  foundConfirmText: { color: BG, fontSize: 12, fontWeight: '600' },
-  foundDismissBtn: {
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  foundDismissText: { color: MUTED, fontSize: 12 },
-});
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 80 },
+    topBack: {
+      alignSelf: 'flex-start',
+      paddingVertical: 6,
+      paddingHorizontal: 4,
+      marginBottom: 8,
+    },
+    topBackText: { color: theme.muted, fontSize: 13, letterSpacing: 0.3 },
+    title: { color: theme.text, fontSize: 28, fontWeight: '700', letterSpacing: -0.5, marginBottom: 6 },
+    subtitle: { color: theme.muted, fontSize: 13, paddingBottom: 24, letterSpacing: 0.2 },
+    section: { marginBottom: 24 },
+    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    sectionHeader: {
+      color: accentColor,
+      fontSize: 11,
+      letterSpacing: 2,
+      fontWeight: '600',
+      marginBottom: 6,
+    },
+    sectionLine: { height: 1, backgroundColor: 'rgba(184, 150, 12, 0.25)', marginBottom: 12 },
+    fieldLabel: {
+      color: theme.muted,
+      fontSize: 10,
+      letterSpacing: 1.5,
+      textTransform: 'uppercase',
+      marginBottom: 4,
+    },
+    input: {
+      color: theme.text,
+      fontSize: 14,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      borderRadius: 8,
+    },
+    segmentedRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+    segmentTile: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderWidth: 1,
+      borderColor: SOFT_BORDER,
+      borderRadius: 8,
+    },
+    segmentTileActive: {
+      borderColor: accentColor,
+      backgroundColor: 'rgba(184, 150, 12, 0.08)',
+    },
+    segmentText: { color: theme.muted, fontSize: 13, letterSpacing: 0.3 },
+    segmentTextActive: { color: theme.text, fontWeight: '600' },
+    subCard: {
+      padding: 12,
+      backgroundColor: 'rgba(255,255,255,0.02)',
+      borderRadius: 10,
+      marginBottom: 10,
+      gap: 10,
+    },
+    subCardHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    subCardTitle: { color: theme.text, fontSize: 14, fontWeight: '600' },
+    addItemLink: { color: accentColor, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
+    removeLink: { color: theme.muted, fontSize: 11, fontStyle: 'italic' },
+    fromEmailBadge: {
+      color: theme.muted,
+      fontSize: 9,
+      letterSpacing: 0.5,
+      fontWeight: '500',
+    },
+    subCardHeaderRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    emptyInline: { color: theme.muted, fontSize: 12, fontStyle: 'italic' },
+    empty: { alignItems: 'center', paddingVertical: 60 },
+    foundSection: {
+      marginBottom: 28,
+      paddingTop: 8,
+    },
+    foundHeader: {
+      color: accentColor,
+      fontSize: 10,
+      letterSpacing: 2,
+      fontWeight: '600',
+      marginBottom: 4,
+    },
+    foundSub: {
+      color: theme.muted,
+      fontSize: 12,
+      marginBottom: 14,
+      lineHeight: 17,
+    },
+    foundCard: {
+      padding: 14,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(184, 150, 12, 0.35)',
+      backgroundColor: 'rgba(184, 150, 12, 0.04)',
+      marginBottom: 12,
+    },
+    foundCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 8,
+    },
+    foundCardEmoji: { fontSize: 18 },
+    foundCardLabel: {
+      color: theme.text,
+      fontSize: 14,
+      fontWeight: '600',
+      flex: 1,
+    },
+    foundConfDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+    },
+    foundRow: {
+      color: theme.text,
+      fontSize: 13,
+      lineHeight: 19,
+    },
+    foundRowLabel: {
+      color: theme.muted,
+      fontSize: 11,
+      letterSpacing: 0.3,
+    },
+    foundSource: {
+      color: theme.muted,
+      fontSize: 10,
+      fontStyle: 'italic',
+      marginTop: 6,
+    },
+    foundActions: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 12,
+    },
+    foundConfirmBtn: {
+      paddingVertical: 7,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      backgroundColor: accentColor,
+    },
+    foundConfirmText: { color: theme.background, fontSize: 12, fontWeight: '600' },
+    foundDismissBtn: {
+      paddingVertical: 7,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255,255,255,0.10)',
+    },
+    foundDismissText: { color: theme.muted, fontSize: 12 },
+  });
+}

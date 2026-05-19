@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -19,13 +19,12 @@ import { CameraScanner } from './CameraScanner';
 import { SMSComposerSheet } from './SMSComposerSheet';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 import { Tooltip } from './Tooltip';
+import { useTheme } from '../app/theme';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const BRASS = '#b8960c';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const USER_ID = 'james_totalhome_gmail_com';
+
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
 
 // Status cycle for the edit-mode tap-to-advance picker. Keep in sync
 // with the values produced by the import classifier; "Unknown" is the
@@ -67,6 +66,12 @@ export function FinaleSheet(props: FinaleSheetProps) {
     return <SingleSheet {...props} />;
   }
 
+  return <CategorySheet {...props} />;
+}
+
+function CategorySheet(props: CategoryProps) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const { visible, categoryTypeKey, signals, bottomInset = 0, onClose, onRest } = props;
   const categoryMeta = TYPE_META[categoryTypeKey];
 
@@ -147,6 +152,9 @@ function SingleSheet({
   onHold,
   onUpdate,
 }: SingleProps) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const MUTED = theme.muted;
   const meta = metaFor(signal);
   const [editing, setEditing] = useState(false);
   const [editedDescription, setEditedDescription] = useState(signal.description || '');
@@ -478,6 +486,8 @@ function SingleSheet({
 // backend already wrote the photo into signal.photos[] during
 // the /api/scan call.
 function SignalPhotosRow({ signal, userId }: { signal: Signal; userId: string }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [showScanner, setShowScanner] = useState(false);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   return (
@@ -516,6 +526,8 @@ function SignalPhotosRow({ signal, userId }: { signal: Signal; userId: string })
 // signal. Keeps the call-site tiny so it slots cleanly under the
 // photo attachment row without re-flowing the meta block.
 function SignalSMSLink({ signal, userId }: { signal: Signal; userId: string }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -550,6 +562,8 @@ function CrewAttributionRow({
   userId: string;
   onAttributed: (name: string | null) => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [crew, setCrew] = useState<{ name: string; photoUrl?: string | null; memberType?: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState<string | null>(signal.crewMemberId || null);
@@ -641,395 +655,397 @@ function CrewAttributionRow({
   );
 }
 
-const styles = StyleSheet.create({
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 40,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    width: 48,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    marginBottom: 16,
-  },
-  sheetHeaderWrap: {
-    position: 'relative',
-    marginBottom: 12,
-    justifyContent: 'center',
-  },
-  sheetHeader: {
-    color: MUTED,
-    fontSize: 11,
-    letterSpacing: 3,
-    fontWeight: '600',
-    textAlign: 'center',
-    textTransform: 'uppercase',
-  },
-  editLinkPosition: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  editLink: {
-    color: MUTED,
-    fontSize: 11,
-    letterSpacing: 1,
-    fontWeight: '500',
-  },
-  sheetEmoji: {
-    fontSize: 40,
-    lineHeight: 48,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  sheetDescription: {
-    color: OFF_WHITE,
-    fontSize: 18,
-    fontWeight: '300',
-    lineHeight: 26,
-    textAlign: 'center',
-    marginBottom: 20,
-    letterSpacing: 0.2,
-  },
-  editDescription: {
-    color: OFF_WHITE,
-    fontSize: 18,
-    fontWeight: '300',
-    lineHeight: 26,
-    textAlign: 'center',
-    marginBottom: 20,
-    letterSpacing: 0.2,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 8,
-    minHeight: 40,
-  },
-  metaBlock: {
-    marginBottom: 24,
-    gap: 6,
-  },
-  recurringLine: {
-    color: MUTED,
-    fontSize: 12,
-    letterSpacing: 0.3,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  metaLine: {
-    color: MUTED,
-    fontSize: 13,
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  finaleTipWrap: {
-    alignItems: 'center',
-    marginBottom: 6,
-    paddingHorizontal: 20,
-  },
-  photosBlock: {
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  photoThumbs: { gap: 8, paddingVertical: 4 },
-  photoThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  addPhotoBtn: {
-    paddingVertical: 6,
-  },
-  addPhotoText: {
-    color: '#5a5855',
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  smsLinkBtn: {
-    paddingVertical: 6,
-    alignSelf: 'center',
-    marginTop: 4,
-  },
-  smsLinkText: {
-    color: '#5a5855',
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  attributionRow: {
-    marginTop: 12,
-    paddingVertical: 6,
-    alignItems: 'center',
-  },
-  attributionLabel: {
-    color: MUTED,
-    fontSize: 11,
-    letterSpacing: 0.5,
-  },
-  attributionName: {
-    color: BRASS,
-    fontSize: 13,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  attributionAssign: {
-    color: MUTED,
-    fontSize: 12,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  attributionBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  attributionSheet: {
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    paddingTop: 22,
-    paddingBottom: 36,
-    paddingHorizontal: 18,
-  },
-  attributionSheetTitle: {
-    color: '#f0ede8',
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    marginBottom: 16,
-  },
-  attributionMemberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    gap: 12,
-  },
-  attributionPhoto: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BRASS,
-  },
-  attributionPhotoFallback: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#2a2a2a',
-    borderWidth: 1,
-    borderColor: BRASS,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attributionPhotoInitials: {
-    color: BRASS,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  attributionMemberName: {
-    color: '#f0ede8',
-    fontSize: 14,
-  },
-  suggestionBlock: {
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
-  suggestionLabel: {
-    color: MUTED,
-    fontSize: 10,
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  suggestionText: {
-    color: BRASS,
-    fontSize: 13,
-    fontStyle: 'italic',
-    lineHeight: 18,
-    letterSpacing: 0.2,
-  },
-  editMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  editLabel: {
-    color: MUTED,
-    fontSize: 13,
-    letterSpacing: 0.3,
-  },
-  editValue: {
-    color: OFF_WHITE,
-    fontSize: 13,
-    letterSpacing: 0.3,
-    textDecorationLine: 'underline',
-    textDecorationColor: MUTED,
-  },
-  editEtaInput: {
-    color: OFF_WHITE,
-    fontSize: 13,
-    letterSpacing: 0.3,
-    minWidth: 140,
-    textAlign: 'left',
-    paddingVertical: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.15)',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  btn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  btnPrimary: {
-    backgroundColor: OFF_WHITE,
-  },
-  btnPrimaryText: {
-    color: BG,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  btnSecondary: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  btnSecondaryText: {
-    color: OFF_WHITE,
-    fontSize: 15,
-    fontWeight: '500',
-    letterSpacing: 0.3,
-  },
-  // Camouflage link sits below the Hold/Rest button row. Small, muted,
-  // not styled as a button — it's an escape hatch, not a primary
-  // action.
-  camouflageLinkWrap: {
-    marginTop: 16,
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-  },
-  camouflageLink: {
-    color: MUTED,
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  btnSave: {
-    backgroundColor: BRASS,
-  },
-  btnSaveText: {
-    color: BG,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  filterBackdrop: {
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  filterSheet: {
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 12,
-    maxHeight: '70%',
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-  },
-  filterTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  filterTitleEmoji: {
-    fontSize: 20,
-    lineHeight: 24,
-  },
-  filterTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  clearFilterText: {
-    color: MUTED,
-    fontSize: 13,
-    letterSpacing: 0.5,
-  },
-  filterList: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-  },
-  filterEmpty: {
-    color: MUTED,
-    fontSize: 14,
-    textAlign: 'center',
-    paddingVertical: 32,
-  },
-  filterItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-    gap: 12,
-  },
-  filterItemEmoji: {
-    fontSize: 24,
-    lineHeight: 28,
-    width: 28,
-    textAlign: 'center',
-  },
-  filterItemBody: {
-    flex: 1,
-    gap: 4,
-  },
-  filterItemDescription: {
-    color: OFF_WHITE,
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '400',
-  },
-  filterItemMeta: {
-    color: MUTED,
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  filterRestBtn: {
-    backgroundColor: OFF_WHITE,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    alignSelf: 'center',
-  },
-  filterRestBtnText: {
-    color: BG,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-});
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'flex-end',
+    },
+    sheet: {
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 24,
+      paddingTop: 12,
+      paddingBottom: 40,
+    },
+    sheetHandle: {
+      alignSelf: 'center',
+      width: 48,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      marginBottom: 16,
+    },
+    sheetHeaderWrap: {
+      position: 'relative',
+      marginBottom: 12,
+      justifyContent: 'center',
+    },
+    sheetHeader: {
+      color: theme.muted,
+      fontSize: 11,
+      letterSpacing: 3,
+      fontWeight: '600',
+      textAlign: 'center',
+      textTransform: 'uppercase',
+    },
+    editLinkPosition: {
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      paddingHorizontal: 4,
+    },
+    editLink: {
+      color: theme.muted,
+      fontSize: 11,
+      letterSpacing: 1,
+      fontWeight: '500',
+    },
+    sheetEmoji: {
+      fontSize: 40,
+      lineHeight: 48,
+      textAlign: 'center',
+      marginBottom: 16,
+    },
+    sheetDescription: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: '300',
+      lineHeight: 26,
+      textAlign: 'center',
+      marginBottom: 20,
+      letterSpacing: 0.2,
+    },
+    editDescription: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: '300',
+      lineHeight: 26,
+      textAlign: 'center',
+      marginBottom: 20,
+      letterSpacing: 0.2,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+      borderRadius: 8,
+      minHeight: 40,
+    },
+    metaBlock: {
+      marginBottom: 24,
+      gap: 6,
+    },
+    recurringLine: {
+      color: theme.muted,
+      fontSize: 12,
+      letterSpacing: 0.3,
+      marginTop: 4,
+      fontStyle: 'italic',
+    },
+    metaLine: {
+      color: theme.muted,
+      fontSize: 13,
+      letterSpacing: 0.3,
+      textAlign: 'center',
+    },
+    finaleTipWrap: {
+      alignItems: 'center',
+      marginBottom: 6,
+      paddingHorizontal: 20,
+    },
+    photosBlock: {
+      marginTop: 10,
+      alignItems: 'center',
+    },
+    photoThumbs: { gap: 8, paddingVertical: 4 },
+    photoThumb: {
+      width: 40,
+      height: 40,
+      borderRadius: 6,
+      marginRight: 8,
+    },
+    addPhotoBtn: {
+      paddingVertical: 6,
+    },
+    addPhotoText: {
+      color: theme.muted,
+      fontSize: 12,
+      letterSpacing: 0.3,
+    },
+    smsLinkBtn: {
+      paddingVertical: 6,
+      alignSelf: 'center',
+      marginTop: 4,
+    },
+    smsLinkText: {
+      color: theme.muted,
+      fontSize: 12,
+      letterSpacing: 0.3,
+    },
+    attributionRow: {
+      marginTop: 12,
+      paddingVertical: 6,
+      alignItems: 'center',
+    },
+    attributionLabel: {
+      color: theme.muted,
+      fontSize: 11,
+      letterSpacing: 0.5,
+    },
+    attributionName: {
+      color: accentColor,
+      fontSize: 13,
+      marginTop: 4,
+      fontWeight: '500',
+    },
+    attributionAssign: {
+      color: theme.muted,
+      fontSize: 12,
+      marginTop: 4,
+      fontStyle: 'italic',
+    },
+    attributionBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'flex-end',
+    },
+    attributionSheet: {
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: 18,
+      borderTopRightRadius: 18,
+      paddingTop: 22,
+      paddingBottom: 36,
+      paddingHorizontal: 18,
+    },
+    attributionSheetTitle: {
+      color: theme.text,
+      fontSize: 14,
+      fontWeight: '600',
+      letterSpacing: 0.3,
+      marginBottom: 16,
+    },
+    attributionMemberRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+      gap: 12,
+    },
+    attributionPhoto: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: accentColor,
+    },
+    attributionPhotoFallback: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: '#2a2a2a',
+      borderWidth: 1,
+      borderColor: accentColor,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    attributionPhotoInitials: {
+      color: accentColor,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    attributionMemberName: {
+      color: theme.text,
+      fontSize: 14,
+    },
+    suggestionBlock: {
+      marginBottom: 24,
+      paddingHorizontal: 8,
+    },
+    suggestionLabel: {
+      color: theme.muted,
+      fontSize: 10,
+      letterSpacing: 1,
+      marginBottom: 4,
+    },
+    suggestionText: {
+      color: accentColor,
+      fontSize: 13,
+      fontStyle: 'italic',
+      lineHeight: 18,
+      letterSpacing: 0.2,
+    },
+    editMetaRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 8,
+    },
+    editLabel: {
+      color: theme.muted,
+      fontSize: 13,
+      letterSpacing: 0.3,
+    },
+    editValue: {
+      color: theme.text,
+      fontSize: 13,
+      letterSpacing: 0.3,
+      textDecorationLine: 'underline',
+      textDecorationColor: theme.muted,
+    },
+    editEtaInput: {
+      color: theme.text,
+      fontSize: 13,
+      letterSpacing: 0.3,
+      minWidth: 140,
+      textAlign: 'left',
+      paddingVertical: 2,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255,255,255,0.15)',
+    },
+    buttonRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    btn: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    btnPrimary: {
+      backgroundColor: theme.text,
+    },
+    btnPrimaryText: {
+      color: theme.background,
+      fontSize: 15,
+      fontWeight: '600',
+      letterSpacing: 0.3,
+    },
+    btnSecondary: {
+      backgroundColor: 'rgba(255,255,255,0.06)',
+    },
+    btnSecondaryText: {
+      color: theme.text,
+      fontSize: 15,
+      fontWeight: '500',
+      letterSpacing: 0.3,
+    },
+    // Camouflage link sits below the Hold/Rest button row. Small, muted,
+    // not styled as a button — it's an escape hatch, not a primary
+    // action.
+    camouflageLinkWrap: {
+      marginTop: 16,
+      alignSelf: 'flex-start',
+      paddingVertical: 4,
+    },
+    camouflageLink: {
+      color: theme.muted,
+      fontSize: 12,
+      letterSpacing: 0.3,
+    },
+    btnSave: {
+      backgroundColor: accentColor,
+    },
+    btnSaveText: {
+      color: theme.background,
+      fontSize: 15,
+      fontWeight: '600',
+      letterSpacing: 0.3,
+    },
+    filterBackdrop: {
+      backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    filterSheet: {
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingTop: 12,
+      maxHeight: '70%',
+    },
+    filterHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 24,
+      paddingTop: 8,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255,255,255,0.06)',
+    },
+    filterTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    filterTitleEmoji: {
+      fontSize: 20,
+      lineHeight: 24,
+    },
+    filterTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+    },
+    clearFilterText: {
+      color: theme.muted,
+      fontSize: 13,
+      letterSpacing: 0.5,
+    },
+    filterList: {
+      paddingHorizontal: 24,
+      paddingTop: 12,
+    },
+    filterEmpty: {
+      color: theme.muted,
+      fontSize: 14,
+      textAlign: 'center',
+      paddingVertical: 32,
+    },
+    filterItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255,255,255,0.05)',
+      gap: 12,
+    },
+    filterItemEmoji: {
+      fontSize: 24,
+      lineHeight: 28,
+      width: 28,
+      textAlign: 'center',
+    },
+    filterItemBody: {
+      flex: 1,
+      gap: 4,
+    },
+    filterItemDescription: {
+      color: theme.text,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: '400',
+    },
+    filterItemMeta: {
+      color: theme.muted,
+      fontSize: 12,
+      letterSpacing: 0.3,
+    },
+    filterRestBtn: {
+      backgroundColor: theme.text,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 8,
+      alignSelf: 'center',
+    },
+    filterRestBtnText: {
+      color: theme.background,
+      fontSize: 13,
+      fontWeight: '600',
+      letterSpacing: 0.3,
+    },
+  });
+}
