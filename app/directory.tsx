@@ -8,6 +8,7 @@
 //
 // Entry can target a specific card via ?card=<id> or ?screen=<path>.
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -39,7 +40,7 @@ type DirectoryCard = {
   screenLink: string | null;
 };
 
-const CARDS: DirectoryCard[] = [
+const DIRECTORY_CARDS_EN: DirectoryCard[] = [
   // ── Section 1 — The Basics ──
   { id: 'brief', section: 'The Basics', sectionNumber: 1, title: 'The Brief',
     body: "Every morning at 7am Conductor delivers a brief — 3 to 5 sentences about what matters most in your household today. Not everything. Not a list. Just what you actually need to know, said calmly and clearly. The brief gets smarter every day as Conductor learns your household's patterns.",
@@ -149,7 +150,85 @@ const CARDS: DirectoryCard[] = [
     screenLink: '/privacy-dashboard' },
 ];
 
-const SECTION_PILLS: { label: string; section: string | 'all' }[] = [
+// 24 Spanish translations. Same id + screenLink as EN so navigation
+// deep-links continue to work in either language. Section labels are
+// localized; the SECTION_PILLS_ES below matches.
+const DIRECTORY_CARDS_ES: DirectoryCard[] = [
+  { id: 'brief', section: 'Lo Básico', sectionNumber: 1, title: 'El Resumen',
+    body: 'Cada mañana a las 7am Conductor entrega un resumen — 3 a 5 oraciones sobre lo más importante en tu hogar hoy. No todo. No una lista. Solo lo que necesitas saber, dicho con calma y claridad. El resumen mejora cada día mientras Conductor aprende los patrones de tu hogar.',
+    example: '"Tienes dos renovaciones de suscripción esta semana y Mia tiene una excursión el lunes."', screenLink: '/' },
+  { id: 'radar', section: 'Lo Básico', sectionNumber: 1, title: 'El Radar',
+    body: 'La pantalla Hover muestra tus señales como puntos en tres anillos giratorios. El anillo interior necesita atención hoy. El anillo del medio se acerca. El anillo exterior está en el horizonte. Toca cualquier punto para ver detalles.',
+    example: 'Un paquete que llega hoy está en el anillo interior. Una renovación en tres semanas está en el anillo exterior.', screenLink: '/hover' },
+  { id: 'signals', section: 'Lo Básico', sectionNumber: 1, title: 'Señales',
+    body: 'Una señal es cualquier cosa en tu hogar que necesita atención o acción — una entrega, un plazo, una cita de servicio, una renovación. Conductor encuentra señales en tu Gmail automáticamente. Puedes agregarlas manualmente. Las señales pasan de entrante a activa a resuelta.',
+    example: 'Cuando tocas Descansar en una señal, se resuelve y contribuye a tu racha del hogar.', screenLink: '/hover' },
+  { id: 'pulse', section: 'Lo Básico', sectionNumber: 1, title: 'El Pulso',
+    body: 'El Pulso sintetiza tu salud, el clima y la carga de señales en una oración sobre el día de hoy. Vive debajo de tu saludo en la pantalla principal. Tócalo para expandir y ver qué está considerando Conductor.',
+    example: '"La humedad tiene opiniones hoy — dos cosas urgentes necesitan tu atención antes de que aumente el calor."', screenLink: '/' },
+  { id: 'crew', section: 'Tu Hogar', sectionNumber: 2, title: 'Equipo',
+    body: 'Equipo es todos en tu hogar — parejas, hijos, mascotas. Cada miembro tiene su propia bio con horario, detalles de salud y señales atribuidas. Cuando una señal pertenece a una persona específica, Conductor la atribuye a ellos y lo narra así en el resumen.',
+    example: '"La receta de Mia necesita renovarse esta semana." — porque la señal está atribuida a Mia.', screenLink: '/crew' },
+  { id: 'vault', section: 'Tu Hogar', sectionNumber: 2, title: 'Bóveda',
+    body: 'La Bóveda es el registro permanente de tu hogar — pólizas de seguro, suscripciones, garantías, registros, arrendamientos y plazos. Conductor la llena desde Gmail automáticamente. También puedes escanear documentos físicos o agregar elementos manualmente.',
+    example: 'La renovación del registro de tu auto vive en la Bóveda. Conductor la muestra antes de que venza.', screenLink: '/vault' },
+  { id: 'horizon', section: 'Tu Hogar', sectionNumber: 2, title: 'El Horizonte',
+    body: 'El Horizonte muestra todo más allá de las próximas dos semanas — organizado en Próximamente, Más Adelante y En el Borde. Toca Anotado para reconocer algo sin resolverlo. Los elementos se mueven al resumen cuando se acercan.',
+    example: 'Tu viaje a París está en Próximamente. Tu renovación anual de seguro está en Más Adelante.', screenLink: '/horizon' },
+  { id: 'programme', section: 'Tu Hogar', sectionNumber: 2, title: 'El Programa',
+    body: 'El Programa es una línea de tiempo de 14 días que muestra todo lo que Conductor está vigilando — señales, eventos del equipo, plazos de la bóveda y eventos del calendario en una sola vista. El calendario unificado del hogar que no existe en ningún otro lugar.',
+    example: 'El lunes muestra una entrega. El martes muestra una cita de servicio. El jueves muestra la práctica de fútbol de Mia.', screenLink: '/programme' },
+  { id: 'inventory', section: 'Tu Hogar', sectionNumber: 2, title: 'Inventario del Hogar',
+    body: 'El Inventario del Hogar es donde le dices a Conductor sobre los sistemas de tu hogar — techo, HVAC, calentador de agua, vehículos, electrodomésticos. Cuanto más llenes, más inteligente se vuelve el plan de mantenimiento.',
+    example: 'Dile a Conductor que tu techo fue instalado en 2009 y mostrará un recordatorio de inspección antes de la temporada de huracanes.', screenLink: '/inventory' },
+  { id: 'ask', section: 'Inteligencia', sectionNumber: 3, title: 'Pregúntale a Conductor',
+    body: 'Pregúntale a Conductor cualquier cosa — sobre tu hogar, sobre el producto, o comandos como "abrir mi bóveda" o "activar Face ID". Conductor responde desde los datos reales de tu hogar y puede navegar la app o cambiar configuraciones en tu nombre.',
+    example: '"¿Es razonable $450 por servicio de HVAC?" — Conductor conoce tu mercado y tu historial de servicio.', screenLink: '/' },
+  { id: 'synthesis', section: 'Inteligencia', sectionNumber: 3, title: 'Síntesis',
+    body: 'Cada mañana Conductor considera tus datos de salud, el clima y tu carga de señales simultáneamente antes de decir algo. Esta capa de síntesis es lo que hace que el resumen se sienta como si hubiera sido escrito por alguien que te conoce.',
+    example: 'Mal sueño más alta humedad más un día de señales ocupado produce: "Mantente hidratado hoy."', screenLink: '/' },
+  { id: 'patterns', section: 'Inteligencia', sectionNumber: 3, title: 'Patrones',
+    body: 'Con el tiempo Conductor aprende cómo opera tu hogar — qué señales resuelves rápido, qué días son típicamente ocupados, qué patrones estacionales se repiten. Después de 90 días la voz del resumen refleja este conocimiento naturalmente.',
+    example: 'Después de tres meses Conductor sabe que tus pedidos de Amazon llegan en 2 días — así que un retraso de 5 días es notable.', screenLink: '/' },
+  { id: 'network', section: 'Inteligencia', sectionNumber: 3, title: 'La Red',
+    body: 'La Red conecta tu hogar con hogares familiares de confianza. Tú eliges qué compartir — desde solo conciencia de emergencia hasta visibilidad completa de señales. Los hogares conectados aparecen discretamente en tu resumen cuando algo necesita atención.',
+    example: '"El hogar de tus padres tiene un plazo que se acerca esta semana." — mostrado porque están conectados.', screenLink: '/network' },
+  { id: 'maintenance', section: 'Planificación', sectionNumber: 4, title: 'Plan de Mantenimiento',
+    body: 'Una vez que Conductor conoce los sistemas de tu hogar, genera un programa de mantenimiento anual con tiempos estacionales y rangos de costos reales para tu mercado. Cada elemento se puede agregar a tu radar de señales con un toque.',
+    example: '"Mantenimiento de HVAC antes de junio. Reserva ahora — la demanda en South Florida aumenta en verano."', screenLink: '/maintenance' },
+  { id: 'transitions', section: 'Planificación', sectionNumber: 4, title: 'Transiciones de Vida',
+    body: 'Cuando algo grande cambia — un nuevo bebé, casa nueva, diagnóstico de salud, cambio de trabajo — díselo a Conductor. Siembra los elementos correctos en la Bóveda, ajusta su tono y vigila los plazos específicos de la transición por 90 días.',
+    example: 'Una transición de casa nueva siembra automáticamente 14 elementos en la Bóveda — desde el cambio de dirección postal hasta el primer pago de impuestos.', screenLink: '/transition' },
+  { id: 'caught', section: 'Planificación', sectionNumber: 4, title: 'Momentos Atrapados',
+    body: 'Cuando Conductor atrapa algo cerca de escaparse — un plazo manejado dentro de 72 horas antes de vencer — lo reconoce. Estos se registran en tu Diario de Memoria y aparecen en la Revisión de la Semana.',
+    example: '"Conductor atrapó el registro del vehículo antes de que venciera — manejado con 2 días de sobra."', screenLink: '/journal' },
+  { id: 'weekreview', section: 'Planificación', sectionNumber: 4, title: 'Revisión de la Semana',
+    body: 'Cada domingo por la noche el resumen de Despeje incluye una Revisión de la Semana — un párrafo cálido y honesto sobre cómo le fue al hogar esta semana. Señales manejadas, plazos atrapados, estado de racha. Se vuelve más personal mientras Conductor te conoce mejor.',
+    example: '"Siete señales esta semana. Seis manejadas, una trasladada. La racha se mantiene en 12 días."', screenLink: '/' },
+  { id: 'notifications', section: 'Comunicación', sectionNumber: 5, title: 'Notificaciones',
+    body: 'Conductor envía tres tipos de notificaciones push — Despegue matutino a las 7am, Despeje vespertino a las 9pm, y seguimientos cuando pasa el ETA de una señal. Los controles de mediodía son opcionales y están desactivados por defecto.',
+    example: 'Un seguimiento se activa una hora después de que pasa tu ventana de HVAC: "Tu ventana de cita acaba de pasar — ¿ocurrió?"', screenLink: '/settings' },
+  { id: 'sms', section: 'Comunicación', sectionNumber: 5, title: 'Actualizaciones por SMS',
+    body: 'Conductor puede enviar mensajes de texto a cualquier persona conectada a tu hogar — familiares, contratistas — tengan o no la app. Responden con palabras clave simples (LISTO, SÍ, NO) y Conductor actualiza la señal automáticamente.',
+    example: 'Texto a tu contratista: "Confirmando el jueves a las 2pm. Responde CONFIRMAR para confirmar." Responden. La señal se actualiza.', screenLink: '/communicate' },
+  { id: 'relay', section: 'Comunicación', sectionNumber: 5, title: 'Relevo de Señales',
+    body: 'Los miembros del hogar — incluidos los niños con Conductor Junior — pueden agregar señales directamente hablando o escribiendo. Un niño puede decir que necesita útiles escolares y aparece inmediatamente en el resumen de los padres atribuido a ese niño.',
+    example: 'Mia dice "necesito lápices de colores para el viernes" → resumen de padres: "[MIA AGREGÓ] Útiles escolares necesarios para el viernes"', screenLink: '/junior' },
+  { id: 'reads', section: 'Privacidad y Datos', sectionNumber: 6, title: 'Qué Lee Conductor',
+    body: 'Conductor lee tu Gmail para encontrar señales, tu Google Calendar para detectar conflictos, y Apple Health para síntesis. Nunca lee correos que no generan señales y nunca almacena contenido de correo — solo la señal que extrae.',
+    example: 'Un correo de envío de Amazon se convierte en una señal de entrega. El contenido del correo se descarta inmediatamente.', screenLink: '/privacy-dashboard' },
+  { id: 'never', section: 'Privacidad y Datos', sectionNumber: 6, title: 'Lo Que Conductor Nunca Hace',
+    body: 'Conductor nunca vende tus datos. Nunca comparte la información de tu hogar sin permiso explícito. Nunca lee correos que no generan señales. Nunca almacena datos de salud sin cifrar. Tu resumen se genera desde tus datos — no desde datos de otros hogares.',
+    example: 'Tus señales son tuyas. Nunca entrenan modelos ni informan a otros hogares sin tu permiso.', screenLink: '/privacy-dashboard' },
+  { id: 'network-privacy', section: 'Privacidad y Datos', sectionNumber: 6, title: 'Privacidad de La Red',
+    body: 'Las conexiones de La Red solo ven lo que compartes explícitamente. Los niveles de permiso los estableces tú y son revocables en cualquier momento. Las conexiones vigilantes solo ven la carga de señales. Las conexiones abiertas ven descripciones de señales.',
+    example: 'Tus padres en nivel Vigilante ven: "2 señales en movimiento." Nada más a menos que lo cambies.', screenLink: '/network' },
+  { id: 'controls', section: 'Privacidad y Datos', sectionNumber: 6, title: 'Tus Controles de Datos',
+    body: 'Puedes exportar todos los datos de tu hogar como un archivo JSON en cualquier momento. Puedes eliminar tu cuenta y todos los datos asociados permanentemente. Puedes ver exactamente qué correos generaron qué señales en el Panel de Privacidad.',
+    example: 'Tu Casa → Privacidad y Datos → Exportar mis datos descarga todo lo que Conductor sabe sobre tu hogar.', screenLink: '/privacy-dashboard' },
+];
+
+const SECTION_PILLS_EN: { label: string; section: string | 'all' }[] = [
   { label: 'All', section: 'all' },
   { label: 'Basics', section: 'The Basics' },
   { label: 'Household', section: 'Your Household' },
@@ -157,6 +236,16 @@ const SECTION_PILLS: { label: string; section: string | 'all' }[] = [
   { label: 'Planning', section: 'Planning' },
   { label: 'Communication', section: 'Communication' },
   { label: 'Privacy', section: 'Privacy & Data' },
+];
+
+const SECTION_PILLS_ES: { label: string; section: string | 'all' }[] = [
+  { label: 'Todo', section: 'all' },
+  { label: 'Lo Básico', section: 'Lo Básico' },
+  { label: 'Tu Hogar', section: 'Tu Hogar' },
+  { label: 'Inteligencia', section: 'Inteligencia' },
+  { label: 'Planificación', section: 'Planificación' },
+  { label: 'Comunicación', section: 'Comunicación' },
+  { label: 'Privacidad', section: 'Privacidad y Datos' },
 ];
 
 // Map screenLink → friendly name for the "Open X →" link.
@@ -183,6 +272,26 @@ export default function DirectoryScreen() {
   const { width } = useWindowDimensions();
   const cardWidth = width - 40; // 20px peek on each side
   const listRef = useRef<FlatList<DirectoryCard>>(null);
+
+  // Language pick — read AsyncStorage 'conductorLanguage' on mount.
+  // Default English. Defensive try/catch so storage failure can't
+  // crash the screen.
+  const [language, setLanguage] = useState<'en' | 'es'>('en');
+  useEffect(() => {
+    (async () => {
+      try {
+        const v = await AsyncStorage.getItem('conductorLanguage');
+        if (v === 'es') setLanguage('es');
+      } catch { /* fall through to EN */ }
+    })();
+  }, []);
+  const CARDS = language === 'es' ? DIRECTORY_CARDS_ES : DIRECTORY_CARDS_EN;
+  const SECTION_PILLS = language === 'es' ? SECTION_PILLS_ES : SECTION_PILLS_EN;
+  const titleLabel = language === 'es' ? 'Directorio' : 'Directory';
+  const subtitleLabel = language === 'es' ? 'Tu guía de Conductor' : 'Your guide to Conductor';
+  const returnLabel = language === 'es' ? '← Volver' : '← Return';
+  const counterOf = language === 'es' ? 'de' : 'of';
+  const openWord = language === 'es' ? 'Abrir' : 'Open';
 
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -236,13 +345,13 @@ export default function DirectoryScreen() {
     <View style={styles.container}>
       <View style={styles.headerWrap}>
         <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
-          <Text style={styles.topBackText}>← Return</Text>
+          <Text style={styles.topBackText}>{returnLabel}</Text>
         </TouchableOpacity>
-        <Text style={styles.counter}>{activeIndex + 1} of {CARDS.length}</Text>
+        <Text style={styles.counter}>{activeIndex + 1} {counterOf} {CARDS.length}</Text>
       </View>
 
-      <Text style={styles.title}>Directory</Text>
-      <Text style={styles.subtitle}>Your guide to Conductor</Text>
+      <Text style={styles.title}>{titleLabel}</Text>
+      <Text style={styles.subtitle}>{subtitleLabel}</Text>
 
       <ScrollView
         horizontal
@@ -302,7 +411,7 @@ export default function DirectoryScreen() {
                   style={styles.openLinkRow}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Text style={styles.openLink}>
-                    Open {SCREEN_NAMES[item.screenLink] || item.screenLink} →
+                    {openWord} {SCREEN_NAMES[item.screenLink] || item.screenLink} →
                   </Text>
                 </TouchableOpacity>
               ) : null}
