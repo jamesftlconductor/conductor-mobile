@@ -371,13 +371,21 @@ export default function ProgrammeScreen() {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={MUTED} />
       }>
-      <TouchableOpacity
-        onPress={() => router.back()}
-        activeOpacity={0.6}
-        style={styles.topBack}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Text style={styles.topBackText}>← Return</Text>
-      </TouchableOpacity>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          activeOpacity={0.6}
+          style={styles.topBack}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.topBackText}>← Return</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => router.push('/calendar' as never)}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.monthLink}>Month view →</Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.title}>The Programme</Text>
       <Text style={styles.subtitle}>Everything in motion</Text>
@@ -431,16 +439,28 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
     scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+    topBar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
     topBack: {
-      alignSelf: 'flex-start',
       paddingVertical: 6,
       paddingHorizontal: 4,
-      marginBottom: 8,
     },
     topBackText: {
       color: theme.muted,
       fontSize: 13,
       letterSpacing: 0.3,
+    },
+    monthLink: {
+      color: accentColor,
+      fontSize: 13,
+      letterSpacing: 0.3,
+      fontWeight: '500',
+      paddingVertical: 6,
+      paddingHorizontal: 4,
     },
     title: {
       color: theme.text,

@@ -26,9 +26,14 @@ type Props = {
   userId: string;
   onClose: () => void;
   onAdded: (signal: Signal) => void;
+  // Optional ETA pre-fill — used by the monthly Calendar screen when
+  // the user taps "+ Add signal for this date". Resets along with the
+  // other fields on each open so re-opening from somewhere else stays
+  // clean. Pass YYYY-MM-DD; the input field accepts free text anyway.
+  initialEta?: string;
 };
 
-export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
+export function AddSignalSheet({ visible, userId, onClose, onAdded, initialEta }: Props) {
   const [description, setDescription] = useState('');
   const [typeKey, setTypeKey] = useState<string>('package');
   const [eta, setEta] = useState('');
@@ -37,16 +42,17 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded }: Props) {
 
   // Reset every time the sheet opens — leftover state from a prior
   // open would be confusing if the user added one signal then opened
-  // the sheet again.
+  // the sheet again. initialEta seeds the ETA when the sheet is
+  // opened from the Calendar screen's day-sheet.
   useEffect(() => {
     if (visible) {
       setDescription('');
       setTypeKey('package');
-      setEta('');
+      setEta(initialEta || '');
       setSender('');
       setSubmitting(false);
     }
-  }, [visible]);
+  }, [visible, initialEta]);
 
   const canSubmit = description.trim().length > 0 && !submitting;
 
