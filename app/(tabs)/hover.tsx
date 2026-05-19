@@ -53,9 +53,9 @@ type RingDef = {
 };
 
 const RINGS: Record<RingKey, RingDef> = {
-  outer:  { key: 'outer',  radius: 165, rotationMs: 60000, strokeOpacity: 0.12, label: 'ON THE HORIZON',    pulseMs: 2500 },
-  middle: { key: 'middle', radius: 115, rotationMs: 30000, strokeOpacity: 0.18, label: 'APPROACHING FAST',  pulseMs: 1500 },
-  inner:  { key: 'inner',  radius: 65,  rotationMs: 15000, strokeOpacity: 0.25, label: 'ACT NOW',           pulseMs: 600  },
+  outer:  { key: 'outer',  radius: 165, rotationMs: 60000, strokeOpacity: 0.4, label: 'ON THE HORIZON',    pulseMs: 2500 },
+  middle: { key: 'middle', radius: 115, rotationMs: 30000, strokeOpacity: 0.7, label: 'APPROACHING FAST',  pulseMs: 1500 },
+  inner:  { key: 'inner',  radius: 65,  rotationMs: 15000, strokeOpacity: 1.0, label: 'ACT NOW',           pulseMs: 600  },
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -222,6 +222,7 @@ type ResolveAnim = {
 };
 
 function DashedRing({ radius, opacity }: { radius: number; opacity: number }) {
+  const { accentColor } = useTheme();
   const size = radius * 2 + 4;
   const c = size / 2;
   const circumference = 2 * Math.PI * radius;
@@ -233,7 +234,7 @@ function DashedRing({ radius, opacity }: { radius: number; opacity: number }) {
         cx={c}
         cy={c}
         r={radius}
-        stroke={OFF_WHITE}
+        stroke={accentColor}
         strokeOpacity={opacity}
         strokeWidth={1}
         fill="none"
@@ -371,6 +372,7 @@ function RotatingRing({
   expandedRing,
   freshlyAddedIds,
   onSignalPress,
+  crewColorMap,
 }: {
   ring: RingDef;
   cx: number;
@@ -382,6 +384,7 @@ function RotatingRing({
   expandedRing: RingKey | null;
   freshlyAddedIds: Set<string>;
   onSignalPress: (s: Signal) => void;
+  crewColorMap: Record<string, string>;
 }) {
   const rotation = useRef(new Animated.Value(0)).current;
   const isExpanded = expandedRing === ring.key;
@@ -519,6 +522,9 @@ function RotatingRing({
         const pressure = agePressureMultiplier(s);
         const ageDays = signalAgeDays(s);
         const effectivePulseMs = Math.max(600, Math.round(ring.pulseMs * (1 - pressure)));
+        const crewMemberId = (s as Signal & { crewMemberId?: string }).crewMemberId;
+        const crewKey = crewMemberId ? String(crewMemberId).toLowerCase().trim() : '';
+        const crewOverride = crewKey ? crewColorMap[crewKey] : undefined;
         return (
           <SignalDot
             key={String(s.id)}
@@ -532,6 +538,8 @@ function RotatingRing({
             highlight={isHighlighted}
             freshlyAdded={freshlyAddedIds.has(String(s.id))}
             onPress={() => onSignalPress(s)}
+            crewOverride={crewOverride}
+            isAttributed={!!crewMemberId}
           />
         );
       })}
@@ -550,6 +558,8 @@ function SignalDot({
   highlight,
   freshlyAdded,
   onPress,
+  crewOverride,
+  isAttributed,
 }: {
   meta: TypeMeta;
   x: number;
@@ -561,9 +571,19 @@ function SignalDot({
   highlight: boolean;
   freshlyAdded?: boolean;
   onPress: () => void;
+  crewOverride?: string;
+  isAttributed?: boolean;
 }) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  // Dot color routes by attribution: crewOverride when attributed to a
+  // mapped crew member, accentColor otherwise. Type info is still
+  // conveyed by the emoji glyph + legend wheel — color signals "whose"
+  // not "what". Note `isAttributed` is unused for now but kept on the
+  // contract so a future "attributed-but-unmapped" branch can diverge
+  // from the default accent fallback.
+  void isAttributed;
+  const dotColor = crewOverride || accentColor;
   const scale = useRef(new Animated.Value(1)).current;
   const pausedRef = useRef(paused);
   const highlightRef = useRef(highlight);
@@ -630,8 +650,8 @@ function SignalDot({
             // Signals 10+ days old shift to a subtle amber tint —
             // "this has been waiting" cue, without alarming the user
             // by changing the emoji or position.
-            backgroundColor: meta.color + '26',
-            borderColor: meta.color + '66',
+            backgroundColor: dotColor + '26',
+            borderColor: dotColor + '66',
             transform: [{ scale: composedScale }],
           },
         ]}>
@@ -935,6 +955,18 @@ export default function HoverScreen() {
   // mount and refreshed when the tab regains focus.
   const [crewFilter, setCrewFilter] = useState<string | null>(null);
   const [crewList, setCrewList] = useState<{ name: string; photoUrl?: string | null }[]>([]);
+  // Stable color-per-crew-member lookup. Backend records crewMemberId on
+  // signals as the lowercased trimmed name, so we key the map the same
+  // way. Index in crewList → CREW_COLORS slot, so colors stay stable as
+  // long as crew order is stable on the server.
+  const crewColorMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    crewList.forEach((c, i) => {
+      const k = String(c.name || '').toLowerCase().trim();
+      if (k) m[k] = crewColor(i);
+    });
+    return m;
+  }, [crewList]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1419,6 +1451,7 @@ export default function HoverScreen() {
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={setSelected}
+          crewColorMap={crewColorMap}
         />
         <RotatingRing
           ring={RINGS.middle}
@@ -1431,6 +1464,7 @@ export default function HoverScreen() {
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={setSelected}
+          crewColorMap={crewColorMap}
         />
         <RotatingRing
           ring={RINGS.inner}
@@ -1443,6 +1477,7 @@ export default function HoverScreen() {
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={setSelected}
+          crewColorMap={crewColorMap}
         />
 
         <Animated.View
