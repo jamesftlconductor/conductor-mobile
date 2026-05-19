@@ -17,6 +17,7 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import {
   ActivityIndicator,
   Alert,
@@ -206,22 +207,20 @@ export default function MaintenanceScreen() {
 
   if (!plan) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
-          <Text style={styles.topBackText}>← Return</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>{titleText}</Text>
-        <Text style={styles.subtitle}>No plan yet.</Text>
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyHint}>
-            Conductor can build a 12-month maintenance plan from your home inventory
-            and your location's seasonal patterns.
-          </Text>
-          <TouchableOpacity onPress={generate} style={styles.primaryBtn} activeOpacity={0.7}>
-            <Text style={styles.primaryBtnText}>Build plan</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+      <View style={styles.container}>
+        <ScreenHeader title={titleText} subtitle="No plan yet." />
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyHint}>
+              Conductor can build a 12-month maintenance plan from your home inventory
+              and your location's seasonal patterns.
+            </Text>
+            <TouchableOpacity onPress={generate} style={styles.primaryBtn} activeOpacity={0.7}>
+              <Text style={styles.primaryBtnText}>Build plan</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
     );
   }
 
@@ -231,14 +230,12 @@ export default function MaintenanceScreen() {
   })();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
-        <Text style={styles.topBackText}>← Return</Text>
-      </TouchableOpacity>
-      <Text style={styles.title}>{titleText}</Text>
-      <Text style={styles.subtitle}>
-        {plan.location}{isRenter ? ' · Renter' : ''}{genDate ? ` · Generated ${genDate}` : ''}
-      </Text>
+    <View style={styles.container}>
+      <ScreenHeader
+        title={titleText}
+        subtitle={`${plan.location}${isRenter ? ' · Renter' : ''}${genDate ? ` · Generated ${genDate}` : ''}`}
+      />
+      <ScrollView contentContainerStyle={styles.scroll}>
 
       <View style={styles.budgetCard}>
         <Text style={styles.budgetHeadline}>
@@ -314,14 +311,15 @@ export default function MaintenanceScreen() {
           )}
         </View>
       ))}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 22, paddingTop: 60, paddingBottom: 80 },
+  scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 80 },
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
   topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
   title: { color: OFF_WHITE, fontSize: 28, fontWeight: '300', marginTop: 14, letterSpacing: 0.2 },

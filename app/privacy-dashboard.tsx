@@ -7,6 +7,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -143,13 +144,9 @@ export default function PrivacyDashboardScreen() {
   const connectedDays = daysSince(data?.connectedSince || null);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
-        <Text style={styles.topBackText}>← Return</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>Privacy & Data</Text>
-      <Text style={styles.subtitle}>How Conductor works with your information</Text>
+    <View style={styles.container}>
+      <ScreenHeader title="Privacy & Data" subtitle="How Conductor works with your information" />
+      <ScrollView contentContainerStyle={styles.scroll}>
 
       <Text style={styles.sectionLabel}>WHAT CONDUCTOR READS</Text>
       <View style={styles.block}>
@@ -251,7 +248,8 @@ export default function PrivacyDashboardScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -275,7 +273,7 @@ function NeverRow({ text }: { text: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 22, paddingTop: 60, paddingBottom: 60 },
+  scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
   topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
   title: { color: OFF_WHITE, fontSize: 28, fontWeight: '300', marginTop: 14, letterSpacing: 0.2 },

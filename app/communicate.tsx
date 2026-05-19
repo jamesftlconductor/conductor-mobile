@@ -15,6 +15,7 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import {
   ActivityIndicator,
   Alert,
@@ -202,26 +203,19 @@ export default function CommunicateScreen() {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: BG }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScreenHeader
+        title={phase === 'review' ? 'Review' : 'Compose'}
+        subtitle={
+          phase === 'review'
+            ? 'Conductor drafted the email below. Edit anything, then send.'
+            : "Tell Conductor who you're writing to and what about — it'll draft the email."
+        }
+        onBack={() => (phase === 'review' ? setPhase('compose') : router.back())}
+      />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled">
-        <TouchableOpacity
-          onPress={() => (phase === 'review' ? setPhase('compose') : router.back())}
-          style={styles.topBack}>
-          <Text style={styles.topBackText}>
-            {phase === 'review' ? '← Edit context' : '← Return'}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title}>
-          {phase === 'review' ? 'Review' : 'Compose'}
-        </Text>
-        <Text style={styles.subtitle}>
-          {phase === 'review'
-            ? 'Conductor drafted the email below. Edit anything, then send.'
-            : 'Tell Conductor who you\'re writing to and what about — it\'ll draft the email.'}
-        </Text>
 
         {phase === 'compose' ? (
           <>
@@ -413,7 +407,7 @@ function ViaCard({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 22, paddingTop: 60, paddingBottom: 80 },
+  scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 80 },
 
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
   topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },

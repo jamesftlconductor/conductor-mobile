@@ -12,6 +12,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -205,17 +206,15 @@ export default function JuniorScreen() {
 
   if (error === 'junior_not_configured') {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
-          <Text style={styles.topBackText}>← Return</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Conductor Junior</Text>
-        <Text style={styles.subtitle}>Not set up for this account yet.</Text>
+      <View style={styles.container}>
+        <ScreenHeader title="Conductor Junior" subtitle="Not set up for this account yet." />
+        <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.emptyHint}>
           A parent can enable Junior from a child's Crew card and assign
           chores, allowance, and a savings goal.
         </Text>
-      </ScrollView>
+        </ScrollView>
+      </View>
     );
   }
 
@@ -237,13 +236,9 @@ export default function JuniorScreen() {
   });
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
-        <Text style={styles.topBackText}>← Return</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>Hi {data.name || 'there'}! 👋</Text>
-      <Text style={styles.subtitle}>{todayDate}</Text>
+    <View style={styles.container}>
+      <ScreenHeader title={`Hi ${data.name || 'there'}! 👋`} subtitle={todayDate} />
+      <ScrollView contentContainerStyle={styles.scroll}>
 
       <View style={styles.streakCard}>
         <Text style={styles.streakNumber}>{data.streak}</Text>
@@ -403,7 +398,8 @@ export default function JuniorScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -429,7 +425,7 @@ function badgeEmoji(id: string): string {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 22, paddingTop: 60, paddingBottom: 60 },
+  scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
   topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
 

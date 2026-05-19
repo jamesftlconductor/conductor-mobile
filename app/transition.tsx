@@ -11,6 +11,7 @@
 
 import { router } from 'expo-router';
 import { useState } from 'react';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -180,13 +181,9 @@ export default function TransitionScreen() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScreenHeader title={card?.label || 'Transition'} onBack={reset} />
         <ScrollView contentContainerStyle={styles.formScroll}>
-          <TouchableOpacity onPress={reset} style={styles.topBack}>
-            <Text style={styles.topBackText}>← Back</Text>
-          </TouchableOpacity>
-
           <Text style={styles.formEmoji}>{card?.emoji}</Text>
-          <Text style={styles.formTitle}>{card?.label}</Text>
           <Text style={styles.formBlurb}>{card?.blurb}</Text>
 
           {type === 'new_baby' && (
@@ -323,14 +320,12 @@ export default function TransitionScreen() {
 
   // Default: type picker
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.pickScroll}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
-        <Text style={styles.topBackText}>← Return</Text>
-      </TouchableOpacity>
-      <Text style={styles.title}>Something changed.</Text>
-      <Text style={styles.subtitle}>
-        Tell Conductor what happened — it will adjust.
-      </Text>
+    <View style={styles.container}>
+      <ScreenHeader
+        title="Something changed."
+        subtitle="Tell Conductor what happened — it will adjust."
+      />
+      <ScrollView contentContainerStyle={styles.pickScroll}>
 
       <View style={styles.grid}>
         {CARDS.map((card) => (
@@ -344,7 +339,8 @@ export default function TransitionScreen() {
           </Pressable>
         ))}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -359,8 +355,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  pickScroll: { paddingHorizontal: 22, paddingTop: 60, paddingBottom: 60 },
-  formScroll: { paddingHorizontal: 22, paddingTop: 60, paddingBottom: 80 },
+  pickScroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
+  formScroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 80 },
   center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
   topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },

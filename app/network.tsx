@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -212,18 +213,16 @@ export default function NetworkScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>The Network</Text>
-        <TouchableOpacity
-          onPress={() => setInviteModalVisible(true)}
-          style={styles.inviteBtn}
-        >
-          <Text style={styles.inviteBtnText}>+ Invite</Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="The Network"
+        rightAction={
+          <TouchableOpacity
+            onPress={() => setInviteModalVisible(true)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.inviteBtnText}>+ Invite</Text>
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={styles.scroll}

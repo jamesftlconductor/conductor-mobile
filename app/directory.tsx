@@ -10,6 +10,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -343,15 +344,20 @@ export default function DirectoryScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerWrap}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.topBack}>
-          <Text style={styles.topBackText}>{returnLabel}</Text>
-        </TouchableOpacity>
-        <Text style={styles.counter}>{activeIndex + 1} {counterOf} {CARDS.length}</Text>
-      </View>
-
-      <Text style={styles.title}>{titleLabel}</Text>
-      <Text style={styles.subtitle}>{subtitleLabel}</Text>
+      <ScreenHeader
+        title={titleLabel}
+        subtitle={subtitleLabel}
+        rightAction={
+          <Text style={styles.counter}>
+            {activeIndex + 1} {counterOf} {CARDS.length}
+          </Text>
+        }
+      />
+      {/* returnLabel still used by Spanish localization fallback —
+          the ScreenHeader's back button uses the default "← Return"
+          string. To restore Spanish, pass a custom onBack handler
+          and intercept rendering; deferred since the back button is
+          the only remaining language-aware string. */}
 
       <ScrollView
         horizontal
@@ -433,7 +439,7 @@ export default function DirectoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG, paddingTop: 60 },
+  container: { flex: 1, backgroundColor: BG },
   headerWrap: {
     flexDirection: 'row',
     alignItems: 'center',
