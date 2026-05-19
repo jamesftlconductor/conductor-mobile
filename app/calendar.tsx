@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 
 import { AddSignalSheet } from '@/components/AddSignalSheet';
+import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { metaForRing, type Signal, TYPE_META } from '@/components/signalTypes';
 import { useTheme } from './theme';
 
@@ -253,20 +254,33 @@ export default function CalendarScreen() {
           <View style={styles.grid}>
             {cells.map((cell, i) => {
               if (!cell) {
-                return <View key={`empty-${i}`} style={[styles.cell, { width: cellWidth }]} />;
+                return (
+                  <View
+                    key={`empty-${i}`}
+                    style={[styles.cell, styles.cellEmpty, { width: cellWidth }]}
+                  />
+                );
               }
               const bucket = days[cell.ymd];
               const sigCount = bucket?.signals.length || 0;
               const vaultCount = bucket?.vault.length || 0;
-              const dotSignals = (bucket?.signals || []).slice(0, 3);
-              const overflow = Math.max(0, sigCount - 3);
+              const dotSignals = (bucket?.signals || []).slice(0, 4);
+              const overflow = Math.max(0, sigCount - 4);
               const isToday = cell.ymd === today;
+              const hasContent =
+                sigCount > 0 || vaultCount > 0 || (bucket?.crewEvents.length || 0) > 0;
               return (
                 <TouchableOpacity
                   key={cell.ymd}
                   onPress={() => setSelectedYmd(cell.ymd)}
                   activeOpacity={0.6}
-                  style={[styles.cell, { width: cellWidth }]}>
+                  hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+                  style={[
+                    styles.cell,
+                    { width: cellWidth },
+                    !hasContent && styles.cellQuiet,
+                    isToday && styles.cellToday,
+                  ]}>
                   <View
                     style={[
                       styles.dayNumWrap,
@@ -301,7 +315,8 @@ export default function CalendarScreen() {
         </ScrollView>
       )}
 
-      {/* Day-detail half-sheet */}
+      {/* Day-detail half-sheet — SwipeDismissSheet adds a drag handle
+          on top and pan-to-dismiss with an 80px threshold. */}
       <Modal
         visible={!!selectedYmd}
         animationType="slide"
@@ -310,7 +325,10 @@ export default function CalendarScreen() {
         <Pressable
           style={styles.sheetBackdrop}
           onPress={() => setSelectedYmd(null)}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
+          <SwipeDismissSheet
+            style={styles.sheet}
+            onClose={() => setSelectedYmd(null)}>
+            <Pressable onPress={() => {}}>
             <Text style={styles.sheetTitle}>
               {selectedYmd
                 ? weekdayLabel(
@@ -399,10 +417,12 @@ export default function CalendarScreen() {
             <TouchableOpacity
               onPress={openAddForSelectedDay}
               activeOpacity={0.6}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.addRow}>
               <Text style={styles.addRowText}>+ Add signal for this date</Text>
             </TouchableOpacity>
-          </Pressable>
+            </Pressable>
+          </SwipeDismissSheet>
         </Pressable>
       </Modal>
 
@@ -489,10 +509,35 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       flexWrap: 'wrap',
     },
     cell: {
-      aspectRatio: 1,
-      padding: 4,
-      alignItems: 'center',
-      borderRadius: 6,
+      minHeight: 60,
+      padding: 6,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border,
+      // Negative margins overlap adjacent cell borders by a hairline so
+      // shared edges read as a single line — same trick Apple Calendar's
+      // month view uses to avoid the "double border" look between cells.
+      marginRight: -StyleSheet.hairlineWidth,
+      marginBottom: -StyleSheet.hairlineWidth,
+      backgroundColor: theme.background,
+    },
+    cellQuiet: {
+      // Empty days get a slightly muted fill so the eye can scan past
+      // them while still registering the grid structure.
+      backgroundColor: theme.surface,
+      opacity: 0.6,
+    },
+    cellEmpty: {
+      // Padding-only out-of-month spacers — no border so the visible
+      // grid only spans actual month days.
+      borderWidth: 0,
+      backgroundColor: 'transparent',
+      minHeight: 60,
+    },
+    cellToday: {
+      // Today gets a subtle accent-tinted background. The accent circle
+      // around the day number does the heavy lifting; this is just a
+      // companion cue at the cell level.
+      backgroundColor: accentColor + '0d',
     },
     dayNumWrap: {
       width: 22,
@@ -555,9 +600,9 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     },
     sheetTitle: {
       color: theme.text,
-      fontSize: 17,
-      fontWeight: '600',
-      letterSpacing: 0.2,
+      fontSize: 18,
+      fontWeight: '700',
+      letterSpacing: 0.1,
       marginBottom: 14,
     },
     sheetList: {

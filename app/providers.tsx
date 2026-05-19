@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from './theme';
+import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -255,7 +256,8 @@ function AddProviderModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
       <Pressable style={styles.modalBackdrop} onPress={close}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
+        <SwipeDismissSheet style={styles.sheet} onClose={close}>
+          <Pressable onPress={() => {}}>
           <Text style={styles.sheetTitle}>Add Provider</Text>
           <Text style={styles.sectionHeader}>SERVICE TYPE</Text>
           <View style={styles.typeGrid}>
@@ -289,7 +291,8 @@ function AddProviderModal({
               <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Provider'}</Text>
             </TouchableOpacity>
           </View>
-        </Pressable>
+          </Pressable>
+        </SwipeDismissSheet>
       </Pressable>
     </Modal>
   );

@@ -641,6 +641,13 @@ export default function TakeoffScreen() {
   // device. Setting a flag never un-sets — these are first-run hints.
   const [showSignalTapTip, setShowSignalTapTip] = useState(false);
   const [showPulseTip, setShowPulseTip] = useState(false);
+  // Resolution moment — a brief "Rested ✓" toast fades in at the
+  // top of the brief screen for 2s when the user taps Done on a
+  // quick-action popover or the Finale Rest button (via deep-link
+  // params from FinaleSheet). Pairs with conductorHaptics.signalRested
+  // for the haptic side of the moment.
+  const [restedToast, setRestedToast] = useState(false);
+
   // Took Care Of band — items Conductor auto-resolved or expired
   // in the last 48h. Collapsed by default. Per-item dismissals are
   // persisted to AsyncStorage so a return-to-Ground doesn't undo
@@ -1171,6 +1178,11 @@ export default function TakeoffScreen() {
           Minimap's left edge is 60px from screen right; HelpButton's right
           edge sits at 68px to give an 8px gap. */}
       <HelpButton cardId="brief" right={68} />
+      {restedToast ? (
+        <View pointerEvents="none" style={styles.restedToast}>
+          <Text style={styles.restedToastText}>Rested ✓</Text>
+        </View>
+      ) : null}
       <GestureDetector gesture={swipeGesture}>
         <ScrollView
           style={styles.scrollFlex}
@@ -1350,7 +1362,8 @@ export default function TakeoffScreen() {
 
           <TouchableOpacity
             onPress={() => setShowYesterday(true)}
-            activeOpacity={0.6}>
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={styles.inFlowYesterday}>Yesterday&apos;s Programme →</Text>
           </TouchableOpacity>
 
@@ -1807,6 +1820,13 @@ export default function TakeoffScreen() {
                   if (!t) return;
                   setQuickActed((m) => ({ ...m, [String(t.signalId)]: 'done' }));
                   setQuickActionTarget(null);
+                  // Success haptic + transient "Rested ✓" toast. Both
+                  // fire optimistically before the PATCH lands so the
+                  // moment of resolution feels immediate even on a
+                  // slow network. The toast auto-dismisses after 2s.
+                  conductorHaptics.signalRested();
+                  setRestedToast(true);
+                  setTimeout(() => setRestedToast(false), 2000);
                   fetch('https://conductor-ivory.vercel.app/api/signals', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -1815,7 +1835,18 @@ export default function TakeoffScreen() {
                       state: 'resolved',
                       userId: 'james_totalhome_gmail_com',
                     }),
-                  }).catch(() => {});
+                  }).then(() => {
+                    // Refresh the Took Care Of band so the just-rested
+                    // signal joins it without a manual pull-to-refresh.
+                    return fetch(
+                      'https://conductor-ivory.vercel.app/api/signals?type=autoResolutions&userId=james_totalhome_gmail_com'
+                    );
+                  })
+                  .then((r) => r?.json?.())
+                  .then((d) => {
+                    if (Array.isArray(d?.items)) setAutoResolutions(d.items);
+                  })
+                  .catch(() => {});
                 }}>
                 <Text style={styles.quickActionDoneText}>Done ✓</Text>
               </TouchableOpacity>
@@ -1886,6 +1917,27 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   scrollFlex: {
     flex: 1,
+  },
+  // Resolution-moment toast — absolutely-positioned brass pill near
+  // the top of the screen. Renders for 2s on Done tap, fades out
+  // automatically when restedToast flips back to false.
+  restedToast: {
+    position: 'absolute',
+    top: 70,
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: accentColor + '26',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: accentColor + '66',
+    zIndex: 50,
+  },
+  restedToastText: {
+    color: accentColor,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   // The Pulse — synthesis output sits between the greeting/title block
   // and the in-flow date. Small uppercase label + one italic editorial

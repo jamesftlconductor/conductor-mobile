@@ -824,13 +824,15 @@ function InfiniteLedger({
         <TouchableOpacity
           style={styles.deepLink}
           onPress={() => router.push('/missed-cues')}
-          activeOpacity={0.6}>
+          activeOpacity={0.6}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={styles.missedCuesLinkText}>Missed Cues</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.deepLink}
           onPress={() => router.push('/horizon')}
-          activeOpacity={0.6}>
+          activeOpacity={0.6}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={styles.missedCuesLinkText}>The Horizon</Text>
         </TouchableOpacity>
       </View>
@@ -1396,7 +1398,8 @@ export default function HoverScreen() {
                     key={`${m.name}-${i}`}
                     onPress={() => setCrewFilter(crewFilter === m.name ? null : m.name)}
                     style={styles.crewFilterMember}
-                    activeOpacity={0.7}>
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <View
                       style={[
                         styles.crewFilterCircle,

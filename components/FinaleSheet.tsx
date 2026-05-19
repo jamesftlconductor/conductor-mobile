@@ -96,7 +96,9 @@ function CategorySheet(props: CategoryProps) {
                 </>
               )}
             </View>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.clearFilterText}>Reset</Text>
             </TouchableOpacity>
           </View>
@@ -408,7 +410,8 @@ function SingleSheet({
             {!editing && (
               <TouchableOpacity
                 style={styles.editLinkPosition}
-                onPress={() => setEditing(true)}>
+                onPress={() => setEditing(true)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Text style={styles.editLink}>ADJUST</Text>
               </TouchableOpacity>
             )}
@@ -430,7 +433,7 @@ function SingleSheet({
                     onPress={acceptAttribSuggestion}
                     disabled={attribAssigning}
                     activeOpacity={0.6}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Text style={styles.attribAssignBtn}>
                       {attribAssigning ? '...' : 'Assign'}
                     </Text>

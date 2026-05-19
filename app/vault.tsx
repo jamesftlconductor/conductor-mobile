@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { SecureScreen } from '@/components/SecureScreen';
 import { CameraScanner, type ScanResult } from '@/components/CameraScanner';
 import { HelpButton } from '@/components/HelpButton';
+import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -895,7 +896,8 @@ function AddVaultModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
       <Pressable style={styles.modalBackdrop} onPress={close}>
-        <Pressable style={styles.addSheet} onPress={() => {}}>
+        <SwipeDismissSheet style={styles.addSheet} onClose={close}>
+          <Pressable onPress={() => {}}>
           {step === 1 ? (
             <>
               <Text style={styles.addSheetTitle}>What kind?</Text>
@@ -1246,7 +1248,8 @@ function AddVaultModal({
               </View>
             </>
           )}
-        </Pressable>
+          </Pressable>
+        </SwipeDismissSheet>
       </Pressable>
 
       <CameraScanner
