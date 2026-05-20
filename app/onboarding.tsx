@@ -51,7 +51,7 @@ const INTERSTITIAL_POLL_MS = 3000;
 const PIPELINE_START_KEY = 'onboard_pipeline_started_at';
 const STEP_KEY = 'onboardingStep';
 
-type Phase = 'joining' | 'language' | 'step1' | 'step2' | 'step3' | 'interstitial';
+type Phase = 'joining' | 'language' | 'step1' | 'step2' | 'step3' | 'step4' | 'interstitial';
 type Language = 'en' | 'es';
 
 type Who = 'solo' | 'couple' | 'family' | 'multigenerational' | 'investment_property';
@@ -102,6 +102,27 @@ const PRIORITY_OPTIONS = [
   { id: 'providers', label: '🔧 Service providers' },
   { id: 'deliveries', label: '📦 Deliveries and orders' },
   { id: 'essentials', label: '⚡ Just the essentials' },
+];
+
+// Hobby keys must mirror api/signals.js HOBBY_KEYS exactly. Backend
+// silently drops anything not in that set, so a typo here surfaces as
+// "selected pill disappears after save."
+const HOBBY_OPTIONS = [
+  { id: 'water',    label: '🌊 Water' },
+  { id: 'music',    label: '🎵 Music' },
+  { id: 'food',     label: '🍽️ Food' },
+  { id: 'golf',     label: '⛳ Golf' },
+  { id: 'fitness',  label: '🏋️ Fitness' },
+  { id: 'art',      label: '🎨 Art' },
+  { id: 'travel',   label: '✈️ Travel' },
+  { id: 'sports',   label: '🏈 Sports' },
+  { id: 'outdoors', label: '🌱 Outdoors' },
+  { id: 'film',     label: '🎬 Film' },
+  { id: 'wine',     label: '🍷 Wine & Spirits' },
+  { id: 'cycling',  label: '🚴 Cycling' },
+  { id: 'books',    label: '📚 Books' },
+  { id: 'gaming',   label: '🎮 Gaming' },
+  { id: 'wellness', label: '🧘 Wellness' },
 ];
 
 // Big lookup table — every tone+detail+humor combo carries a
@@ -164,6 +185,7 @@ export default function OnboardingScreen() {
   const [humor, setHumor] = useState<Humor>('sometimes');
 
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [hobbiesPicked, setHobbiesPicked] = useState<Set<string>>(new Set());
 
   const [pipelineReady, setPipelineReady] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
@@ -217,6 +239,7 @@ export default function OnboardingScreen() {
           savedPhase === 'step1' ||
           savedPhase === 'step2' ||
           savedPhase === 'step3' ||
+          savedPhase === 'step4' ||
           savedPhase === 'interstitial' ||
           savedPhase === 'language'
         ) {
@@ -377,6 +400,29 @@ export default function OnboardingScreen() {
         }),
       });
     } catch { /* best-effort */ }
+    // Hobbies is the new final personalization step — always show it
+    // before kicking the user into the interstitial / reveal. Even if
+    // pipeline is already done, we want them to see this screen so
+    // the joie-de-vivre layer gets a chance to set itself.
+    setPhase('step4');
+  }
+
+  // Save hobbies (or skip), then continue. Mirrors the confirmStep3
+  // pipeline-ready branch — straight to reveal if ready, otherwise
+  // interstitial.
+  async function confirmStep4(skipped: boolean) {
+    if (!skipped) {
+      try {
+        await fetch(`${API_BASE}/signals?type=hobbies`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: USER_ID,
+            hobbies: Array.from(hobbiesPicked),
+          }),
+        });
+      } catch { /* best-effort */ }
+    }
     if (pipelineReady) {
       clearOnboardingState();
       router.replace('/onboard-reveal' as never);
@@ -387,6 +433,15 @@ export default function OnboardingScreen() {
 
   function togglePriority(id: string) {
     setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleHobby(id: string) {
+    setHobbiesPicked((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -462,12 +517,28 @@ export default function OnboardingScreen() {
           />
         ) : null}
 
+        {phase === 'step4' ? (
+          <Step4
+            picked={hobbiesPicked}
+            onToggle={toggleHobby}
+            onContinue={() => confirmStep4(false)}
+            onSkip={() => confirmStep4(true)}
+          />
+        ) : null}
+
         {phase === 'interstitial' ? (
           <InterstitialBlock pipelineReady={pipelineReady} />
         ) : null}
 
-        {phase === 'step1' || phase === 'step2' || phase === 'step3' ? (
-          <StepDots active={phase === 'step1' ? 0 : phase === 'step2' ? 1 : 2} />
+        {phase === 'step1' || phase === 'step2' || phase === 'step3' || phase === 'step4' ? (
+          <StepDots
+            active={
+              phase === 'step1' ? 0
+              : phase === 'step2' ? 1
+              : phase === 'step3' ? 2
+              : 3
+            }
+          />
         ) : null}
       </ScrollView>
     </View>
@@ -884,6 +955,57 @@ function Step3({
   );
 }
 
+// ---------- Step 4: Hobbies (joie-de-vivre) ----------
+
+function Step4({
+  picked, onToggle, onContinue, onSkip,
+}: {
+  picked: Set<string>;
+  onToggle: (id: string) => void;
+  onContinue: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <>
+      <Text style={styles.title}>What does your household love?</Text>
+      <Text style={styles.subtitle}>
+        Conductor will watch for opportunities, not just obligations.
+      </Text>
+
+      <View style={styles.priorityGrid}>
+        {HOBBY_OPTIONS.map((h) => {
+          const active = picked.has(h.id);
+          return (
+            <TouchableOpacity
+              key={h.id}
+              onPress={() => onToggle(h.id)}
+              style={[styles.priorityPill, active && styles.priorityPillActive]}>
+              <Text style={[styles.priorityLabel, active && { color: BRASS, fontWeight: '600' }]}>
+                {h.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <TouchableOpacity onPress={onContinue} style={styles.continueBtn}>
+        <Text style={styles.continueBtnText}>Continue →</Text>
+      </TouchableOpacity>
+
+      {/* Quiet "skip" affordance — same pattern as other onboarding
+          escapes. Tinted muted so it doesn't compete with Continue. */}
+      <TouchableOpacity
+        onPress={onSkip}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{ marginTop: 14, alignItems: 'center' }}>
+        <Text style={{ color: MUTED, fontSize: 13 }}>
+          Just the essentials for now →
+        </Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
 // ---------- Interstitial: cycling phrases ----------
 
 function InterstitialBlock({ pipelineReady }: { pipelineReady: boolean }) {
@@ -920,10 +1042,10 @@ function InterstitialBlock({ pipelineReady }: { pipelineReady: boolean }) {
 
 // ---------- Step indicator dots ----------
 
-function StepDots({ active }: { active: 0 | 1 | 2 }) {
+function StepDots({ active }: { active: 0 | 1 | 2 | 3 }) {
   return (
     <View style={styles.dotsRow}>
-      {[0, 1, 2].map((i) => {
+      {[0, 1, 2, 3].map((i) => {
         const state = i === active ? 'active' : i < active ? 'done' : 'upcoming';
         return (
           <View

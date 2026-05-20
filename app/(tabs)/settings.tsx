@@ -616,6 +616,112 @@ function AppearanceBlock() {
   );
 }
 
+// Mirror of onboarding's HOBBY_OPTIONS — keys MUST match
+// api/signals.js HOBBY_KEYS or the save round-trip drops them.
+const HOBBY_OPTIONS: { id: string; label: string }[] = [
+  { id: 'water',    label: '🌊 Water' },
+  { id: 'music',    label: '🎵 Music' },
+  { id: 'food',     label: '🍽️ Food' },
+  { id: 'golf',     label: '⛳ Golf' },
+  { id: 'fitness',  label: '🏋️ Fitness' },
+  { id: 'art',      label: '🎨 Art' },
+  { id: 'travel',   label: '✈️ Travel' },
+  { id: 'sports',   label: '🏈 Sports' },
+  { id: 'outdoors', label: '🌱 Outdoors' },
+  { id: 'film',     label: '🎬 Film' },
+  { id: 'wine',     label: '🍷 Wine & Spirits' },
+  { id: 'cycling',  label: '🚴 Cycling' },
+  { id: 'books',    label: '📚 Books' },
+  { id: 'gaming',   label: '🎮 Gaming' },
+  { id: 'wellness', label: '🧘 Wellness' },
+];
+
+function WhatYouLoveBlock() {
+  const { theme, accentColor } = useTheme();
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
+
+  // Load existing hobbies on mount. Silent failure — the section
+  // still renders the empty grid so the user can set hobbies for the
+  // first time even if the GET hiccups.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=hobbies&userId=${USER_ID}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const list: string[] = Array.isArray(data?.hobbies) ? data.hobbies : [];
+        if (!cancelled) {
+          setPicked(new Set(list));
+          setLoaded(true);
+        }
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Optimistic toggle — flip local state first, then POST the new
+  // full array. The backend bust of currentTakeoff means the next
+  // brief regenerates with the change, so no extra plumbing needed
+  // here. Save failures fall through silently (user can retry by
+  // re-tapping); we don't roll back optimistic state to avoid
+  // making the UI feel flaky on a single 500.
+  function toggle(id: string) {
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setPicked(next);
+    fetch(`${API_BASE}/signals?type=hobbies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: USER_ID,
+        hobbies: Array.from(next),
+      }),
+    }).catch(() => { /* silent */ });
+  }
+
+  // Until the GET resolves, render the grid in a slightly faded
+  // state so the user doesn't tap an "empty" grid and then watch
+  // their selection mysteriously appear a beat later.
+  const opacity = loaded ? 1 : 0.5;
+
+  return (
+    <View style={{ paddingHorizontal: 22, paddingTop: 4, paddingBottom: 14, opacity }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+        {HOBBY_OPTIONS.map((h) => {
+          const active = picked.has(h.id);
+          return (
+            <TouchableOpacity
+              key={h.id}
+              onPress={() => toggle(h.id)}
+              activeOpacity={0.6}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 22,
+                borderWidth: 1,
+                borderColor: active ? accentColor : 'rgba(255,255,255,0.06)',
+                backgroundColor: active ? 'rgba(184,150,12,0.08)' : 'rgba(255,255,255,0.03)',
+              }}>
+              <Text
+                style={{
+                  color: active ? accentColor : theme.text,
+                  fontSize: 13,
+                  fontWeight: active ? '600' : '400',
+                }}>
+                {h.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function VoiceStyleBlock() {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
@@ -1411,6 +1517,9 @@ export default function SettingsScreen() {
             </View>
           }
         />
+
+        <SectionHeader title="What You Love" subtext="Conductor watches for opportunities, not just obligations" />
+        <WhatYouLoveBlock />
 
         <SectionHeader title="Programme" subtext="When the day opens and closes" />
         <ChevronRow
