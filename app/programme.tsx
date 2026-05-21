@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { SignalFilterPills } from '@/components/SignalFilterPills';
+import { applyFilter as applyMeCrewHouse, useSignalFilter } from '@/hooks/useSignalFilter';
 import { metaFor, type Signal } from '@/components/signalTypes';
 import { useTheme } from './theme';
 
@@ -292,6 +294,7 @@ export default function ProgrammeScreen() {
   const [calendar, setCalendar] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { filter: meCrewHouse, setFilter: setMeCrewHouse } = useSignalFilter('all');
 
   async function load() {
     // All four endpoints in parallel — Programme is read-only and each
@@ -335,7 +338,8 @@ export default function ProgrammeScreen() {
   const grouped = useMemo(() => {
     const today = new Date();
     const horizonEnd = new Date(today.getTime() + (HORIZON_DAYS - 1) * DAY_MS);
-    const { items } = buildItems({ signals, vault, crew, calendar, today, horizonEnd, accentColor });
+    const filteredSignals = applyMeCrewHouse(signals, meCrewHouse, USER_ID);
+    const { items } = buildItems({ signals: filteredSignals, vault, crew, calendar, today, horizonEnd, accentColor });
 
     // Bucket by YMD, preserving the sorted order produced above.
     const buckets = new Map<string, ProgrammeItem[]>();
@@ -379,6 +383,7 @@ export default function ProgrammeScreen() {
           </TouchableOpacity>
         }
       />
+      <SignalFilterPills value={meCrewHouse} onChange={setMeCrewHouse} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
