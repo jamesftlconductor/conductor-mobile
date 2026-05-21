@@ -60,6 +60,8 @@ const CATEGORIES: { key: CategoryKey; label: string; storeKey: string }[] = [
 const HORIZON_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Monthly'] as const;
 type HorizonFrequency = (typeof HORIZON_FREQUENCIES)[number];
 
+type FinancialAwareness = 'silent' | 'awareness' | 'tracking' | 'planning';
+
 type Settings = {
   takeoffTime: string;       // "HH:MM" 24-hour
   clearanceTime: string;     // "HH:MM" 24-hour
@@ -77,6 +79,9 @@ type Settings = {
   // Weekend takeoff delay — when true, Saturday/Sunday push the
   // takeoff hour forward by 1 hour relative to the weekday default.
   weekendTakeoffDelay: boolean;
+  // Financial intelligence — how much engagement Conductor brings to
+  // money topics. Default is 'silent' (only anomalies surface).
+  financialAwareness: FinancialAwareness;
 };
 
 const DEFAULTS: Settings = {
@@ -98,7 +103,15 @@ const DEFAULTS: Settings = {
   middayEnabled: false,
   overwatchHour: 23,          // 11pm default per spec
   weekendTakeoffDelay: false,
+  financialAwareness: 'silent',
 };
+
+const FINANCIAL_OPTIONS: { id: FinancialAwareness; title: string; sub: string }[] = [
+  { id: 'silent',    title: 'Silent',    sub: 'Track quietly. Only alerts on anomalies and fraud.' },
+  { id: 'awareness', title: 'Awareness', sub: 'Surface renewals, price changes, and unusual charges.' },
+  { id: 'tracking',  title: 'Tracking',  sub: 'Track against typical patterns. Surface category overruns.' },
+  { id: 'planning',  title: 'Planning',  sub: 'Full financial intelligence in your brief.' },
+];
 
 // Overwatch options shown in the Settings picker. Stored hour is the
 // integer Settings.overwatchHour; the 23.5 case is represented in the
@@ -144,6 +157,7 @@ async function persistAndSync(settings: Settings) {
     ['middayEnabled', String(settings.middayEnabled)],
     ['overwatchHour', String(settings.overwatchHour)],
     ['weekendTakeoffDelay', String(settings.weekendTakeoffDelay)],
+    ['financialAwareness', settings.financialAwareness],
     ...CATEGORIES.map(
       (c) => [c.storeKey, String(settings.categoryEnabled[c.key])] as [string, string]
     ),
@@ -169,6 +183,7 @@ async function persistAndSync(settings: Settings) {
         middayEnabled: settings.middayEnabled,
         overwatchHour: settings.overwatchHour,
         weekendTakeoffDelay: settings.weekendTakeoffDelay,
+        financialAwareness: settings.financialAwareness,
       },
     }),
   }).catch(() => {});
@@ -186,6 +201,7 @@ async function loadSettings(): Promise<Settings> {
     'middayEnabled',
     'overwatchHour',
     'weekendTakeoffDelay',
+    'financialAwareness',
     ...CATEGORIES.map((c) => c.storeKey),
   ];
   try {
@@ -210,6 +226,12 @@ async function loadSettings(): Promise<Settings> {
         return isNaN(n) ? DEFAULTS.overwatchHour : n;
       })(),
       weekendTakeoffDelay: bool('weekendTakeoffDelay', DEFAULTS.weekendTakeoffDelay),
+      financialAwareness: (() => {
+        const v = map.financialAwareness;
+        return v === 'silent' || v === 'awareness' || v === 'tracking' || v === 'planning'
+          ? v
+          : DEFAULTS.financialAwareness;
+      })(),
       categoryEnabled: CATEGORIES.reduce((acc, c) => {
         acc[c.key] = bool(c.storeKey, DEFAULTS.categoryEnabled[c.key]);
         return acc;
@@ -409,6 +431,194 @@ function ToggleRow({
         />
       }
     />
+  );
+}
+
+// iOS Shortcuts library — a hand-curated catalog of shortcut templates
+// users can install to forward signals from other apps into Conductor
+// via /api/ingest. The templateId values below are intentionally
+// placeholders; substitute real shortcut share URLs once published on
+// iCloud. The Install button opens the iCloud Shortcuts share link;
+// iOS handles the install handshake natively.
+const SHORTCUT_CATEGORIES: { category: string; items: { id: string; icon: string; name: string; desc: string }[] }[] = [
+  {
+    category: 'BANKING',
+    items: [
+      { id: 'banking-large-tx', icon: '💳', name: 'Large transaction alert', desc: 'When a charge over a set amount arrives → Conductor signal' },
+    ],
+  },
+  {
+    category: 'SCHOOL',
+    items: [
+      { id: 'school-classdojo', icon: '🎒', name: 'ClassDojo message', desc: 'Forward ClassDojo notifications to Conductor crew signals' },
+      { id: 'school-remind',    icon: '🏫', name: 'Remind message',    desc: 'School messages to Conductor' },
+    ],
+  },
+  {
+    category: 'HEALTH',
+    items: [
+      { id: 'health-workout', icon: '🏋️', name: 'Workout complete', desc: 'Log Apple Watch workouts to Conductor health context' },
+      { id: 'health-hr',      icon: '❤️', name: 'High heart rate',   desc: 'Unusual heart rate → Conductor health signal' },
+    ],
+  },
+  {
+    category: 'HOME',
+    items: [
+      { id: 'home-door',   icon: '🔓', name: 'Door unlocked', desc: 'August/smart lock events to Conductor' },
+      { id: 'home-garage', icon: '🚪', name: 'Garage opened', desc: 'Garage door events to Conductor' },
+    ],
+  },
+  {
+    category: 'TRAVEL',
+    items: [
+      { id: 'travel-flight', icon: '✈️', name: 'Flight update',    desc: 'Forward airline notifications to Conductor travel signal' },
+      { id: 'travel-hotel',  icon: '🏨', name: 'Hotel check-in',   desc: 'Hotel confirmation to Conductor' },
+    ],
+  },
+  {
+    category: 'LIFESTYLE',
+    items: [
+      { id: 'life-resy',    icon: '🍽️',  name: 'Restaurant reservation',  desc: 'OpenTable/Resy bookings to Conductor' },
+      { id: 'life-concert', icon: '🎟️',  name: 'Concert tickets',         desc: 'Ticketmaster purchases to Conductor event signal' },
+      { id: 'life-grocery', icon: '🛒',  name: 'Grocery order',           desc: 'Instacart orders to Conductor' },
+    ],
+  },
+];
+
+function ShortcutsLibraryBlock() {
+  const { theme, accentColor } = useTheme();
+  return (
+    <View style={{ paddingHorizontal: 22, paddingVertical: 8 }}>
+      {SHORTCUT_CATEGORIES.map((group) => (
+        <View key={group.category} style={{ marginBottom: 14 }}>
+          <Text style={{
+            color: theme.muted,
+            fontSize: 10,
+            letterSpacing: 2,
+            fontWeight: '600',
+            marginBottom: 8,
+            marginTop: 4,
+          }}>
+            {group.category}
+          </Text>
+          {group.items.map((item) => (
+            <View
+              key={item.id}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 10,
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: 'rgba(255,255,255,0.06)',
+              }}>
+              <Text style={{ fontSize: 20, marginRight: 12 }}>{item.icon}</Text>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '500' }}>
+                  {item.name}
+                </Text>
+                <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2, lineHeight: 14 }}>
+                  {item.desc}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => Linking.openURL(`https://www.icloud.com/shortcuts/${item.id}`).catch(() => {})}
+                activeOpacity={0.6}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={{
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: accentColor,
+                }}>
+                <Text style={{ color: accentColor, fontSize: 11, fontWeight: '600' }}>
+                  Install →
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ))}
+
+      {/* Generic integration rows — IFTTT / Zapier / direct webhook.
+          These are static links because the webhook URL is per-
+          household and assembled server-side; once household API
+          keys ship in onboarding, swap this label for the live URL. */}
+      <View style={{ marginTop: 6 }}>
+        <TouchableOpacity
+          onPress={() => Linking.openURL('https://ifttt.com').catch(() => {})}
+          style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.06)' }}
+          activeOpacity={0.6}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={{ color: theme.text, fontSize: 13 }}>Connect via IFTTT →</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => Linking.openURL('https://zapier.com').catch(() => {})}
+          style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.06)' }}
+          activeOpacity={0.6}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={{ color: theme.text, fontSize: 13 }}>Connect via Zapier →</Text>
+        </TouchableOpacity>
+        <View style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.06)' }}>
+          <Text style={{ color: theme.text, fontSize: 13 }}>Webhook URL</Text>
+          <Text style={{ color: theme.muted, fontSize: 11, marginTop: 4 }}>
+            POST to /api/ingest with X-Conductor-Key header
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// Financial awareness — stacked option cards. Tap to select; brass
+// border on the active tier. Defaults to 'silent' (only anomalies
+// surface in the brief). Backend reads this from user preferences
+// and applies the corresponding filter inside the brief pool build.
+function FinancialAwarenessBlock({
+  value,
+  onChange,
+}: {
+  value: FinancialAwareness;
+  onChange: (v: FinancialAwareness) => void;
+}) {
+  const { theme, accentColor } = useTheme();
+  return (
+    <View style={{ paddingHorizontal: 22, paddingVertical: 10 }}>
+      {FINANCIAL_OPTIONS.map((o) => {
+        const active = o.id === value;
+        return (
+          <TouchableOpacity
+            key={o.id}
+            onPress={() => onChange(o.id)}
+            activeOpacity={0.6}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            style={{
+              borderWidth: 1,
+              borderColor: active ? accentColor : 'rgba(255,255,255,0.06)',
+              backgroundColor: active ? 'rgba(184,150,12,0.08)' : 'transparent',
+              borderRadius: 12,
+              padding: 14,
+              marginBottom: 10,
+            }}>
+            <Text style={{
+              color: active ? accentColor : theme.text,
+              fontSize: 14,
+              fontWeight: active ? '600' : '500',
+              marginBottom: 4,
+            }}>
+              {o.title}
+            </Text>
+            <Text style={{
+              color: theme.muted,
+              fontSize: 12,
+              lineHeight: 17,
+            }}>
+              {o.sub}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
   );
 }
 
@@ -1617,6 +1827,15 @@ export default function SettingsScreen() {
 
         <SectionHeader title="What You Love" subtext="Conductor watches for opportunities, not just obligations" />
         <WhatYouLoveBlock />
+
+        <SectionHeader title="Financial Intelligence" subtext="How much Conductor engages with your finances" />
+        <FinancialAwarenessBlock
+          value={settings.financialAwareness}
+          onChange={(v) => update({ ...settings, financialAwareness: v })}
+        />
+
+        <SectionHeader title="Extend with Shortcuts" subtext="Connect any app to Conductor without sharing access" />
+        <ShortcutsLibraryBlock />
 
         <SectionHeader title="Programme" subtext="When the day opens and closes" />
         <ChevronRow

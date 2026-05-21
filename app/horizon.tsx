@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { HelpButton } from '@/components/HelpButton';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { SignalFilterPills } from '@/components/SignalFilterPills';
+import { useSignalFilter, applyFilter as applyMeCrewHouse } from '@/hooks/useSignalFilter';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -323,6 +325,7 @@ export default function HorizonScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const { filter: meCrewHouse, setFilter: setMeCrewHouse } = useSignalFilter('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -354,8 +357,13 @@ export default function HorizonScreen() {
     setRefreshing(false);
   }
 
+  const filteredSignals = useMemo(
+    () => applyMeCrewHouse(signals, meCrewHouse, USER_ID),
+    [signals, meCrewHouse]
+  );
+
   const grouped = useMemo(() => {
-    const { items } = buildItems({ signals, vault, crew, today: new Date() });
+    const { items } = buildItems({ signals: filteredSignals, vault, crew, today: new Date() });
     const filtered = items.filter((i) => matchesFilter(i, filter));
     const buckets: Record<'coming' | 'further' | 'edge', Item[]> = {
       coming: [], further: [], edge: [],
@@ -367,7 +375,7 @@ export default function HorizonScreen() {
       buckets[b].push(it);
     }
     return buckets;
-  }, [signals, vault, crew, filter]);
+  }, [filteredSignals, vault, crew, filter]);
 
   function toggle(id: string) {
     LayoutAnimation.configureNext({
@@ -489,7 +497,8 @@ export default function HorizonScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-    <ScreenHeader title="The Horizon" subtitle="What Conductor is watching ahead" />
+    <ScreenHeader title="The Horizon" subtitle="What Conductor is watching ahead" screenContext="horizon" />
+    <SignalFilterPills value={meCrewHouse} onChange={setMeCrewHouse} />
     <HelpButton cardId="horizon" />
     <ScrollView
       style={styles.container}
