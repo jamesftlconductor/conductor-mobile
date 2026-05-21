@@ -1,8 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+
+import { useTheme } from '@/app/theme';
 import {
   ActivityIndicator,
   Alert,
@@ -21,10 +23,6 @@ import {
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type PermissionLevel = 'watchful' | 'open' | 'emergency_only';
@@ -59,14 +57,19 @@ const LEVEL_HINT: Record<PermissionLevel, string> = {
   emergency_only: 'They see only whether something urgent is happening.',
 };
 
-function loadColor(load?: string): string {
+function loadColor(load: string | undefined, accentColor: string, muted: string): string {
   if (load === 'heavy') return '#d97757';
-  if (load === 'moderate') return BRASS;
+  if (load === 'moderate') return accentColor;
   if (load === 'light') return '#7a9a6e';
-  return MUTED;
+  return muted;
 }
 
 export default function NetworkScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
+  const OFF_WHITE = theme.text;
   // shareItemId param — set when the user enters from the Vault
   // "Share with Network →" link. When present, renders a banner at
   // the top inviting them to pick a connection + permission.
@@ -303,7 +306,7 @@ export default function NetworkScreen() {
                     <View
                       style={[
                         styles.loadDot,
-                        { backgroundColor: loadColor(s.signalLoad) },
+                        { backgroundColor: loadColor(s.signalLoad, accentColor, theme.muted) },
                       ]}
                     />
                     <Text style={styles.cardSummary}>
@@ -415,7 +418,14 @@ export default function NetworkScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  const BRASS = accentColor;
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG },
   header: {
@@ -516,10 +526,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: theme.surface,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
-    padding: 22,
+    padding: 16,
     paddingBottom: 38,
   },
   modalTitle: { color: OFF_WHITE, fontSize: 17, fontWeight: '600', marginBottom: 14 },
@@ -564,4 +574,5 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: '#0f0f0f', fontSize: 15, fontWeight: '600' },
   secondaryBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 6 },
   secondaryBtnText: { color: MUTED, fontSize: 14 },
-});
+  });
+}

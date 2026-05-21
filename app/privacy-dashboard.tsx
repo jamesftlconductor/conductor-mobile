@@ -8,7 +8,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,15 +23,10 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE = 'https://conductor-ivory.vercel.app/api';
+import { useTheme } from '@/app/theme';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const FAINT = '#a8a5a0';
-const BRASS = '#b8960c';
+const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const RED = '#ef4444';
-const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type PrivacyData = {
   ok: boolean;
@@ -61,6 +56,8 @@ function daysSince(iso: string | null): number | null {
 }
 
 export default function PrivacyDashboardScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [userId, setUserId] = useState<string>('');
   const [data, setData] = useState<PrivacyData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,204 +142,213 @@ export default function PrivacyDashboardScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Privacy & Data" subtitle="How Conductor works with your information" />
+      <ScreenHeader title="Privacy & Data" subtitle="How Conductor works with your information" screenContext="privacy-dashboard" />
       <ScrollView contentContainerStyle={styles.scroll}>
 
-      <Text style={styles.sectionLabel}>WHAT CONDUCTOR READS</Text>
-      <View style={styles.block}>
-        {DATA_SOURCE_ROWS.map((r) => (
-          <View key={r.key} style={styles.sourceRow}>
-            <Text style={styles.sourceEmoji}>{r.emoji}</Text>
-            <View style={styles.sourceBody}>
-              <Text style={styles.sourceLabel}>{r.label}</Text>
-              <Text style={styles.sourceDesc}>{r.desc}</Text>
+        <Text style={styles.sectionLabel}>WHAT CONDUCTOR READS</Text>
+        <View style={styles.block}>
+          {DATA_SOURCE_ROWS.map((r) => (
+            <View key={r.key} style={styles.sourceRow}>
+              <Text style={styles.sourceEmoji}>{r.emoji}</Text>
+              <View style={styles.sourceBody}>
+                <Text style={styles.sourceLabel}>{r.label}</Text>
+                <Text style={styles.sourceDesc}>{r.desc}</Text>
+              </View>
             </View>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
 
-      <Text style={styles.sectionLabel}>YOUR DATA</Text>
-      <View style={styles.block}>
-        {loading || !data ? (
-          <ActivityIndicator color={MUTED} />
-        ) : (
-          <>
-            <Stat label="signals found" value={data.signalsFound} />
-            <Stat label="vault items being watched" value={data.vaultItems} />
-            <Stat label="crew members" value={data.crewMembers} />
-            <Stat label="emails scanned" value={data.emailsScanned} />
-            <Stat label="emails sent" value={data.sentCommunications} />
-            <Stat label="network connections" value={data.networkConnections} />
-            {connectedDays !== null ? (
-              <Text style={styles.connectedSince}>
-                Connected {connectedDays} day{connectedDays === 1 ? '' : 's'} ago
-              </Text>
-            ) : null}
-          </>
-        )}
-      </View>
+        <Text style={styles.sectionLabel}>YOUR DATA</Text>
+        <View style={styles.block}>
+          {loading || !data ? (
+            <ActivityIndicator color={theme.muted} />
+          ) : (
+            <>
+              <View style={styles.statRow}>
+                <Text style={styles.statValue}>{data.signalsFound}</Text>
+                <Text style={styles.statLabel}>signals found</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statValue}>{data.vaultItems}</Text>
+                <Text style={styles.statLabel}>vault items being watched</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statValue}>{data.crewMembers}</Text>
+                <Text style={styles.statLabel}>crew members</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statValue}>{data.emailsScanned}</Text>
+                <Text style={styles.statLabel}>emails scanned</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statValue}>{data.sentCommunications}</Text>
+                <Text style={styles.statLabel}>emails sent</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statValue}>{data.networkConnections}</Text>
+                <Text style={styles.statLabel}>network connections</Text>
+              </View>
+              {connectedDays !== null ? (
+                <Text style={styles.connectedSince}>
+                  Connected {connectedDays} day{connectedDays === 1 ? '' : 's'} ago
+                </Text>
+              ) : null}
+            </>
+          )}
+        </View>
 
-      <Text style={styles.sectionLabel}>WHAT CONDUCTOR NEVER DOES</Text>
-      <View style={styles.block}>
-        <NeverRow text="Sells your data — ever" />
-        <NeverRow text="Reads emails that don't generate signals" />
-        <NeverRow text="Shares household data without permission" />
-        <NeverRow text="Stores health data unencrypted" />
-      </View>
+        <Text style={styles.sectionLabel}>WHAT CONDUCTOR NEVER DOES</Text>
+        <View style={styles.block}>
+          {[
+            'Sells your data — ever',
+            "Reads emails that don't generate signals",
+            'Shares household data without permission',
+            'Stores health data unencrypted',
+          ].map((t) => (
+            <View key={t} style={styles.neverRow}>
+              <Text style={styles.neverIcon}>✗</Text>
+              <Text style={styles.neverText}>{t}</Text>
+            </View>
+          ))}
+        </View>
 
-      <Text style={styles.sectionLabel}>DATA CONTROLS</Text>
-      <View style={styles.block}>
-        <TouchableOpacity
-          onPress={exportData}
-          disabled={exporting}
-          style={styles.controlRow}>
-          <Text style={styles.controlLabel}>
-            {exporting ? 'Preparing export…' : 'Export my data'}
-          </Text>
-          <Text style={styles.controlArrow}>→</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setDeleteOpen(true)}
-          style={styles.controlRow}>
-          <Text style={[styles.controlLabel, { color: RED }]}>Delete my account</Text>
-          <Text style={[styles.controlArrow, { color: RED }]}>→</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ height: 40 }} />
-
-      <Modal visible={deleteOpen} transparent animationType="slide" onRequestClose={() => setDeleteOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setDeleteOpen(false)}>
-          <Pressable style={styles.deleteModal} onPress={() => {}}>
-            <Text style={styles.deleteTitle}>Delete account permanently?</Text>
-            <Text style={styles.deleteBody}>
-              This will permanently delete all your household data — signals,
-              vault items, crew, memory, everything. This cannot be undone.
+        <Text style={styles.sectionLabel}>DATA CONTROLS</Text>
+        <View style={styles.block}>
+          <TouchableOpacity
+            onPress={exportData}
+            disabled={exporting}
+            style={styles.controlRow}>
+            <Text style={styles.controlLabel}>
+              {exporting ? 'Preparing export…' : 'Export my data'}
             </Text>
-            <Text style={styles.deleteHint}>Type DELETE to confirm</Text>
-            <TextInput
-              value={confirmPhrase}
-              onChangeText={setConfirmPhrase}
-              placeholder="DELETE"
-              placeholderTextColor={MUTED}
-              autoCapitalize="characters"
-              style={styles.deleteInput}
-            />
-            <View style={styles.deleteBtnRow}>
-              <TouchableOpacity
-                onPress={() => { setDeleteOpen(false); setConfirmPhrase(''); }}
-                style={styles.deleteCancelBtn}>
-                <Text style={styles.deleteCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={deleteAccount}
-                disabled={deleting}
-                style={[styles.deleteConfirmBtn, deleting && { opacity: 0.5 }]}>
-                {deleting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.deleteConfirmText}>Delete permanently</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.controlArrow}>→</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setDeleteOpen(true)}
+            style={styles.controlRow}>
+            <Text style={[styles.controlLabel, { color: RED }]}>Delete my account</Text>
+            <Text style={[styles.controlArrow, { color: RED }]}>→</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 40 }} />
+
+        <Modal visible={deleteOpen} transparent animationType="slide" onRequestClose={() => setDeleteOpen(false)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setDeleteOpen(false)}>
+            <Pressable style={styles.deleteModal} onPress={() => {}}>
+              <Text style={styles.deleteTitle}>Delete account permanently?</Text>
+              <Text style={styles.deleteBody}>
+                This will permanently delete all your household data — signals,
+                vault items, crew, memory, everything. This cannot be undone.
+              </Text>
+              <Text style={styles.deleteHint}>Type DELETE to confirm</Text>
+              <TextInput
+                value={confirmPhrase}
+                onChangeText={setConfirmPhrase}
+                placeholder="DELETE"
+                placeholderTextColor={theme.muted}
+                autoCapitalize="characters"
+                style={styles.deleteInput}
+              />
+              <View style={styles.deleteBtnRow}>
+                <TouchableOpacity
+                  onPress={() => { setDeleteOpen(false); setConfirmPhrase(''); }}
+                  style={styles.deleteCancelBtn}>
+                  <Text style={styles.deleteCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={deleteAccount}
+                  disabled={deleting}
+                  style={[styles.deleteConfirmBtn, deleting && { opacity: 0.5 }]}>
+                  {deleting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.deleteConfirmText}>Delete permanently</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
       </ScrollView>
     </View>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <View style={styles.statRow}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 60 },
+
+    sectionLabel: {
+      color: theme.muted, fontSize: 10, letterSpacing: 2,
+      marginTop: 24, marginBottom: 12, fontWeight: '600',
+      textTransform: 'uppercase',
+    },
+    block: {
+      backgroundColor: theme.surface,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255,255,255,0.06)',
+      padding: 16,
+    },
+
+    sourceRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, minHeight: 44 },
+    sourceEmoji: { fontSize: 22, marginRight: 14 },
+    sourceBody: { flex: 1 },
+    sourceLabel: { color: theme.text, fontSize: 15, fontWeight: '600' },
+    sourceDesc: { color: theme.muted, fontSize: 13, lineHeight: 18, marginTop: 4 },
+
+    statRow: {
+      flexDirection: 'row', alignItems: 'baseline',
+      paddingVertical: 8,
+    },
+    statValue: { color: accentColor, fontSize: 22, fontWeight: '600', minWidth: 56 },
+    statLabel: { color: theme.muted, fontSize: 13, marginLeft: 8 },
+    connectedSince: { color: theme.muted, fontSize: 11, marginTop: 12, fontStyle: 'italic' },
+
+    neverRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8 },
+    neverIcon: { color: RED, fontSize: 16, fontWeight: '700', marginRight: 12, lineHeight: 20 },
+    neverText: { color: theme.text, fontSize: 13, lineHeight: 20, flex: 1 },
+
+    controlRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingVertical: 12, paddingHorizontal: 0, minHeight: 44,
+    },
+    controlLabel: { color: theme.text, fontSize: 15 },
+    controlArrow: { color: accentColor, fontSize: 16 },
+
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+    deleteModal: {
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: 18, borderTopRightRadius: 18,
+      padding: 24, paddingBottom: 36,
+    },
+    deleteTitle: { color: theme.text, fontSize: 18, fontWeight: '600' },
+    deleteBody: { color: theme.muted, fontSize: 13, lineHeight: 20, marginTop: 12 },
+    deleteHint: { color: theme.muted, fontSize: 10, marginTop: 24, letterSpacing: 2, textTransform: 'uppercase', fontWeight: '600' },
+    deleteInput: {
+      color: theme.text, fontSize: 16, fontWeight: '600',
+      paddingVertical: 12, paddingHorizontal: 14,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.06)',
+      marginTop: 10,
+      letterSpacing: 2,
+    },
+    deleteBtnRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
+    deleteCancelBtn: {
+      flex: 1, paddingVertical: 14, borderRadius: 24,
+      borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.06)',
+      alignItems: 'center',
+    },
+    deleteCancelText: { color: theme.muted, fontSize: 14 },
+    deleteConfirmBtn: {
+      flex: 1, paddingVertical: 14, borderRadius: 24,
+      backgroundColor: RED, alignItems: 'center',
+    },
+    deleteConfirmText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  });
 }
-
-function NeverRow({ text }: { text: string }) {
-  return (
-    <View style={styles.neverRow}>
-      <Text style={styles.neverIcon}>✗</Text>
-      <Text style={styles.neverText}>{text}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
-  topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  title: { color: OFF_WHITE, fontSize: 28, fontWeight: '300', marginTop: 14, letterSpacing: 0.2 },
-  subtitle: { color: MUTED, fontSize: 13, marginTop: 4, marginBottom: 24 },
-
-  sectionLabel: {
-    color: MUTED, fontSize: 10, letterSpacing: 1.5,
-    marginTop: 24, marginBottom: 12, fontWeight: '600',
-  },
-  block: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
-    padding: 16,
-  },
-
-  sourceRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10 },
-  sourceEmoji: { fontSize: 22, marginRight: 14 },
-  sourceBody: { flex: 1 },
-  sourceLabel: { color: OFF_WHITE, fontSize: 14, fontWeight: '600' },
-  sourceDesc: { color: FAINT, fontSize: 12, lineHeight: 18, marginTop: 4 },
-
-  statRow: {
-    flexDirection: 'row', alignItems: 'baseline',
-    paddingVertical: 8,
-  },
-  statValue: { color: BRASS, fontSize: 22, fontWeight: '600', minWidth: 56 },
-  statLabel: { color: FAINT, fontSize: 13, marginLeft: 8 },
-  connectedSince: { color: MUTED, fontSize: 11, marginTop: 12, fontStyle: 'italic' },
-
-  neverRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8 },
-  neverIcon: { color: RED, fontSize: 16, fontWeight: '700', marginRight: 12, lineHeight: 20 },
-  neverText: { color: OFF_WHITE, fontSize: 13, lineHeight: 20, flex: 1 },
-
-  controlRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 14,
-  },
-  controlLabel: { color: OFF_WHITE, fontSize: 14 },
-  controlArrow: { color: BRASS, fontSize: 16 },
-
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  deleteModal: {
-    backgroundColor: BG,
-    borderTopLeftRadius: 18, borderTopRightRadius: 18,
-    padding: 24, paddingBottom: 36,
-  },
-  deleteTitle: { color: OFF_WHITE, fontSize: 18, fontWeight: '600' },
-  deleteBody: { color: FAINT, fontSize: 13, lineHeight: 20, marginTop: 12 },
-  deleteHint: { color: MUTED, fontSize: 10, marginTop: 24, letterSpacing: 1.5, textTransform: 'uppercase' },
-  deleteInput: {
-    color: OFF_WHITE, fontSize: 16, fontWeight: '600',
-    paddingVertical: 12, paddingHorizontal: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
-    marginTop: 10,
-    letterSpacing: 2,
-  },
-  deleteBtnRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
-  deleteCancelBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
-    alignItems: 'center',
-  },
-  deleteCancelText: { color: MUTED, fontSize: 14 },
-  deleteConfirmBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 24,
-    backgroundColor: RED, alignItems: 'center',
-  },
-  deleteConfirmText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-});

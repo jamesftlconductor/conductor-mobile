@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
@@ -11,14 +11,10 @@ import {
   View,
 } from 'react-native';
 
+import { useTheme } from '@/app/theme';
+
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
-
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const BRASS = '#b8960c';
-const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type CamouflageRule = {
   type: 'sender' | 'signalType';
@@ -27,6 +23,8 @@ type CamouflageRule = {
 };
 
 export default function SignalFiltersScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [rules, setRules] = useState<CamouflageRule[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -56,8 +54,6 @@ export default function SignalFiltersScreen() {
           text: 'Remove filter',
           style: 'destructive',
           onPress: async () => {
-            // Optimistic remove — drop from local state immediately,
-            // refetch on the next focus pass.
             setRules((prev) => prev.filter((r) => !(r.type === rule.type && r.value === rule.value)));
             try {
               await fetch(
@@ -65,7 +61,6 @@ export default function SignalFiltersScreen() {
                 { method: 'DELETE' }
               );
             } catch {
-              // Reload to reconcile if the DELETE failed.
               load();
             }
           },
@@ -89,7 +84,7 @@ export default function SignalFiltersScreen() {
 
       {loading ? (
         <View style={styles.empty}>
-          <ActivityIndicator color={MUTED} />
+          <ActivityIndicator color={theme.muted} />
         </View>
       ) : rules.length === 0 ? (
         <View style={styles.empty}>
@@ -118,72 +113,79 @@ export default function SignalFiltersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
-  topBack: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  topBackText: {
-    color: MUTED,
-    fontSize: 13,
-    letterSpacing: 0.3,
-  },
-  title: {
-    color: OFF_WHITE,
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: MUTED,
-    fontSize: 13,
-    paddingBottom: 24,
-    letterSpacing: 0.2,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    color: MUTED,
-    fontSize: 13,
-    letterSpacing: 0.3,
-    textAlign: 'center',
-    paddingHorizontal: 16,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: SOFT_BORDER,
-    gap: 12,
-  },
-  rowText: {
-    flex: 1,
-    gap: 2,
-  },
-  ruleValue: {
-    color: OFF_WHITE,
-    fontSize: 15,
-  },
-  ruleKind: {
-    color: MUTED,
-    fontSize: 11,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  removeLink: {
-    color: BRASS,
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    fontWeight: '600',
-  },
-});
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scroll: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 60 },
+    topBack: {
+      alignSelf: 'flex-start',
+      paddingVertical: 6,
+      paddingHorizontal: 4,
+      marginBottom: 8,
+    },
+    topBackText: {
+      color: theme.muted,
+      fontSize: 13,
+      letterSpacing: 0.3,
+    },
+    title: {
+      color: theme.text,
+      fontSize: 22,
+      fontWeight: '700',
+      letterSpacing: -0.2,
+      marginBottom: 6,
+    },
+    subtitle: {
+      color: theme.muted,
+      fontSize: 13,
+      paddingBottom: 24,
+      letterSpacing: 0.2,
+    },
+    empty: {
+      alignItems: 'center',
+      paddingVertical: 60,
+    },
+    emptyText: {
+      color: theme.muted,
+      fontSize: 13,
+      letterSpacing: 0.3,
+      textAlign: 'center',
+      paddingHorizontal: 16,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 12,
+      paddingHorizontal: 0,
+      minHeight: 44,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(255,255,255,0.06)',
+      gap: 12,
+    },
+    rowText: {
+      flex: 1,
+      gap: 2,
+    },
+    ruleValue: {
+      color: theme.text,
+      fontSize: 15,
+    },
+    ruleKind: {
+      color: theme.muted,
+      fontSize: 10,
+      letterSpacing: 2,
+      textTransform: 'uppercase',
+      fontWeight: '600',
+    },
+    removeLink: {
+      color: accentColor,
+      fontSize: 10,
+      letterSpacing: 2,
+      textTransform: 'uppercase',
+      fontWeight: '600',
+    },
+  });
+}
