@@ -11,6 +11,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { useCatchphrase } from '@/hooks/useCatchphrase';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -268,6 +269,16 @@ const SCREEN_NAMES: Record<string, string> = {
   '/privacy-dashboard': 'Privacy Dashboard',
 };
 
+// Per-card catchphrase — extracted so the FlatList renderItem can
+// call useCatchphrase. Renders below the SECTION label and above
+// the card title. Empty string from the hook (unmapped feature)
+// renders nothing.
+function CardCatchphrase({ featureId }: { featureId: string }) {
+  const phrase = useCatchphrase(featureId);
+  if (!phrase) return null;
+  return <Text style={styles.cardCatchphrase}>{phrase}</Text>;
+}
+
 export default function DirectoryScreen() {
   const params = useLocalSearchParams<{ card?: string; screen?: string }>();
   const { width } = useWindowDimensions();
@@ -402,6 +413,7 @@ export default function DirectoryScreen() {
           <View style={[styles.cardOuter, { width: cardWidth }]}>
             <View style={styles.card}>
               <Text style={styles.cardSection}>{item.section.toUpperCase()}</Text>
+              <CardCatchphrase featureId={item.id} />
               <Text style={styles.cardTitle}>{item.title}</Text>
               <View style={styles.brassDivider} />
               <Text style={styles.cardBody}>{item.body}</Text>
@@ -499,6 +511,13 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 9,
     letterSpacing: 2,
+  },
+  cardCatchphrase: {
+    color: BRASS,
+    fontSize: 11,
+    fontStyle: 'italic',
+    letterSpacing: 0.5,
+    marginTop: 6,
   },
   cardTitle: {
     color: OFF_WHITE,

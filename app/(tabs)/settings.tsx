@@ -5,6 +5,7 @@ import * as security from '@/app/security';
 import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { Minimap } from '@/components/Minimap';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
+import { useCatchphrase } from '@/hooks/useCatchphrase';
 import {
   ICON_COLORS,
   ICON_TAGLINES,
@@ -13,6 +14,7 @@ import {
   type IconKey,
 } from '@/hooks/useDynamicIcon';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
+import { getCatchphrase, type Detail, type Tone } from '@/utils/catchphrases';
 import { ChevronRight, Lock } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -375,13 +377,36 @@ function SecuritySection() {
   );
 }
 
-function SectionHeader({ title, subtext }: { title: string; subtext?: string }) {
+function SectionHeader({
+  title,
+  subtext,
+  catchphraseFeatureId,
+}: {
+  title: string;
+  subtext?: string;
+  // Optional feature ID — when set, the section gains a single-line
+  // catchphrase in the user's chosen voice (read live via the hook).
+  catchphraseFeatureId?: string;
+}) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const catchphrase = useCatchphrase(catchphraseFeatureId || '');
   return (
     <View style={styles.sectionHeaderWrap}>
       <Text style={styles.sectionHeader}>{title}</Text>
       {!!subtext && <Text style={styles.sectionSubtext}>{subtext}</Text>}
+      {catchphraseFeatureId && catchphrase ? (
+        <Text
+          style={{
+            color: theme.muted,
+            fontSize: 11,
+            fontStyle: 'italic',
+            marginTop: 4,
+            letterSpacing: 0.3,
+          }}>
+          {catchphrase}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -1177,6 +1202,39 @@ function VoiceStyleBlock() {
         value={detail}
         onChange={(v) => { setDetail(v as StyleDetail); persist({ communicationDetail: v }); }}
       />
+
+      {/* Live catchphrase preview — the user's tone × detail
+          choice doesn't just shape the brief, it shapes the
+          entire product's surface language. Showing the vault
+          catchphrase in their selected voice makes the impact
+          immediately visible. */}
+      <View
+        style={{
+          marginTop: 14,
+          paddingVertical: 10,
+          paddingHorizontal: 14,
+          borderRadius: 8,
+          backgroundColor: theme.card,
+          borderLeftWidth: 2,
+          borderLeftColor: accentColor,
+        }}>
+        <Text style={{
+          color: theme.muted,
+          fontSize: 9,
+          letterSpacing: 2,
+          fontWeight: '600',
+          marginBottom: 6,
+        }}>
+          FEATURES SOUND LIKE
+        </Text>
+        <Text style={{
+          color: accentColor,
+          fontSize: 12,
+          fontStyle: 'italic',
+        }}>
+          {getCatchphrase('vault', tone as Tone, detail as Detail)}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -1891,10 +1949,10 @@ export default function SettingsScreen() {
           }
         />
 
-        <SectionHeader title="What You Love" subtext="Conductor watches for opportunities, not just obligations" />
+        <SectionHeader title="What You Love" subtext="Conductor watches for opportunities, not just obligations" catchphraseFeatureId="emotional_intelligence" />
         <WhatYouLoveBlock />
 
-        <SectionHeader title="Financial Intelligence" subtext="How much Conductor engages with your finances" />
+        <SectionHeader title="Financial Intelligence" subtext="How much Conductor engages with your finances" catchphraseFeatureId="vault" />
         <FinancialAwarenessBlock
           value={settings.financialAwareness}
           onChange={(v) => update({ ...settings, financialAwareness: v })}
@@ -1903,7 +1961,7 @@ export default function SettingsScreen() {
         <SectionHeader title="Extend with Shortcuts" subtext="Connect any app to Conductor without sharing access" />
         <ShortcutsLibraryBlock />
 
-        <SectionHeader title="Programme" subtext="When the day opens and closes" />
+        <SectionHeader title="Programme" subtext="When the day opens and closes" catchphraseFeatureId="brief" />
         <ChevronRow
           label="Takeoff"
           rightText={format12Hour(settings.takeoffTime)}
@@ -2087,7 +2145,7 @@ export default function SettingsScreen() {
         <SectionHeader title="Language / Idioma" />
         <LanguageRow />
 
-        <SectionHeader title="Your Voice" subtext="How Conductor talks to you" />
+        <SectionHeader title="Your Voice" subtext="How Conductor talks to you" catchphraseFeatureId="ask" />
         <VoiceStyleBlock />
 
         <SectionHeader title="Hey Conductor" subtext="Hands-free interaction" />
