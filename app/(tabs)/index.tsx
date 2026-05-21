@@ -968,6 +968,10 @@ export default function TakeoffScreen() {
   const [jokeSetup, setJokeSetup] = useState<string | null>(null);
   const [jokePunchline, setJokePunchline] = useState<string | null>(null);
   const [jokeLoading, setJokeLoading] = useState(false);
+  // Streak milestone observation — surfaces on the named thresholds
+  // (7/14/21/30/60/90/100/365). Brass color + slight size bump per
+  // spec to distinguish from the regular brief line.
+  const [streakObservation, setStreakObservation] = useState<string | null>(null);
   const [conductorQuestionAcked, setConductorQuestionAcked] = useState<
     'ack' | 'dismissed' | null
   >(null);
@@ -1297,6 +1301,11 @@ export default function TakeoffScreen() {
       setJokeSetup(null);
       setJokePunchline(null);
       setJokeLoading(false);
+      setStreakObservation(
+        typeof data.streakObservation === 'string' && data.streakObservation.length > 0
+          ? data.streakObservation
+          : null
+      );
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -1995,6 +2004,15 @@ export default function TakeoffScreen() {
             </View>
           ) : null}
 
+          {!loading && streakObservation ? (
+            // Streak milestone — brass-colored single line. Appears
+            // exactly once per milestone via the household:{id}:
+            // streakAck:{N} key on the backend.
+            <View style={styles.streakObsWrap}>
+              <Text style={styles.streakObsText}>{streakObservation}</Text>
+            </View>
+          ) : null}
+
           {!loading && jokeOffer ? (
             // Joke offer — subtle line below the brief on tough-but-
             // not-broken days. Backend only emits when eligible; the
@@ -2664,6 +2682,20 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingBottom: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: accentRgba(accentColor, 0.18),
+  },
+  // Streak milestone — single brass line above the joke offer slot.
+  // Slight size bump (15 vs the brief's 14) so the line lands as a
+  // moment, not a footnote.
+  streakObsWrap: {
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  streakObsText: {
+    color: accentColor,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 21,
+    letterSpacing: 0.1,
   },
   // Joke offer — quiet line below the brief. Not a card. The
   // muted divider above + italic offer text sit lower in the
