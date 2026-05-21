@@ -81,6 +81,21 @@ export function ConductorSheet() {
   const { visible, context } = useConductorSheetState();
   const [signals, setSignals] = useState<SignalLite[]>([]);
   const [loaded, setLoaded] = useState(false);
+  // Backdrop arm-delay — the tap that opened the sheet bubbles
+  // through the Modal mount and hits the backdrop Pressable on the
+  // same gesture cycle, immediately closing the sheet. Gate the
+  // backdrop's onPress behind a 300ms timer so the opening tap can't
+  // also be the closing tap. Resets to false on close so the next
+  // open cycles through the arm-delay cleanly.
+  const [backdropActive, setBackdropActive] = useState(false);
+  useEffect(() => {
+    if (!visible) {
+      setBackdropActive(false);
+      return;
+    }
+    const t = setTimeout(() => setBackdropActive(true), 300);
+    return () => clearTimeout(t);
+  }, [visible]);
 
   // Mount-once log so we can confirm the sheet IS mounted at root.
   useEffect(() => {
@@ -131,7 +146,9 @@ export function ConductorSheet() {
       animationType="slide"
       transparent
       onRequestClose={closeConductorSheet}>
-      <Pressable style={styles.backdrop} onPress={closeConductorSheet}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={backdropActive ? closeConductorSheet : undefined}>
         <SwipeDismissSheet style={styles.sheet} onClose={closeConductorSheet}>
           <Pressable onPress={() => {}}>
             {/* Header reads as "The Conductor" — Conductor (brand) →
