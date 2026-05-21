@@ -5,6 +5,13 @@ import * as security from '@/app/security';
 import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { Minimap } from '@/components/Minimap';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
+import {
+  ICON_COLORS,
+  ICON_TAGLINES,
+  MONTH_ICONS,
+  MONTH_NAMES,
+  type IconKey,
+} from '@/hooks/useDynamicIcon';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { ChevronRight, Lock } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -431,6 +438,65 @@ function ToggleRow({
         />
       }
     />
+  );
+}
+
+// App Icon row — surfaces the currently-active icon as a colored
+// swatch plus the month name + tagline ("December — Christmas").
+// Tap routes to the full selector screen. Reads currentIcon from
+// AsyncStorage on focus; falls through to the current calendar
+// month when nothing is stored yet.
+function AppIconRow() {
+  const { theme, accentColor } = useTheme();
+  const [icon, setIcon] = useState<IconKey>('january');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem('currentIcon');
+        if (cancelled) return;
+        if (stored && [...MONTH_ICONS, 'founding'].includes(stored as IconKey)) {
+          setIcon(stored as IconKey);
+        } else {
+          setIcon(MONTH_ICONS[new Date().getMonth()]);
+        }
+      } catch { /* fall through to default */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const isFounding = icon === 'founding';
+  const monthName = isFounding ? 'Founding' : MONTH_NAMES[MONTH_ICONS.indexOf(icon as any)];
+  const tagline = ICON_TAGLINES[icon];
+  return (
+    <TouchableOpacity
+      onPress={() => router.push('/icon-selector' as never)}
+      activeOpacity={0.6}
+      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 22,
+      }}>
+      <View
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 6,
+          backgroundColor: ICON_COLORS[icon],
+          marginRight: 12,
+        }}
+      />
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: theme.text, fontSize: 14 }}>
+          App Icon
+        </Text>
+        <Text style={{ color: theme.muted, fontSize: 12, marginTop: 2 }}>
+          {monthName} — {tagline}
+        </Text>
+      </View>
+      <ChevronRight size={18} color={theme.muted} />
+    </TouchableOpacity>
   );
 }
 
@@ -2027,7 +2093,8 @@ export default function SettingsScreen() {
         <SectionHeader title="Hey Conductor" subtext="Hands-free interaction" />
         <HeyConductorBlock />
 
-        <SectionHeader title="Conductor" />
+        <SectionHeader title="Your Conductor" />
+        <AppIconRow />
         <Row label="Conductor" subtext="Version 1.0.0" />
         <Row
           label="API Access"

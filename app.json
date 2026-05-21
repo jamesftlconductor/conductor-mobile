@@ -84,6 +84,21 @@
       "router": {},
       "eas": {
         "projectId": "04f4211f-0b25-420c-b079-4e7e394dfb76"
+      },
+      "alternateIcons": {
+        "january":   { "image": "./assets/icons/icon-january.png" },
+        "february":  { "image": "./assets/icons/icon-february.png" },
+        "march":     { "image": "./assets/icons/icon-march.png" },
+        "april":     { "image": "./assets/icons/icon-april.png" },
+        "may":       { "image": "./assets/icons/icon-may.png" },
+        "june":      { "image": "./assets/icons/icon-june.png" },
+        "july":      { "image": "./assets/icons/icon-july.png" },
+        "august":    { "image": "./assets/icons/icon-august.png" },
+        "september": { "image": "./assets/icons/icon-september.png" },
+        "october":   { "image": "./assets/icons/icon-october.png" },
+        "november":  { "image": "./assets/icons/icon-november.png" },
+        "december":  { "image": "./assets/icons/icon-december.png" },
+        "founding":  { "image": "./assets/icons/icon-founding.png" }
       }
     },
     "runtimeVersion": {

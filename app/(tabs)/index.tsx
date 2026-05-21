@@ -972,6 +972,10 @@ export default function TakeoffScreen() {
   // (7/14/21/30/60/90/100/365). Brass color + slight size bump per
   // spec to distinguish from the regular brief line.
   const [streakObservation, setStreakObservation] = useState<string | null>(null);
+  // Icon note — 1st-of-month flavor line. Tied to the dynamic icon
+  // system. Auto-fades 3 seconds after appearing so it doesn't
+  // linger past its moment.
+  const [iconNote, setIconNote] = useState<string | null>(null);
   const [conductorQuestionAcked, setConductorQuestionAcked] = useState<
     'ack' | 'dismissed' | null
   >(null);
@@ -1306,6 +1310,15 @@ export default function TakeoffScreen() {
           ? data.streakObservation
           : null
       );
+      const note = typeof data.iconNote === 'string' && data.iconNote.length > 0
+        ? data.iconNote
+        : null;
+      setIconNote(note);
+      if (note) {
+        // 3-second auto-fade — note doesn't linger past its moment.
+        // setTimeout is cleaned up by the next brief reload's reset.
+        setTimeout(() => setIconNote(null), 3000);
+      }
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -2004,6 +2017,15 @@ export default function TakeoffScreen() {
             </View>
           ) : null}
 
+          {!loading && iconNote ? (
+            // Icon note — single muted italic line below The Pulse,
+            // 1st-of-month only. Backend gates this; mobile just
+            // renders + auto-fades.
+            <View style={styles.iconNoteWrap}>
+              <Text style={styles.iconNoteText}>{iconNote}</Text>
+            </View>
+          ) : null}
+
           {!loading && streakObservation ? (
             // Streak milestone — brass-colored single line. Appears
             // exactly once per milestone via the household:{id}:
@@ -2682,6 +2704,18 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingBottom: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: accentRgba(accentColor, 0.18),
+  },
+  // Icon note — 1st-of-month flavor. Very subtle: small line below
+  // The Pulse area, muted italic. Auto-fades after 3 seconds.
+  iconNoteWrap: {
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  iconNoteText: {
+    color: theme.muted,
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 17,
   },
   // Streak milestone — single brass line above the joke offer slot.
   // Slight size bump (15 vs the brief's 14) so the line lands as a

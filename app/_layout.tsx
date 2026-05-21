@@ -10,6 +10,17 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider as ConductorThemeProvider } from '@/app/theme';
 import { ConductorSheet } from '@/components/ConductorSheet';
+import {
+  acceptIconChange,
+  declineIconChange,
+  getAutoUpdateEnabled,
+  ICON_COLORS,
+  ICON_TAGLINES,
+  MONTH_ICONS,
+  MONTH_NAMES,
+  shouldSuggestIconUpdate,
+  type MonthIcon,
+} from '@/hooks/useDynamicIcon';
 
 const ALERT_USER_ID = 'james_totalhome_gmail_com';
 const ALERT_API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -266,6 +277,130 @@ const overlayStyles = StyleSheet.create({
   },
 });
 
+// Subtle launch-time icon suggestion. Slides up 4 seconds after
+// mount (long enough for the brief to land first), auto-dismisses
+// after 8 seconds of no interaction. "Update" persists the choice;
+// "Keep current" marks this month declined so the sheet doesn't
+// re-appear today. The native OS icon swap is gated behind a
+// dynamic require in acceptIconChange — until expo-dynamic-app-icon
+// is installed + an EAS build is cut, this is preference-only.
+function IconSuggestionSheet() {
+  const [suggested, setSuggested] = useState<MonthIcon | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const enabled = await getAutoUpdateEnabled();
+        if (!enabled || cancelled) return;
+        const suggestion = await shouldSuggestIconUpdate();
+        if (suggestion && !cancelled) setSuggested(suggestion);
+      } catch { /* silent */ }
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!suggested) return;
+    const t = setTimeout(() => setSuggested(null), 8000);
+    return () => clearTimeout(t);
+  }, [suggested]);
+
+  if (!suggested) return null;
+
+  const monthName = MONTH_NAMES[MONTH_ICONS.indexOf(suggested)];
+  const tagline = ICON_TAGLINES[suggested];
+  const swatchColor = ICON_COLORS[suggested];
+
+  return (
+    <View pointerEvents="box-none" style={iconSuggestStyles.wrap}>
+      <View style={iconSuggestStyles.sheet}>
+        <View
+          style={[
+            iconSuggestStyles.swatch,
+            { backgroundColor: swatchColor },
+          ]}
+        />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={iconSuggestStyles.title}>
+            {monthName} has arrived.
+          </Text>
+          <Text style={iconSuggestStyles.sub} numberOfLines={1}>
+            {tagline}
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={async () => {
+            await acceptIconChange(suggested);
+            setSuggested(null);
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={{ paddingHorizontal: 10 }}>
+          <Text style={iconSuggestStyles.update}>Update</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={async () => {
+            await declineIconChange(suggested);
+            setSuggested(null);
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={{ paddingLeft: 8 }}>
+          <Text style={iconSuggestStyles.dismiss}>Keep current</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const iconSuggestStyles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingBottom: 24,
+    paddingHorizontal: 12,
+  },
+  sheet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    height: 76,
+  },
+  swatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+  },
+  title: {
+    color: '#f5f0eb',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  sub: {
+    color: '#8a8780',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  update: {
+    color: '#b8960c',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dismiss: {
+    color: '#5a5855',
+    fontSize: 12,
+  },
+});
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -294,6 +429,7 @@ export default function RootLayout() {
             <Stack.Screen name="missed-cues" options={{ headerShown: false, gestureEnabled: true }} />
             <Stack.Screen name="calendar" options={{ headerShown: false, gestureEnabled: true }} />
             <Stack.Screen name="channel" options={{ headerShown: false, gestureEnabled: true }} />
+            <Stack.Screen name="icon-selector" options={{ headerShown: false, gestureEnabled: true }} />
           </Stack>
           {/* Root-mounted ConductorSheet — visibility owned by
               useConductorSheet so any minimap from any screen opens
@@ -304,6 +440,10 @@ export default function RootLayout() {
               Renders above everything else when an active alert is
               present and the current user hasn't dismissed it. */}
           <RedAlertOverlay />
+          {/* Icon suggestion — surfaces 4 seconds after mount when
+              the current month has a new icon and the user hasn't
+              already declined it. Subtle bottom sheet, not a modal. */}
+          <IconSuggestionSheet />
           <StatusBar style="auto" />
         </ThemeProvider>
       </GestureHandlerRootView>
