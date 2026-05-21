@@ -11,6 +11,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
+import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import OverwatchView from '@/components/OverwatchView';
@@ -334,6 +335,23 @@ function buildAskChips(args: {
 // overwatchHour parameter is the user-configured threshold from
 // Settings (default 23 = 11pm). Hours strictly below 7 always render
 // Overwatch as before — that's the overnight-quiet contract.
+type WeeklyAchievementsPayload = {
+  instruments: {
+    monday: boolean;
+    tuesday: boolean;
+    wednesday: boolean;
+    thursday: boolean;
+    friday: boolean;
+    saturday: boolean;
+    sunday: boolean;
+  };
+  instrumentsEarned: number;
+  symphonyVariation: 'full' | 'major' | 'moderate' | 'sparse' | 'minimal';
+  symphonyKey: 'major' | 'minor';
+  soundSequence: string[];
+  weekStart?: string;
+};
+
 // Evening card discriminated union. Backend (api/clearance.js
 // generateEveningCards) emits whichever variants apply tonight; the
 // mobile renderer maps over them and selects the matching block.
@@ -976,6 +994,11 @@ export default function TakeoffScreen() {
   // system. Auto-fades 3 seconds after appearing so it doesn't
   // linger past its moment.
   const [iconNote, setIconNote] = useState<string | null>(null);
+  // Weekly Symphony — Sunday Clearance only. Backend ships
+  // weeklyAchievements as null on non-Sundays, and on Sunday returns
+  // the seven-instrument bitmap + variation/key/sequence.
+  const [weeklyAchievements, setWeeklyAchievements] = useState<WeeklyAchievementsPayload | null>(null);
+  const [symphonyPlaying, setSymphonyPlaying] = useState(false);
   const [conductorQuestionAcked, setConductorQuestionAcked] = useState<
     'ack' | 'dismissed' | null
   >(null);
@@ -1319,6 +1342,12 @@ export default function TakeoffScreen() {
         // setTimeout is cleaned up by the next brief reload's reset.
         setTimeout(() => setIconNote(null), 3000);
       }
+      // Sunday Clearance ships weeklyAchievements; other days null.
+      setWeeklyAchievements(
+        data?.weeklyAchievements && typeof data.weeklyAchievements === 'object'
+          ? (data.weeklyAchievements as WeeklyAchievementsPayload)
+          : null,
+      );
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -2150,6 +2179,22 @@ export default function TakeoffScreen() {
                 {weekInReview}
               </Text>
             </View>
+          ) : null}
+
+          {!loading && mode.title === 'Clearance' && weeklyAchievements ? (
+            <WeeklySymphony
+              achievements={weeklyAchievements}
+              isSunday={new Date().getDay() === 0}
+              playing={symphonyPlaying}
+              onPlay={() => {
+                // Audio playback deferred — expo-av isn't in the
+                // install. For now we visually "play" by toggling
+                // the button state for the rough length the
+                // composition would occupy, then reset.
+                setSymphonyPlaying(true);
+                setTimeout(() => setSymphonyPlaying(false), 4500);
+              }}
+            />
           ) : null}
 
           {!loading && mode.title === 'Clearance' && eveningCards.length > 0 ? (
