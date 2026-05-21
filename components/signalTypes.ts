@@ -14,6 +14,12 @@ export type Signal = {
   // junior-relay). Used by horizon.tsx + Minimap to display an owner
   // tag when the signal isn't tied to the current user.
   userId?: string | null;
+  // Emotional layer — set by the import classifier (api/import.js) and
+  // by manual signal creation (defaults neutral/low). FinaleSheet
+  // surfaces a "How does this feel?" override for high-intensity
+  // signals so the user can correct the auto-classification.
+  emotionalValence?: 'joyful' | 'neutral' | 'stressful' | 'grief';
+  emotionalIntensity?: 'high' | 'medium' | 'low';
 };
 
 export type TypeMeta = { emoji: string; color: string; label: string };

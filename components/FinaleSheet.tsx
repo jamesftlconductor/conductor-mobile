@@ -481,6 +481,19 @@ function SingleSheet({
                 <SignalSMSLink signal={signal} userId={userId || ''} />
               </View>
 
+              {/* Emotional tag — only surfaces for high-intensity signals
+                  (auto-classified by the import pipeline). Routine
+                  package deliveries stay quiet; the user only has to
+                  classify when Conductor already thinks it's a big
+                  enough moment to matter. Tap to override. */}
+              {signal.emotionalIntensity === 'high' ? (
+                <EmotionalTagRow
+                  signal={signal}
+                  userId={userId || ''}
+                  onUpdate={(updated) => onUpdate?.(updated)}
+                />
+              ) : null}
+
               {(suggestionLoading || suggestion) && (
                 <View style={styles.suggestionBlock}>
                   <Text style={styles.suggestionLabel}>NEXT STEP</Text>
@@ -684,6 +697,99 @@ function SignalSMSLink({ signal, userId }: { signal: Signal; userId: string }) {
 //   - "Assign to crew member →" muted link (unattributed)
 // Tap opens a bottom sheet listing crew members + a Household option;
 // tap one to POST the attribution and update parent local state.
+// "How does this feel?" — surfaced inside SingleSheet only for
+// signals the import pipeline (or manual override) marked as
+// high-intensity. The 4-pill row defaults to the auto-classified
+// valence; a tap saves the override via PATCH and updates local
+// signal state so the brief sees the change on next regeneration.
+//
+// Hidden entirely for medium/low intensity signals — every routine
+// package delivery would otherwise force the user to repeatedly
+// classify items they don't care about emotionally.
+const VALENCE_PILLS: { id: 'joyful' | 'neutral' | 'stressful' | 'grief'; emoji: string; label: string }[] = [
+  { id: 'joyful',    emoji: '😊', label: 'Joyful' },
+  { id: 'neutral',   emoji: '😐', label: 'Neutral' },
+  { id: 'stressful', emoji: '😟', label: 'Stressful' },
+  { id: 'grief',     emoji: '💔', label: 'Grief' },
+];
+
+function EmotionalTagRow({
+  signal,
+  userId,
+  onUpdate,
+}: {
+  signal: Signal;
+  userId: string;
+  onUpdate: (updated: Signal) => void;
+}) {
+  const { theme, accentColor } = useTheme();
+  const [current, setCurrent] = useState<Signal['emotionalValence']>(
+    signal.emotionalValence || 'neutral'
+  );
+
+  function save(next: NonNullable<Signal['emotionalValence']>) {
+    if (next === current) return;
+    setCurrent(next);
+    const updated: Signal = { ...signal, emotionalValence: next };
+    onUpdate(updated);
+    fetch(`${API_BASE}/signals`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: signal.id,
+        userId,
+        emotionalValence: next,
+      }),
+    }).catch(() => { /* silent — local state already reflects choice */ });
+  }
+
+  return (
+    <View style={{ marginTop: 14, marginBottom: 4 }}>
+      <Text style={{
+        color: theme.muted,
+        fontSize: 10,
+        letterSpacing: 1.5,
+        fontWeight: '600',
+        marginBottom: 8,
+      }}>
+        HOW DOES THIS FEEL?
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {VALENCE_PILLS.map((p) => {
+          const active = current === p.id;
+          return (
+            <TouchableOpacity
+              key={p.id}
+              onPress={() => save(p.id)}
+              activeOpacity={0.6}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              style={{
+                flex: 1,
+                paddingVertical: 8,
+                paddingHorizontal: 4,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: active ? accentColor : 'rgba(255,255,255,0.08)',
+                backgroundColor: active ? 'rgba(184,150,12,0.08)' : 'transparent',
+                alignItems: 'center',
+              }}>
+              <Text style={{ fontSize: 16 }}>{p.emoji}</Text>
+              <Text style={{
+                color: active ? accentColor : theme.muted,
+                fontSize: 10,
+                fontWeight: active ? '600' : '400',
+                marginTop: 2,
+              }}>
+                {p.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function CrewAttributionRow({
   signal,
   userId,
