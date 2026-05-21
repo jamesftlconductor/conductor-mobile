@@ -341,7 +341,8 @@ type EveningCard =
   | { type: 'quick_actions'; items: { signalId: string | number; description: string; action: string }[] }
   | { type: 'opportunity'; title: string; description: string; ctaText: string; ctaAction: string }
   | { type: 'suppressed'; items: { description: string; daysSuppressed: number; action: string }[] }
-  | { type: 'observation'; text: string };
+  | { type: 'observation'; text: string }
+  | { type: 'joke_offer'; offer: string };
 
 function getBriefMode(hour: number, overwatchHour: number = 23) {
   if (hour < 7 || hour >= overwatchHour) return { title: 'Overwatch', endpoint: null as string | null };
@@ -753,8 +754,108 @@ function EveningCardsStack({
             </View>
           );
         }
+        if (card.type === 'joke_offer') {
+          return (
+            <JokeOfferCard
+              key={`joke-${idx}`}
+              offer={card.offer}
+              base={base}
+              theme={theme}
+              accentColor={accentColor}
+            />
+          );
+        }
         return null;
       })}
+    </View>
+  );
+}
+
+// Self-contained joke card — same fetch + reveal pattern as the
+// Ground brief variant but rendered inside the evening stack. Keeps
+// the offer line on tap, swaps to setup → 800ms → punchline + light
+// haptic, then stays.
+function JokeOfferCard({
+  offer,
+  base,
+  theme,
+  accentColor,
+}: {
+  offer: string;
+  base: any;
+  theme: any;
+  accentColor: string;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [setup, setSetup] = useState<string | null>(null);
+  const [punchline, setPunchline] = useState<string | null>(null);
+  return (
+    <View style={base}>
+      {setup ? (
+        <View>
+          <Text style={{ color: theme.text, fontSize: 14, lineHeight: 20 }}>{setup}</Text>
+          {punchline ? (
+            <Text style={{
+              color: accentColor,
+              fontSize: 14,
+              lineHeight: 20,
+              marginTop: 8,
+              fontWeight: '500',
+            }}>
+              {punchline}
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Text style={{
+            flex: 1,
+            color: theme.muted,
+            fontSize: 13,
+            fontStyle: 'italic',
+            lineHeight: 19,
+          }}>
+            {offer}
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            disabled={loading}
+            onPress={async () => {
+              if (loading) return;
+              setLoading(true);
+              try {
+                const res = await fetch('https://conductor-ivory.vercel.app/api/ask', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId: 'james_totalhome_gmail_com',
+                    question: 'tell me a joke',
+                  }),
+                });
+                const data = await res.json();
+                const text = typeof data?.answer === 'string' ? data.answer : '';
+                const parts = text.split(/\n\n+/);
+                const s = parts[0] || text || '';
+                const p = parts.slice(1).join('\n\n') || '';
+                if (!s) return;
+                setSetup(s);
+                setTimeout(() => {
+                  setPunchline(p || '');
+                  conductorHaptics.newSignal();
+                }, 800);
+              } catch {
+                // silent
+              } finally {
+                setLoading(false);
+              }
+            }}>
+            <Text style={{ color: accentColor, fontSize: 18, fontWeight: '700', paddingHorizontal: 4 }}>
+              →
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -860,6 +961,13 @@ export default function TakeoffScreen() {
   // conductorQuestion ack/dismiss row.
   const [morningQuestion, setMorningQuestion] = useState<string | null>(null);
   const [isFirstBrief, setIsFirstBrief] = useState(false);
+  // Joke offer — subtle line below the brief on tough-but-not-broken
+  // days. State here covers fetched joke + visibility (offer fades
+  // out once the joke lands). Spoken via expo-speech if voice is on.
+  const [jokeOffer, setJokeOffer] = useState<string | null>(null);
+  const [jokeSetup, setJokeSetup] = useState<string | null>(null);
+  const [jokePunchline, setJokePunchline] = useState<string | null>(null);
+  const [jokeLoading, setJokeLoading] = useState(false);
   const [conductorQuestionAcked, setConductorQuestionAcked] = useState<
     'ack' | 'dismissed' | null
   >(null);
@@ -1176,6 +1284,19 @@ export default function TakeoffScreen() {
           ? data.morningQuestion
           : null
       );
+
+      // Joke offer — backend only emits this when eligible AND
+      // hasn't been shown to this household today. Local state
+      // resets on every brief load so a stale offer doesn't linger
+      // after dismissal.
+      setJokeOffer(
+        typeof data.jokeOffer === 'string' && data.jokeOffer.length > 0
+          ? data.jokeOffer
+          : null
+      );
+      setJokeSetup(null);
+      setJokePunchline(null);
+      setJokeLoading(false);
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -1874,6 +1995,67 @@ export default function TakeoffScreen() {
             </View>
           ) : null}
 
+          {!loading && jokeOffer ? (
+            // Joke offer — subtle line below the brief on tough-but-
+            // not-broken days. Backend only emits when eligible; the
+            // arrow tap fetches a joke from /api/ask, animates setup
+            // → 800ms pause → punchline with a light haptic, then
+            // the offer line itself fades.
+            <View style={styles.jokeOfferWrap}>
+              <View style={styles.jokeOfferDivider} />
+              {jokeSetup ? (
+                <View>
+                  <Text style={styles.jokeSetup}>{jokeSetup}</Text>
+                  {jokePunchline ? (
+                    <Text style={styles.jokePunchline}>{jokePunchline}</Text>
+                  ) : null}
+                </View>
+              ) : (
+                <View style={styles.jokeOfferRow}>
+                  <Text style={styles.jokeOfferText}>{jokeOffer}</Text>
+                  <TouchableOpacity
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    disabled={jokeLoading}
+                    onPress={async () => {
+                      if (jokeLoading) return;
+                      setJokeLoading(true);
+                      try {
+                        const res = await fetch('https://conductor-ivory.vercel.app/api/ask', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            userId: 'james_totalhome_gmail_com',
+                            question: 'tell me a joke',
+                          }),
+                        });
+                        const data = await res.json();
+                        // Easter egg response shape: answer = "setup\n\npunchline".
+                        // Fall back to a single block on the off chance the
+                        // shape changes server-side.
+                        const text = typeof data?.answer === 'string' ? data.answer : '';
+                        const parts = text.split(/\n\n+/);
+                        const setup = parts[0] || text || '';
+                        const punchline = parts.slice(1).join('\n\n') || '';
+                        if (!setup) return;
+                        setJokeSetup(setup);
+                        setTimeout(() => {
+                          setJokePunchline(punchline || '');
+                          conductorHaptics.newSignal();
+                        }, 800);
+                      } catch {
+                        // silent — leave the offer line visible
+                      } finally {
+                        setJokeLoading(false);
+                      }
+                    }}>
+                    <Text style={styles.jokeOfferArrow}>→</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ) : null}
+
           {!loading && isFirstBrief && morningQuestion ? (
             // First-brief morning question — onboarding moment that
             // introduces The Conductor. Slightly more prominent than
@@ -2482,6 +2664,50 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingBottom: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: accentRgba(accentColor, 0.18),
+  },
+  // Joke offer — quiet line below the brief. Not a card. The
+  // muted divider above + italic offer text sit lower in the
+  // visual hierarchy than feedback rows; the arrow does the
+  // affordance work.
+  jokeOfferWrap: {
+    marginTop: 18,
+    marginBottom: 8,
+    paddingTop: 12,
+  },
+  jokeOfferDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: accentRgba(accentColor, 0.16),
+    marginBottom: 12,
+  },
+  jokeOfferRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  jokeOfferText: {
+    flex: 1,
+    color: theme.muted,
+    fontSize: 13,
+    fontStyle: 'italic',
+    lineHeight: 19,
+  },
+  jokeOfferArrow: {
+    color: accentColor,
+    fontSize: 18,
+    fontWeight: '700',
+    paddingHorizontal: 4,
+  },
+  jokeSetup: {
+    color: theme.text,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  jokePunchline: {
+    color: accentColor,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
+    fontWeight: '500',
   },
   // First-brief morning question — sits between the conductorQuestion
   // ack row and Year/Week in Review. Wider top padding + real brass
