@@ -10,7 +10,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-export const DEBUG_BANNER_ENABLED = false;
+export const DEBUG_BANNER_ENABLED = true;
 
 type Entry = {
   id: number;
