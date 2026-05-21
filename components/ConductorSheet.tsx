@@ -149,7 +149,10 @@ export function ConductorSheet() {
       <Pressable
         style={styles.backdrop}
         onPress={backdropActive ? closeConductorSheet : undefined}>
-        <SwipeDismissSheet style={styles.sheet} onClose={closeConductorSheet}>
+        <SwipeDismissSheet
+          style={styles.sheet}
+          onClose={closeConductorSheet}
+          enabled={backdropActive}>
           <Pressable onPress={() => {}}>
             {/* Header reads as "The Conductor" — Conductor (brand) →
                 The Conductor (presence/voice). The context pill sits
