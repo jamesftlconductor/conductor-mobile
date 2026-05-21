@@ -16,6 +16,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenHeader } from '@/components/ScreenHeader';
+
+import { useTheme } from '@/app/theme';
 import {
   ActivityIndicator,
   Alert,
@@ -33,11 +35,6 @@ import {
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const FAINT = '#a8a5a0';
-const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type CommType = 'contractor_request' | 'network_update' | 'family_summary' | 'general';
@@ -60,6 +57,11 @@ const COMM_TYPES: { value: CommType; label: string; hint: string }[] = [
 type Phase = 'compose' | 'review' | 'sent';
 
 export default function CommunicateScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
+  const OFF_WHITE = theme.text;
   const params = useLocalSearchParams<{
     recipientName?: string;
     recipientEmail?: string;
@@ -201,7 +203,7 @@ export default function CommunicateScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: BG }}
+      style={{ flex: 1, backgroundColor: theme.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScreenHeader
         title={phase === 'review' ? 'Review' : 'Compose'}
@@ -383,6 +385,8 @@ export default function CommunicateScreen() {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -394,17 +398,27 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function ViaCard({
   active, title, subtitle, onPress,
 }: { active: boolean; title: string; subtitle: string; onPress: () => void }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <TouchableOpacity
       onPress={onPress}
       style={[styles.viaCard, active && styles.viaCardActive]}>
-      <Text style={[styles.viaTitle, active && { color: BRASS }]}>{title}</Text>
+      <Text style={[styles.viaTitle, active && { color: accentColor }]}>{title}</Text>
       <Text style={styles.viaSub}>{subtitle}</Text>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  const FAINT = theme.muted;
+  const BRASS = accentColor;
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 80 },
@@ -503,6 +517,7 @@ const styles = StyleSheet.create({
   viaTitle: { color: OFF_WHITE, fontSize: 13, fontWeight: '600', marginBottom: 4 },
   viaSub: { color: MUTED, fontSize: 11, lineHeight: 16 },
 
-  sentTitle: { color: BRASS, fontSize: 28, fontWeight: '300', letterSpacing: 1 },
+  sentTitle: { color: BRASS, fontSize: 22, fontWeight: '600', letterSpacing: 0.5 },
   sentSub: { color: MUTED, fontSize: 12, marginTop: 12 },
-});
+  });
+}

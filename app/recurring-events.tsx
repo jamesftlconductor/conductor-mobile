@@ -22,13 +22,10 @@ import {
   View,
 } from 'react-native';
 
+import { useTheme } from '@/app/theme';
+
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const FAINT = '#a8a5a0';
-const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type Recurrence = 'annual' | 'quarterly' | 'monthly';
@@ -70,6 +67,10 @@ function formatTiming(ev: RecurringEvent): string {
 }
 
 export default function RecurringEventsScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
   const [userId, setUserId] = useState<string>('');
   const [events, setEvents] = useState<RecurringEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -199,6 +200,10 @@ export default function RecurringEventsScreen() {
 function EventRow({
   ev, onToggle, onDelete,
 }: { ev: RecurringEvent; onToggle: () => void; onDelete: () => void }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
   return (
     <View style={[styles.eventRow, !ev.active && { opacity: 0.55 }]}>
       <View style={{ flex: 1 }}>
@@ -231,6 +236,10 @@ function AddEventSheet({
   onClose: () => void;
   onAdded: (e: RecurringEvent) => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Category>('other');
   const [recurrence, setRecurrence] = useState<Recurrence>('annual');
@@ -367,7 +376,15 @@ function AddEventSheet({
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  const FAINT = theme.muted;
+  const BRASS = accentColor;
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
@@ -436,4 +453,5 @@ const styles = StyleSheet.create({
     backgroundColor: BRASS,
   },
   saveBtnText: { color: '#0f0f0f', fontSize: 13, fontWeight: '600' },
-});
+  });
+}

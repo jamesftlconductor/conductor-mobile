@@ -1,5 +1,7 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+import { useTheme } from '@/app/theme';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -15,11 +17,7 @@ import { metaFor, Signal } from '@/components/signalTypes';
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
 const AMBER = '#f59e0b';
-const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -31,14 +29,14 @@ const DAY_MS = 24 * HOUR_MS;
 // The color thresholds match what the user requested — amber past 48h,
 // brass past 7d, muted under 48h (carriedForward signals can land here
 // younger than 48h via the carriedForward branch on the server).
-function ageDescription(s: Signal): { label: string; color: string } {
+function ageDescription(s: Signal, accentColor: string, muted: string): { label: string; color: string } {
   const lastMs = s.lastUpdate ? Date.parse(s.lastUpdate) : NaN;
   let ageMs = NaN;
   if (!isNaN(lastMs)) ageMs = Date.now() - lastMs;
   else if (typeof s.id === 'number' && s.id > 0) ageMs = Date.now() - s.id;
 
   if (isNaN(ageMs) || ageMs < 0) {
-    return { label: 'unresolved', color: MUTED };
+    return { label: 'unresolved', color: muted };
   }
 
   const days = Math.floor(ageMs / DAY_MS);
@@ -48,14 +46,19 @@ function ageDescription(s: Signal): { label: string; color: string } {
   else label = `${Math.max(1, hours)} hr${hours === 1 ? '' : 's'} unresolved`;
 
   let color: string;
-  if (ageMs > 7 * DAY_MS) color = BRASS;
+  if (ageMs > 7 * DAY_MS) color = accentColor;
   else if (ageMs > 48 * HOUR_MS) color = AMBER;
-  else color = MUTED;
+  else color = muted;
 
   return { label, color };
 }
 
 export default function MissedCuesScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
+  const OFF_WHITE = theme.text;
   const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -121,7 +124,7 @@ export default function MissedCuesScreen() {
       {!loading &&
         signals.map((s) => {
           const meta = metaFor(s);
-          const age = ageDescription(s);
+          const age = ageDescription(s, accentColor, theme.muted);
           return (
             <View key={String(s.id)} style={styles.row}>
               <Text style={styles.emoji}>{meta.emoji}</Text>
@@ -164,7 +167,14 @@ export default function MissedCuesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  const BRASS = accentColor;
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
   title: {
@@ -262,4 +272,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-});
+  });
+}

@@ -16,7 +16,7 @@
 // addToRadar action, optimistically swapping the link to "Added ✓".
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import {
   ActivityIndicator,
@@ -29,14 +29,13 @@ import {
   View,
 } from 'react-native';
 
+import { useTheme } from '@/app/theme';
+
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const FAINT = '#a8a5a0';
-const BRASS = '#b8960c';
+// Semantic colors that should NOT flip with the theme — these carry
+// meaning (urgency, warning) independent of palette mode.
 const RED = '#d97757';
 const AMBER = '#f59e0b';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
@@ -80,10 +79,10 @@ const CATEGORY_EMOJI: Record<string, string> = {
   general: '📋',
 };
 
-function priorityColor(p: Priority): string {
+function priorityColor(p: Priority, muted: string): string {
   if (p === 'urgent') return RED;
   if (p === 'recommended') return AMBER;
-  return MUTED;
+  return muted;
 }
 
 function priorityLabel(p: Priority): string {
@@ -96,6 +95,10 @@ function fmtUSD(n: number | undefined): string {
 }
 
 export default function MaintenanceScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
   const params = useLocalSearchParams<{ generate?: string }>();
   const shouldGenerate = params?.generate === 'true';
 
@@ -276,7 +279,7 @@ export default function MaintenanceScreen() {
                       {CATEGORY_EMOJI[it.category] || '📋'}
                     </Text>
                     <Text style={styles.itemTask}>{it.task}</Text>
-                    <Text style={[styles.priorityBadge, { color: priorityColor(it.priority) }]}>
+                    <Text style={[styles.priorityBadge, { color: priorityColor(it.priority, theme.muted) }]}>
                       {priorityLabel(it.priority)}
                     </Text>
                   </View>
@@ -316,7 +319,15 @@ export default function MaintenanceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  const FAINT = theme.muted;
+  const BRASS = accentColor;
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 80 },
@@ -391,4 +402,5 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: BG, fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
   workingText: { color: OFF_WHITE, fontSize: 14, marginTop: 16, fontWeight: '500' },
   workingSub: { color: MUTED, fontSize: 12, marginTop: 6, paddingHorizontal: 40, textAlign: 'center' },
-});
+  });
+}

@@ -13,7 +13,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import { useTheme } from '@/app/theme';
 import {
   ActivityIndicator,
   Alert,
@@ -31,11 +33,6 @@ import { conductorHaptics } from './haptics';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const FAINT = '#a8a5a0';
-const BRASS = '#b8960c';
 const GREEN = '#86efac';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
@@ -84,6 +81,11 @@ function todayKey(): string {
 }
 
 export default function JuniorScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
+  const OFF_WHITE = theme.text;
   const [userId, setUserId] = useState<string>('');
   const [data, setData] = useState<JuniorData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -404,6 +406,8 @@ export default function JuniorScreen() {
 }
 
 function CategoryBtn({ label, onPress }: { label: string; onPress: () => void }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <TouchableOpacity onPress={onPress} style={styles.categoryBtn} activeOpacity={0.7}>
       <Text style={styles.categoryBtnText}>{label}</Text>
@@ -422,7 +426,15 @@ function badgeEmoji(id: string): string {
   }
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  const FAINT = theme.muted;
+  const BRASS = accentColor;
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
@@ -564,4 +576,5 @@ const styles = StyleSheet.create({
   sentTitle: { color: BRASS, fontSize: 24, fontWeight: '500' },
   sentBody: { color: OFF_WHITE, fontSize: 13, marginTop: 14, textAlign: 'center', fontStyle: 'italic' },
   sentMeta: { color: MUTED, fontSize: 11, marginTop: 12 },
-});
+  });
+}

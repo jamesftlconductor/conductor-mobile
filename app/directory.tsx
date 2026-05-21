@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useCatchphrase } from '@/hooks/useCatchphrase';
+import { useTheme } from '@/app/theme';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -25,11 +26,6 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const FAINT = '#a8a5a0';
-const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type DirectoryCard = {
@@ -274,12 +270,19 @@ const SCREEN_NAMES: Record<string, string> = {
 // the card title. Empty string from the hook (unmapped feature)
 // renders nothing.
 function CardCatchphrase({ featureId }: { featureId: string }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const phrase = useCatchphrase(featureId);
   if (!phrase) return null;
   return <Text style={styles.cardCatchphrase}>{phrase}</Text>;
 }
 
 export default function DirectoryScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
+  const OFF_WHITE = theme.text;
   const params = useLocalSearchParams<{ card?: string; screen?: string }>();
   const { width } = useWindowDimensions();
   const cardWidth = width - 40; // 20px peek on each side
@@ -450,7 +453,15 @@ export default function DirectoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  const FAINT = theme.muted;
+  const BRASS = accentColor;
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   headerWrap: {
     flexDirection: 'row',
@@ -565,4 +576,5 @@ const styles = StyleSheet.create({
     backgroundColor: BRASS,
     width: 18,
   },
-});
+  });
+}

@@ -7,12 +7,13 @@
 // (e.g. "from Hover" / "from Settings") so the user gets a quiet
 // breadcrumb on where they invoked it.
 //
-// Implementation note: a plain module-scoped state + listener set is
-// preferred over pulling in zustand/jotai. The sheet has exactly one
-// owner (the root layout) and a tiny API surface, so the extra
-// dependency wouldn't earn its weight.
+// Implementation: React 18's useSyncExternalStore is the canonical
+// way to bridge external mutable state into React's render cycle.
+// It eliminates the subscribe/render race the prior hand-rolled
+// pattern was vulnerable to and ensures every openConductorSheet
+// call is observed by the mounted sheet.
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 type SheetState = {
   visible: boolean;
@@ -20,10 +21,24 @@ type SheetState = {
 };
 
 let state: SheetState = { visible: false, context: 'unknown' };
-const listeners = new Set<(s: SheetState) => void>();
+const listeners = new Set<() => void>();
 
 function emit() {
-  for (const l of listeners) l(state);
+  // Notify subscribers parameter-less — they read the current
+  // snapshot via getSnapshot below. Decoupling notification from
+  // payload is what useSyncExternalStore expects.
+  for (const l of listeners) {
+    try { l(); } catch { /* ignore individual subscriber errors */ }
+  }
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+function getSnapshot(): SheetState {
+  return state;
 }
 
 export function openConductorSheet(context: string = 'unknown') {
@@ -39,14 +54,10 @@ export function closeConductorSheet() {
 }
 
 export function useConductorSheetState(): SheetState {
-  const [snapshot, setSnapshot] = useState<SheetState>(state);
-  useEffect(() => {
-    listeners.add(setSnapshot);
-    // Sync in case state changed between render and subscribe.
-    setSnapshot(state);
-    return () => {
-      listeners.delete(setSnapshot);
-    };
-  }, []);
-  return snapshot;
+  // Same getSnapshot is passed as the server snapshot — we don't
+  // SSR this app, and even if we did the sheet would always start
+  // hidden. React handles the subscription lifecycle correctly
+  // across concurrent renders, strict-mode double mounts, and
+  // mid-render state mutations.
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

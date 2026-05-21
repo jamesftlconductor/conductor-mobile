@@ -10,8 +10,10 @@
 // flips activeTransition to drive brief tone for 90 days.
 
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScreenHeader } from '@/components/ScreenHeader';
+
+import { useTheme } from '@/app/theme';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -28,10 +30,6 @@ import {
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const BRASS = '#b8960c';
 const BORDER = 'rgba(255,255,255,0.06)';
 
 type TransitionType =
@@ -61,6 +59,11 @@ const CARDS: Card[] = [
 type Step = 'pick' | 'form' | 'done';
 
 export default function TransitionScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
+  const MUTED = theme.muted;
+  const OFF_WHITE = theme.text;
   const [step, setStep] = useState<Step>('pick');
   const [type, setType] = useState<TransitionType | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -308,7 +311,7 @@ export default function TransitionScreen() {
             style={[styles.primaryBtn, submitting && { opacity: 0.5 }]}
             activeOpacity={0.7}>
             {submitting ? (
-              <ActivityIndicator color={BG} />
+              <ActivityIndicator color={theme.background} />
             ) : (
               <Text style={styles.primaryBtnText}>Let Conductor help</Text>
             )}
@@ -345,6 +348,8 @@ export default function TransitionScreen() {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -353,7 +358,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const BG = theme.background;
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  const BRASS = accentColor;
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   pickScroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
   formScroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 80 },
@@ -462,4 +474,5 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     lineHeight: 21,
   },
-});
+  });
+}
