@@ -1,14 +1,19 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as Speech from 'expo-speech';
+import React, { useEffect, useState } from 'react';
+import { Linking, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider as ConductorThemeProvider } from '@/app/theme';
 import { ConductorSheet } from '@/components/ConductorSheet';
+
+const ALERT_USER_ID = 'james_totalhome_gmail_com';
+const ALERT_API_BASE = 'https://conductor-ivory.vercel.app/api';
+const ALERT_POLL_MS = 60 * 1000;
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -83,6 +88,184 @@ const fallbackStyles = StyleSheet.create({
   cta: { color: '#b8960c', fontSize: 14, fontWeight: '500' },
 });
 
+// Red Alert overlay — household-critical events surface above
+// everything. Polls /api/alert?action=active every 60s. expo-speech
+// is used to announce the alert audibly because expo-av isn't in the
+// install yet; once an mp3 ships in assets/sounds/alert.mp3 the
+// speech fallback can stay as a redundant accessibility surface.
+type ActiveAlert = {
+  id: string;
+  description: string;
+  createdAt: string;
+};
+
+function RedAlertOverlay() {
+  const [alert, setAlert] = useState<ActiveAlert | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function check() {
+      try {
+        const res = await fetch(`${ALERT_API_BASE}/alert?action=active&userId=${ALERT_USER_ID}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.active && data.alert) {
+          setAlert(data.alert);
+        } else {
+          setAlert(null);
+          setDismissed(false);
+        }
+      } catch { /* silent */ }
+    }
+    check();
+    const t = setInterval(check, ALERT_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, []);
+
+  // When a new alert appears (and isn't already dismissed for this
+  // session), speak the description out loud. expo-speech is the
+  // sound surface until an mp3 lands in assets.
+  useEffect(() => {
+    if (!alert || dismissed) return;
+    try {
+      Speech.stop();
+      Speech.speak(`Conductor Red Alert. ${alert.description}`, {
+        rate: 0.85,
+        pitch: 1.0,
+        language: 'en-US',
+      });
+    } catch { /* swallow — speech is best-effort */ }
+  }, [alert?.id, dismissed]);
+
+  if (!alert || dismissed) return null;
+
+  async function imAware() {
+    const targetId = alert?.id;
+    try {
+      await fetch(`${ALERT_API_BASE}/alert`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // householdId derived server-side from userId, but the
+          // backend accepts both — sending userId only keeps the
+          // mobile side from caching the id.
+          householdId: 'RangerOaks925',
+          alertId: targetId,
+          userId: ALERT_USER_ID,
+        }),
+      });
+    } catch { /* ignore — local dismissal still applies */ }
+    Speech.stop();
+    setDismissed(true);
+    setAlert(null);
+  }
+
+  function handleNow() {
+    Speech.stop();
+    setDismissed(true);
+    router.push('/(tabs)/hover' as never);
+  }
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={() => {}}>
+      <View style={overlayStyles.backdrop}>
+        <Text style={overlayStyles.mark}>CONDUCTOR</Text>
+        <Text style={overlayStyles.title}>RED ALERT</Text>
+        <Text style={overlayStyles.body}>{alert.description}</Text>
+        <Text style={overlayStyles.timestamp}>
+          {(() => {
+            try {
+              return new Date(alert.createdAt).toLocaleTimeString();
+            } catch { return ''; }
+          })()}
+        </Text>
+        <TouchableOpacity style={overlayStyles.primaryBtn} onPress={handleNow}>
+          <Text style={overlayStyles.primaryBtnText}>Handle now →</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={overlayStyles.secondaryBtn} onPress={imAware}>
+          <Text style={overlayStyles.secondaryBtnText}>I&apos;m aware</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ padding: 16 }}
+          onPress={() => Linking.openURL('tel:911').catch(() => {})}>
+          <Text style={overlayStyles.tertiary}>Get help →</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
+const overlayStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(239,68,68,0.97)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  mark: {
+    color: 'white',
+    fontSize: 12,
+    letterSpacing: 3,
+    marginBottom: 24,
+    opacity: 0.7,
+  },
+  title: {
+    color: 'white',
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 4,
+    marginBottom: 16,
+  },
+  body: {
+    color: 'white',
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  timestamp: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    marginBottom: 40,
+  },
+  primaryBtn: {
+    backgroundColor: '#b8960c',
+    borderRadius: 12,
+    padding: 16,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  primaryBtnText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  secondaryBtn: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    borderRadius: 12,
+    padding: 16,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  secondaryBtnText: {
+    color: 'white',
+    fontSize: 15,
+  },
+  tertiary: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+  },
+});
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -117,6 +300,10 @@ export default function RootLayout() {
               the same instance. Lives above <Stack> so it overlays
               every route. */}
           <ConductorSheet />
+          {/* Red Alert overlay — household-wide critical events.
+              Renders above everything else when an active alert is
+              present and the current user hasn't dismissed it. */}
+          <RedAlertOverlay />
           <StatusBar style="auto" />
         </ThemeProvider>
       </GestureHandlerRootView>

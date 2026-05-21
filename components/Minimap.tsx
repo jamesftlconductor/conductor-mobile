@@ -6,6 +6,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import Svg, { Circle } from 'react-native-svg';
 
 import { useTheme } from '@/app/theme';
+import { useHouseholdState } from '@/hooks/useHouseholdState';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -237,8 +238,15 @@ type MinimapProps = {
 const DISCOVERY_KEY = 'minimapDiscovered';
 const DISCOVERY_AUTOHIDE_MS = 4000;
 
-export function Minimap({ floating = true, onPress, urgentCount = 0 }: MinimapProps = {}) {
+export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp }: MinimapProps = {}) {
   const { theme, accentColor } = useTheme();
+  // Weather-vane state drives the border color + pulse cadence. The
+  // urgentCount that came in via prop (legacy callers) is overridden
+  // by the hook's count so every minimap reads from the same source.
+  const householdState = useHouseholdState();
+  const urgentCount = householdState.urgentCount ?? urgentCountProp ?? 0;
+  const borderColor = householdState.borderColor;
+  const pulseSpeed = householdState.pulseSpeed;
   const [signals, setSignals] = useState<Signal[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('family');
   const tapScale = useRef(new Animated.Value(1)).current;
@@ -290,12 +298,14 @@ export function Minimap({ floating = true, onPress, urgentCount = 0 }: MinimapPr
   const innerSignals = grouped.inner;
   const glowColor = innerSignals.length > 0 ? colorFor(innerSignals[0]) : null;
 
-  // Inner-ring pulse — only when urgentCount > 0. The opacity
-  // oscillates between 0.3 and 1.0 on a 2.4s cycle. When urgentCount
-  // drops to 0 the animation is stopped and reset to fully opaque.
+  // Pulse cadence comes from householdState.pulseSpeed (ms per half
+  // cycle). When pulseSpeed is null (busy/clear) we stop the loop and
+  // hold opacity at 1. Otherwise the inner ring opacity oscillates
+  // 0.3 → 1.0 → 0.3 with the configured timing — red_alert is 400ms,
+  // grief is 3000ms, etc.
   const pulseAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    if (urgentCount <= 0) {
+    if (pulseSpeed == null) {
       pulseAnim.stopAnimation();
       pulseAnim.setValue(1);
       return;
@@ -304,13 +314,13 @@ export function Minimap({ floating = true, onPress, urgentCount = 0 }: MinimapPr
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 0.3,
-          duration: 1200,
+          duration: pulseSpeed,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1.0,
-          duration: 1200,
+          duration: pulseSpeed,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
@@ -318,7 +328,7 @@ export function Minimap({ floating = true, onPress, urgentCount = 0 }: MinimapPr
     );
     loop.start();
     return () => loop.stop();
-  }, [urgentCount, pulseAnim]);
+  }, [pulseSpeed, pulseAnim]);
 
   // First-render discovery: scale-bounce 3 times, then surface a
   // tooltip ("Tap to ask Conductor anything") for up to 4 seconds.
@@ -405,6 +415,11 @@ export function Minimap({ floating = true, onPress, urgentCount = 0 }: MinimapPr
       <Animated.View
         style={[
           styles.circle,
+          // Weather-vane border — borderColor flips based on the
+          // household state. red_alert → red, grief → violet, joy →
+          // gold, etc. Default state (clear/busy) is brass so a
+          // healthy household reads as the familiar accent.
+          { borderWidth: 2, borderColor },
           glowColor && {
             shadowColor: glowColor,
             shadowOpacity: 0.6,
@@ -429,7 +444,11 @@ export function Minimap({ floating = true, onPress, urgentCount = 0 }: MinimapPr
           pointerEvents="none"
           style={[
             styles.badge,
-            { backgroundColor: accentColor, borderColor: theme.background },
+            // Badge color matches the weather-vane state so a stress
+            // day reads orange-on-orange, a grief day violet, etc.
+            // borderColor here is theme.background to maintain the
+            // crisp gap between badge and minimap rings.
+            { backgroundColor: borderColor, borderColor: theme.background },
           ]}>
           <Text style={styles.badgeText}>{badgeLabel}</Text>
         </View>
