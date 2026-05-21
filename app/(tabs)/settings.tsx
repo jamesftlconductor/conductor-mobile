@@ -1199,7 +1199,7 @@ function HeyConductorBlock() {
     <View>
       <ToggleRow
         label="Activate with shake"
-        subtext="Shake the phone to open Ask Conductor"
+        subtext="Shake the phone to open The Conductor"
         value={shake}
         onChange={(v) => { setShake(v); AsyncStorage.setItem('shakeEnabled', String(v)); }}
       />

@@ -331,7 +331,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
   }, [pulseSpeed, pulseAnim]);
 
   // First-render discovery: scale-bounce 3 times, then surface a
-  // tooltip ("Tap to ask Conductor anything") for up to 4 seconds.
+  // tooltip ("Tap to ask The Conductor anything") for up to 4 seconds.
   // Persisted via AsyncStorage so it only fires once per install.
   const discoveryScale = useRef(new Animated.Value(1)).current;
   const [discoveryTooltipVisible, setDiscoveryTooltipVisible] = useState(false);
@@ -461,7 +461,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
               { backgroundColor: theme.surface, borderColor: theme.border },
             ]}>
             <Text style={[styles.discoveryTooltipText, { color: theme.muted }]}>
-              Tap to ask Conductor anything
+              Tap to ask The Conductor anything
             </Text>
           </View>
         </Pressable>

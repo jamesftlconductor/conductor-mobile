@@ -83,9 +83,9 @@ const DIRECTORY_CARDS_EN: DirectoryCard[] = [
     screenLink: '/inventory' },
 
   // ── Section 3 — Intelligence ──
-  { id: 'ask', section: 'Intelligence', sectionNumber: 3, title: 'Ask Conductor',
-    body: "Ask Conductor anything about your household — what's coming up, what things cost, who you've used before, how your week looks. Conductor answers from your actual household data, not general knowledge. The more Conductor knows about your home, the better the answers.",
-    example: "\"Is $450 reasonable for HVAC service in Fort Lauderdale?\" — Conductor knows your market and your service history.",
+  { id: 'ask', section: 'Intelligence', sectionNumber: 3, title: 'The Conductor',
+    body: "Ask The Conductor anything about your household — what's coming up, what things cost, who you've used before, how your week looks. The Conductor answers from your actual household data, not general knowledge. The more Conductor knows about your home, the better the answers.",
+    example: "\"Is $450 reasonable for HVAC service in Fort Lauderdale?\" — The Conductor knows your market and your service history.",
     screenLink: '/' },
   { id: 'synthesis', section: 'Intelligence', sectionNumber: 3, title: 'Synthesis',
     body: "Every morning Conductor considers your health data, the weather, and your signal load simultaneously before saying anything. This is the synthesis layer — the thing that makes the brief feel like it was written by someone who knows you, not assembled from data.",

@@ -124,6 +124,11 @@ export function ConductorSheet() {
       <Pressable style={styles.backdrop} onPress={closeConductorSheet}>
         <SwipeDismissSheet style={styles.sheet} onClose={closeConductorSheet}>
           <Pressable onPress={() => {}}>
+            {/* Header reads as "The Conductor" — Conductor (brand) →
+                The Conductor (presence/voice). The context pill sits
+                directly below so the user knows the sheet is live. */}
+            <Text style={styles.sheetTitle}>The Conductor</Text>
+            <Text style={styles.contextPill}>📍 The Conductor is listening</Text>
             <Text style={styles.summary}>
               {loaded
                 ? `${urgent} urgent · ${total} signal${total === 1 ? '' : 's'} in motion`
@@ -208,10 +213,32 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       paddingBottom: 32,
       paddingHorizontal: 22,
     },
+    sheetTitle: {
+      color: theme.text,
+      fontSize: 20,
+      fontWeight: '700',
+      letterSpacing: 0.1,
+      marginTop: 2,
+      marginBottom: 4,
+    },
+    contextPill: {
+      alignSelf: 'flex-start',
+      color: accentColor,
+      fontSize: 11,
+      letterSpacing: 1.2,
+      fontWeight: '600',
+      marginBottom: 16,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: accentColor,
+      overflow: 'hidden',
+    },
     summary: {
       color: theme.text,
-      fontSize: 18,
-      fontWeight: '700',
+      fontSize: 16,
+      fontWeight: '600',
       letterSpacing: 0.1,
       marginTop: 4,
     },

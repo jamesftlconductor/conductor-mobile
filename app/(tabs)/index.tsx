@@ -854,6 +854,12 @@ export default function TakeoffScreen() {
   // same prompt doesn't reappear when the brief refreshes within
   // the same ET day.
   const [conductorQuestion, setConductorQuestion] = useState<string | null>(null);
+  // First-brief onboarding question — backend sets isFirstBrief +
+  // morningQuestion together exactly once per household. Renders with
+  // a real "Tell The Conductor →" button rather than the muted
+  // conductorQuestion ack/dismiss row.
+  const [morningQuestion, setMorningQuestion] = useState<string | null>(null);
+  const [isFirstBrief, setIsFirstBrief] = useState(false);
   const [conductorQuestionAcked, setConductorQuestionAcked] = useState<
     'ack' | 'dismissed' | null
   >(null);
@@ -1160,6 +1166,16 @@ export default function TakeoffScreen() {
         setConductorQuestion(incomingQ);
       }
       setConductorQuestionAcked(null);
+
+      // Morning question is only present on the first brief (backend
+      // sets both fields together). On subsequent briefs we clear so
+      // a re-render doesn't surface a stale onboarding card.
+      setIsFirstBrief(data.isFirstBrief === true);
+      setMorningQuestion(
+        data.isFirstBrief === true && typeof data.morningQuestion === 'string' && data.morningQuestion.length > 0
+          ? data.morningQuestion
+          : null
+      );
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -1454,7 +1470,7 @@ export default function TakeoffScreen() {
                   onSubmitEditing={submitAsk}
                   onFocus={() => setAskFocused(true)}
                   onBlur={() => setAskFocused(false)}
-                  placeholder="Ask Conductor..."
+                  placeholder="Ask The Conductor..."
                   placeholderTextColor={theme.muted}
                   returnKeyType="send"
                   editable={!askLoading}
@@ -1855,6 +1871,32 @@ export default function TakeoffScreen() {
                   </TouchableOpacity>
                 </View>
               )}
+            </View>
+          ) : null}
+
+          {!loading && isFirstBrief && morningQuestion ? (
+            // First-brief morning question — onboarding moment that
+            // introduces The Conductor. Slightly more prominent than
+            // the weekly variant; a real brass button rather than
+            // muted ack/dismiss row, since this is the user's first
+            // proper invitation to ask anything.
+            <View style={styles.morningQuestionWrap}>
+              <Text style={styles.morningQuestionText}>{morningQuestion}</Text>
+              <TouchableOpacity
+                activeOpacity={0.6}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={() => {
+                  // Open the ConductorSheet with the question as the
+                  // breadcrumb context so the sheet header reads
+                  // naturally ("Asked from your house" with the
+                  // morning prompt fresh in mind).
+                  openConductorSheet('first-brief-question');
+                }}
+                style={styles.morningQuestionBtn}>
+                <Text style={styles.morningQuestionBtnText}>
+                  Tell The Conductor →
+                </Text>
+              </TouchableOpacity>
             </View>
           ) : null}
 
@@ -2440,6 +2482,37 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingBottom: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: accentRgba(accentColor, 0.18),
+  },
+  // First-brief morning question — sits between the conductorQuestion
+  // ack row and Year/Week in Review. Wider top padding + real brass
+  // button (vs. the muted ack pills above) so the first-time user
+  // reads this as an invitation, not a checkbox.
+  morningQuestionWrap: {
+    marginTop: 22,
+    marginBottom: 8,
+    paddingTop: 18,
+    paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: accentRgba(accentColor, 0.22),
+  },
+  morningQuestionText: {
+    color: theme.text,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  morningQuestionBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 22,
+    backgroundColor: accentColor,
+  },
+  morningQuestionBtnText: {
+    color: '#0f0f0f',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.4,
   },
   conductorQLabel: {
     color: theme.muted,
