@@ -376,10 +376,20 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
   }
 
   function handlePress() {
+    // eslint-disable-next-line no-console
+    console.log('[Minimap] handlePress fired, onPress=', typeof onPress);
     // Light haptic on tap — same pattern as the brief quick-action
     // chips. Swallowed on devices without haptics support.
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     dismissDiscovery();
+    // Kick off the tap-bounce animation on the native thread. We do
+    // NOT block on it — the previous implementation used a 120ms
+    // setTimeout before firing onPress so the bounce was visible
+    // before the modal slid in, but that introduced a real
+    // reliability hazard: any work React did in those 120ms could
+    // race the deferred call. The animation now runs concurrently
+    // with the state update; the modal's own slide-in (~300ms) is
+    // long enough that the bounce reads anyway.
     Animated.sequence([
       Animated.timing(tapScale, {
         toValue: 0.9,
@@ -394,13 +404,21 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
         useNativeDriver: true,
       }),
     ]).start();
-    // Custom onPress overrides the legacy nav-to-Hover behavior.
-    // Wait 120ms before firing so the press-down animation gets a
-    // visible bounce before whatever the parent does next.
-    if (onPress) {
-      setTimeout(onPress, 120);
+    // Fire the parent callback (or the legacy nav-to-Hover fallback)
+    // SYNCHRONOUSLY. openConductorSheet mutates module state and
+    // notifies the root-mounted sheet via useSyncExternalStore — the
+    // modal slides in immediately.
+    if (typeof onPress === 'function') {
+      try {
+        onPress();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[Minimap] onPress threw:', err);
+      }
     } else {
-      setTimeout(() => router.push('/(tabs)/hover'), 120);
+      // eslint-disable-next-line no-console
+      console.log('[Minimap] no onPress prop, falling back to hover nav');
+      router.push('/(tabs)/hover');
     }
   }
 
