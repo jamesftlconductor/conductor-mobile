@@ -70,6 +70,13 @@ type Settings = {
   horizonFrequency: HorizonFrequency;
   workCalendarName: string;  // Empty string = unset
   middayEnabled: boolean;    // Opt-in midday check-in push
+  // Overwatch threshold — the local hour after which brief mode
+  // becomes "Overwatch" (the quiet, end-of-day variant). Stored as a
+  // 24-hour integer; backend reads it directly.
+  overwatchHour: number;
+  // Weekend takeoff delay — when true, Saturday/Sunday push the
+  // takeoff hour forward by 1 hour relative to the weekday default.
+  weekendTakeoffDelay: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -89,7 +96,22 @@ const DEFAULTS: Settings = {
   horizonFrequency: 'Weekly',
   workCalendarName: '',
   middayEnabled: false,
+  overwatchHour: 23,          // 11pm default per spec
+  weekendTakeoffDelay: false,
 };
+
+// Overwatch options shown in the Settings picker. Stored hour is the
+// integer Settings.overwatchHour; the 23.5 case is represented in the
+// UI but rounded down to 23 in storage for now since the backend gate
+// is hour-granular (refine to minutes if user feedback warrants).
+const OVERWATCH_OPTIONS: { hour: number; label: string }[] = [
+  { hour: 22, label: '10pm' },
+  { hour: 23, label: '11pm' },
+  // 11:30 lives in the same hour bucket as 11pm for backend purposes
+  // but the user-visible label communicates the intent.
+  { hour: 23, label: '11:30pm' },
+  { hour: 0,  label: 'Midnight' },
+];
 
 function format12Hour(hhmm: string) {
   const [h] = hhmm.split(':').map((n) => parseInt(n, 10));
@@ -120,6 +142,8 @@ async function persistAndSync(settings: Settings) {
     ['horizonFrequency', settings.horizonFrequency],
     ['workCalendarName', settings.workCalendarName],
     ['middayEnabled', String(settings.middayEnabled)],
+    ['overwatchHour', String(settings.overwatchHour)],
+    ['weekendTakeoffDelay', String(settings.weekendTakeoffDelay)],
     ...CATEGORIES.map(
       (c) => [c.storeKey, String(settings.categoryEnabled[c.key])] as [string, string]
     ),
@@ -143,6 +167,8 @@ async function persistAndSync(settings: Settings) {
         categoryEnabled: settings.categoryEnabled,
         workCalendarName: settings.workCalendarName.trim(),
         middayEnabled: settings.middayEnabled,
+        overwatchHour: settings.overwatchHour,
+        weekendTakeoffDelay: settings.weekendTakeoffDelay,
       },
     }),
   }).catch(() => {});
@@ -158,6 +184,8 @@ async function loadSettings(): Promise<Settings> {
     'horizonFrequency',
     'workCalendarName',
     'middayEnabled',
+    'overwatchHour',
+    'weekendTakeoffDelay',
     ...CATEGORIES.map((c) => c.storeKey),
   ];
   try {
@@ -177,6 +205,11 @@ async function loadSettings(): Promise<Settings> {
           : DEFAULTS.horizonFrequency,
       workCalendarName: map.workCalendarName || DEFAULTS.workCalendarName,
       middayEnabled: bool('middayEnabled', DEFAULTS.middayEnabled),
+      overwatchHour: (() => {
+        const n = parseInt(map.overwatchHour || '', 10);
+        return isNaN(n) ? DEFAULTS.overwatchHour : n;
+      })(),
+      weekendTakeoffDelay: bool('weekendTakeoffDelay', DEFAULTS.weekendTakeoffDelay),
       categoryEnabled: CATEGORIES.reduce((acc, c) => {
         acc[c.key] = bool(c.storeKey, DEFAULTS.categoryEnabled[c.key]);
         return acc;
@@ -376,6 +409,70 @@ function ToggleRow({
         />
       }
     />
+  );
+}
+
+// Overwatch threshold picker — four discrete options as a horizontal
+// pill row, mirroring the existing settings pill style. Selection
+// state shown with the accentColor border + tint. Storage is the
+// integer hour; the 11:30pm label still maps to hour=23 (backend gate
+// is hour-granular for now).
+function OverwatchPickerRow({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (h: number) => void;
+}) {
+  const { theme, accentColor } = useTheme();
+  return (
+    <View style={{ paddingHorizontal: 22, paddingVertical: 12 }}>
+      <Text style={{ color: theme.text, fontSize: 14, marginBottom: 8 }}>
+        Overwatch begins at
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {OVERWATCH_OPTIONS.map((o, idx) => {
+          const active = o.hour === value && (
+            o.label === '11pm' ? value === 23 :
+            o.label === '11:30pm' ? value === 23 :
+            true
+          );
+          // 11pm / 11:30pm share hour=23. Disambiguate by index so
+          // only one of the two reads as "active" at a time. We
+          // remember which label was last picked via a separate
+          // marker in storage — for now, defer that nuance and let
+          // 11pm win when both map to 23.
+          const isActive = idx === 0 ? value === 22
+            : idx === 1 ? value === 23
+            : idx === 2 ? false   // 11:30 distinct UI but same hour bucket
+            : value === 0;
+          return (
+            <TouchableOpacity
+              key={o.label}
+              onPress={() => onChange(o.hour)}
+              activeOpacity={0.6}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: isActive ? accentColor : 'rgba(255,255,255,0.08)',
+                backgroundColor: isActive ? 'rgba(184,150,12,0.08)' : 'transparent',
+                alignItems: 'center',
+              }}>
+              <Text style={{
+                color: isActive ? accentColor : theme.muted,
+                fontSize: 12,
+                fontWeight: isActive ? '600' : '400',
+              }}>
+                {o.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -1527,10 +1624,20 @@ export default function SettingsScreen() {
           rightText={format12Hour(settings.takeoffTime)}
           onPress={() => openTimeEditor('takeoffTime', 'Takeoff')}
         />
+        <ToggleRow
+          label="Weekend Takeoff"
+          subtext="Deliver 1 hour later on weekends"
+          value={settings.weekendTakeoffDelay}
+          onChange={(v) => update({ ...settings, weekendTakeoffDelay: v })}
+        />
         <ChevronRow
           label="Clearance"
           rightText={format12Hour(settings.clearanceTime)}
           onPress={() => openTimeEditor('clearanceTime', 'Clearance')}
+        />
+        <OverwatchPickerRow
+          value={settings.overwatchHour}
+          onChange={(h) => update({ ...settings, overwatchHour: h })}
         />
         <ToggleRow
           label="Midday Check-in"

@@ -330,9 +330,24 @@ function buildAskChips(args: {
   return chips;
 }
 
-function getBriefMode(hour: number) {
-  if (hour < 7 || hour >= 22) return { title: 'Overwatch', endpoint: null as string | null };
-  if (hour < 21) return { title: 'Takeoff', endpoint: 'brief' as string | null };
+// getBriefMode — picks the brief band for the current hour. The
+// overwatchHour parameter is the user-configured threshold from
+// Settings (default 23 = 11pm). Hours strictly below 7 always render
+// Overwatch as before — that's the overnight-quiet contract.
+// Evening card discriminated union. Backend (api/clearance.js
+// generateEveningCards) emits whichever variants apply tonight; the
+// mobile renderer maps over them and selects the matching block.
+type EveningCard =
+  | { type: 'quick_actions'; items: { signalId: string | number; description: string; action: string }[] }
+  | { type: 'opportunity'; title: string; description: string; ctaText: string; ctaAction: string }
+  | { type: 'suppressed'; items: { description: string; daysSuppressed: number; action: string }[] }
+  | { type: 'observation'; text: string };
+
+function getBriefMode(hour: number, overwatchHour: number = 23) {
+  if (hour < 7 || hour >= overwatchHour) return { title: 'Overwatch', endpoint: null as string | null };
+  // Clearance is the one-hour window before Overwatch begins. Below
+  // that — but above 7am — is Takeoff.
+  if (hour < overwatchHour - 1) return { title: 'Takeoff', endpoint: 'brief' as string | null };
   return { title: 'Clearance', endpoint: 'clearance' as string | null };
 }
 
@@ -585,6 +600,165 @@ function PulseFlagsSection({ flags }: { flags: string[] }) {
   );
 }
 
+// Renders the optional 4-card stack at the bottom of Clearance. Cards
+// are display-only — taps on the ack/action affordances fire haptic +
+// add a key to the parent's acked set, which fades the matching item.
+function EveningCardsStack({
+  cards,
+  acked,
+  onAck,
+}: {
+  cards: EveningCard[];
+  acked: Set<string>;
+  onAck: (key: string) => void;
+}) {
+  const { theme, accentColor } = useTheme();
+  return (
+    <View style={{ marginTop: 28, marginBottom: 12 }}>
+      {cards.map((card, idx) => {
+        const base = {
+          backgroundColor: theme.surface,
+          borderColor: theme.border || 'rgba(255,255,255,0.08)',
+          borderWidth: 1,
+          borderRadius: 12,
+          padding: 16,
+          marginBottom: 12,
+        };
+        const labelStyle = {
+          color: accentColor,
+          fontSize: 9,
+          letterSpacing: 2,
+          fontWeight: '600' as const,
+          marginBottom: 10,
+          textTransform: 'uppercase' as const,
+        };
+        const mutedLabel = {
+          ...labelStyle,
+          color: theme.muted,
+        };
+
+        if (card.type === 'quick_actions') {
+          return (
+            <View key={`qa-${idx}`} style={base}>
+              <Text style={labelStyle}>Clear the Deck</Text>
+              {card.items.map((it) => {
+                const key = `qa-${it.signalId}`;
+                const done = acked.has(key);
+                return (
+                  <View
+                    key={key}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 8,
+                      opacity: done ? 0.4 : 1,
+                    }}>
+                    <Text style={{ color: theme.text, flex: 1, fontSize: 14 }} numberOfLines={2}>
+                      {it.description}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => onAck(key)}
+                      activeOpacity={0.6}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      disabled={done}
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 12,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: accentColor,
+                      }}>
+                      <Text style={{ color: accentColor, fontSize: 12, fontWeight: '600' }}>
+                        {done ? '✓' : it.action}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        }
+        if (card.type === 'opportunity') {
+          const key = `opp-${idx}`;
+          const done = acked.has(key);
+          return (
+            <View key={key} style={[base, { opacity: done ? 0.5 : 1 }]}>
+              <Text style={labelStyle}>{card.title}</Text>
+              <Text style={{ color: theme.text, fontSize: 14, lineHeight: 20 }}>
+                {card.description}
+              </Text>
+              <TouchableOpacity
+                onPress={() => onAck(key)}
+                activeOpacity={0.6}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={{
+                  alignSelf: 'flex-start',
+                  marginTop: 12,
+                  paddingVertical: 8,
+                  paddingHorizontal: 14,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: accentColor,
+                }}>
+                <Text style={{ color: accentColor, fontSize: 12, fontWeight: '600' }}>
+                  {done ? '✓' : card.ctaText}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
+        }
+        if (card.type === 'suppressed') {
+          return (
+            <View key={`sup-${idx}`} style={base}>
+              <Text style={mutedLabel}>Conductor Held Back</Text>
+              {card.items.map((it, i) => {
+                const key = `sup-${idx}-${i}`;
+                const done = acked.has(key);
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => onAck(key)}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    disabled={done}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 8,
+                      opacity: done ? 0.3 : 1,
+                    }}>
+                    <Text style={{ color: theme.muted, flex: 1, fontSize: 13 }} numberOfLines={2}>
+                      {it.description}
+                    </Text>
+                    <Text style={{ color: theme.muted, fontSize: 11 }}>
+                      {done ? '✓' : 'Noted'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          );
+        }
+        if (card.type === 'observation') {
+          return (
+            <View key={`obs-${idx}`} style={base}>
+              <Text style={{
+                color: theme.text,
+                fontSize: 14,
+                fontStyle: 'italic',
+                lineHeight: 22,
+              }}>
+                {card.text}
+              </Text>
+            </View>
+          );
+        }
+        return null;
+      })}
+    </View>
+  );
+}
+
 export default function TakeoffScreen() {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
@@ -601,6 +775,11 @@ export default function TakeoffScreen() {
   // returns null on non-Sunday and on empty memory weeks; the mobile
   // section is conditional on truthy.
   const [weekInReview, setWeekInReview] = useState<string | null>(null);
+  // Evening cards — clearance only. Shape: array of cards with `type`
+  // discriminator. State init is [] so the renderer can short-circuit
+  // on length === 0 without a null-check tax.
+  const [eveningCards, setEveningCards] = useState<EveningCard[]>([]);
+  const [eveningAcked, setEveningAcked] = useState<Set<string>>(new Set());
   // Month in Review — only populated on the last day of an ET month
   // (clearance only). Rendered below Week in Review when present.
   const [monthInReview, setMonthInReview] = useState<string | null>(null);
@@ -712,6 +891,23 @@ export default function TakeoffScreen() {
       } catch { /* ignore */ }
     })();
   }, []);
+
+  // Pull the user's Overwatch threshold once on mount. Stored by
+  // Settings as a stringified integer hour (default 23 = 11pm); a
+  // missing/invalid value falls through to the default so existing
+  // installs keep their old behavior until the user changes it.
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('overwatchHour');
+        const n = parseInt(raw || '', 10);
+        if (!isNaN(n) && n >= 0 && n <= 23) {
+          setOverwatchHour(n);
+          setMode(getBriefMode(new Date().getHours(), n));
+        }
+      } catch { /* ignore */ }
+    })();
+  }, []);
   const stopSpeech = useCallback(() => {
     try { Speech.stop(); } catch { /* ignore */ }
     setSpeechActive(false);
@@ -750,7 +946,8 @@ export default function TakeoffScreen() {
   // as "no name yet, render the bare greeting."
   const [userName, setUserName] = useState('there');
   const [date, setDate] = useState('');
-  const [mode, setMode] = useState(getBriefMode(new Date().getHours()));
+  const [overwatchHour, setOverwatchHour] = useState(23);
+  const [mode, setMode] = useState(getBriefMode(new Date().getHours(), 23));
   const [showYesterday, setShowYesterday] = useState(false);
   const navigation = useNavigation();
 
@@ -777,7 +974,7 @@ export default function TakeoffScreen() {
     else if (hour < 17) setGreeting('Good afternoon');
     else setGreeting('Good evening');
 
-    setMode(getBriefMode(hour));
+    setMode(getBriefMode(hour, overwatchHour));
 
     setDate(now.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -861,7 +1058,7 @@ export default function TakeoffScreen() {
     setAskLoading(false);
     setAskAnswer(null);
     setAskError(false);
-    const { endpoint } = getBriefMode(new Date().getHours());
+    const { endpoint } = getBriefMode(new Date().getHours(), overwatchHour);
     if (!endpoint) {
       // Overwatch mode — no brief to fetch. Just exit loading so the
       // OverwatchView renders.
@@ -902,6 +1099,7 @@ export default function TakeoffScreen() {
       setYearInReview(typeof data.yearInReview === 'string' && data.yearInReview.length > 0
         ? data.yearInReview
         : null);
+      setEveningCards(Array.isArray(data.eveningCards) ? (data.eveningCards as EveningCard[]) : []);
       setPulse(typeof data.pulse === 'string' && data.pulse.length > 0
         ? data.pulse
         : null);
@@ -1688,6 +1886,21 @@ export default function TakeoffScreen() {
                 {weekInReview}
               </Text>
             </View>
+          ) : null}
+
+          {!loading && mode.title === 'Clearance' && eveningCards.length > 0 ? (
+            <EveningCardsStack
+              cards={eveningCards}
+              acked={eveningAcked}
+              onAck={(key) => {
+                conductorHaptics.newSignal();
+                setEveningAcked((prev) => {
+                  const next = new Set(prev);
+                  next.add(key);
+                  return next;
+                });
+              }}
+            />
           ) : null}
 
           {!loading && monthInReview ? (
