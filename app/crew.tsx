@@ -631,6 +631,30 @@ export default function CrewScreen() {
         />
       }>
 
+      {/* Crew Channel entry row — household-scoped message log with
+          Conductor system notes inline. Lives at the top of Crew so
+          it's the obvious way to start a conversation with the
+          household. Unread badge wires up once the channel/unread
+          poll is added in a follow-up pass. */}
+      <TouchableOpacity
+        onPress={() => router.push('/channel' as never)}
+        activeOpacity={0.6}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: 14,
+          paddingHorizontal: 4,
+          marginBottom: 10,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.border || 'rgba(255,255,255,0.08)',
+        }}>
+        <Text style={{ color: theme.text, fontSize: 16, flex: 1, fontWeight: '500' }}>
+          Crew Channel
+        </Text>
+        <Text style={{ color: theme.muted, fontSize: 18 }}>→</Text>
+      </TouchableOpacity>
+
       {loading && (
         <View style={styles.loading}>
           <ActivityIndicator color={MUTED} />

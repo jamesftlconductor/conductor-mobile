@@ -110,6 +110,7 @@ export default function RootLayout() {
             <Stack.Screen name="recurring-events" options={{ headerShown: false, gestureEnabled: true }} />
             <Stack.Screen name="missed-cues" options={{ headerShown: false, gestureEnabled: true }} />
             <Stack.Screen name="calendar" options={{ headerShown: false, gestureEnabled: true }} />
+            <Stack.Screen name="channel" options={{ headerShown: false, gestureEnabled: true }} />
           </Stack>
           {/* Root-mounted ConductorSheet — visibility owned by
               useConductorSheet so any minimap from any screen opens
