@@ -125,6 +125,9 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded, initialEta }
             placeholderTextColor={MUTED}
             multiline
             autoFocus
+            autoCorrect
+            autoComplete="off"
+            textContentType="none"
           />
 
           <Text style={styles.label}>Signal type</Text>
@@ -162,6 +165,10 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded, initialEta }
             onChangeText={setSender}
             placeholder="Source or sender..."
             placeholderTextColor={MUTED}
+            autoCorrect={false}
+            autoCapitalize="words"
+            autoComplete="name"
+            textContentType="organizationName"
           />
 
           <View style={styles.buttonRow}>

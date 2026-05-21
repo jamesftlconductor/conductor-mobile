@@ -1509,11 +1509,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 22,
   },
   chipActionSheet: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 14,
+    backgroundColor: theme.surface,
+    borderRadius: 12,
     padding: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(184,150,12,0.35)',
+    borderColor: accentColor + '59', // ~35% accent
     width: '100%',
     maxWidth: 360,
   },
@@ -1606,9 +1606,9 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 24,
   },
   modalSheet: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: theme.surface,
     borderRadius: 12,
-    padding: 20,
+    padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },

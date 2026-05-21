@@ -1179,6 +1179,10 @@ function AddVaultModal({
                 placeholder="Provider (e.g. State Farm)"
                 placeholderTextColor={MUTED}
                 style={styles.addInput}
+                autoCapitalize="words"
+                autoCorrect={false}
+                autoComplete="name"
+                textContentType="organizationName"
               />
               <TextInput
                 value={renewalDate}

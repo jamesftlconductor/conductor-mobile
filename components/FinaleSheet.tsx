@@ -579,6 +579,9 @@ function SingleSheet({
                 placeholder="Description"
                 placeholderTextColor={MUTED}
                 multiline
+                autoCorrect
+                autoComplete="off"
+                textContentType="none"
               />
               <View style={styles.metaBlock}>
                 {!!signal.sender && (

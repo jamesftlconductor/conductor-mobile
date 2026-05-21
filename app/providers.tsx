@@ -266,11 +266,15 @@ function AddProviderModal({
             ))}
           </View>
           <TextInput value={name} onChangeText={setName} placeholder="Name"
-            placeholderTextColor={MUTED} style={styles.input} />
+            placeholderTextColor={MUTED} style={styles.input}
+            autoCapitalize="words" autoCorrect={false}
+            autoComplete="name" textContentType="organizationName" />
           <TextInput value={phone} onChangeText={setPhone} placeholder="Phone (optional)"
-            placeholderTextColor={MUTED} style={styles.input} keyboardType="phone-pad" />
+            placeholderTextColor={MUTED} style={styles.input} keyboardType="phone-pad"
+            autoComplete="tel" textContentType="telephoneNumber" />
           <TextInput value={email} onChangeText={setEmail} placeholder="Email (optional)"
-            placeholderTextColor={MUTED} style={styles.input} keyboardType="email-address" autoCapitalize="none" />
+            placeholderTextColor={MUTED} style={styles.input} keyboardType="email-address" autoCapitalize="none"
+            autoComplete="email" textContentType="emailAddress" autoCorrect={false} />
           <TextInput value={notes} onChangeText={setNotes} placeholder="Notes (optional)"
             placeholderTextColor={MUTED} style={[styles.input, { minHeight: 60 }]} multiline />
           <View style={styles.sheetActions}>
