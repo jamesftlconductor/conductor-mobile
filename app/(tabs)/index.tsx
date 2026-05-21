@@ -363,10 +363,15 @@ type EveningCard =
   | { type: 'joke_offer'; offer: string };
 
 function getBriefMode(hour: number, overwatchHour: number = 23) {
-  if (hour < 7 || hour >= overwatchHour) return { title: 'Overwatch', endpoint: null as string | null };
+  // overwatchHour === 0 means "midnight" — the user wants Overwatch
+  // to begin at the rollover into the next day. The raw comparison
+  // `hour >= 0` would be true for every hour, so normalize to 24
+  // for the boundary check. This is the Midnight picker option.
+  const effective = overwatchHour === 0 ? 24 : overwatchHour;
+  if (hour < 7 || hour >= effective) return { title: 'Overwatch', endpoint: null as string | null };
   // Clearance is the one-hour window before Overwatch begins. Below
   // that — but above 7am — is Takeoff.
-  if (hour < overwatchHour - 1) return { title: 'Takeoff', endpoint: 'brief' as string | null };
+  if (hour < effective - 1) return { title: 'Takeoff', endpoint: 'brief' as string | null };
   return { title: 'Clearance', endpoint: 'clearance' as string | null };
 }
 
