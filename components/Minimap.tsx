@@ -7,6 +7,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { useTheme } from '@/app/theme';
 import { useHouseholdState } from '@/hooks/useHouseholdState';
+import { debugLog } from '@/utils/debugLog';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -376,8 +377,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
   }
 
   function handlePress() {
-    // eslint-disable-next-line no-console
-    console.log('[Minimap] handlePress fired, onPress=', typeof onPress);
+    debugLog('Minimap', `handlePress fired, onPress=${typeof onPress} floating=${floating}`);
     // Light haptic on tap — same pattern as the brief quick-action
     // chips. Swallowed on devices without haptics support.
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -410,14 +410,14 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
     // modal slides in immediately.
     if (typeof onPress === 'function') {
       try {
+        debugLog('Minimap', 'calling onPress()');
         onPress();
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[Minimap] onPress threw:', err);
+        debugLog('Minimap', 'onPress() returned');
+      } catch (err: any) {
+        debugLog('Minimap', `onPress threw: ${err?.message || String(err)}`);
       }
     } else {
-      // eslint-disable-next-line no-console
-      console.log('[Minimap] no onPress prop, falling back to hover nav');
+      debugLog('Minimap', 'no onPress prop → router.push(/hover)');
       router.push('/(tabs)/hover');
     }
   }

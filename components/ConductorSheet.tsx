@@ -17,6 +17,7 @@ import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'reac
 
 import { useTheme } from '@/app/theme';
 import { closeConductorSheet, useConductorSheetState } from '@/hooks/useConductorSheet';
+import { debugLog } from '@/utils/debugLog';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 
 const USER_ID = 'james_totalhome_gmail_com';
@@ -81,7 +82,16 @@ export function ConductorSheet() {
   const [signals, setSignals] = useState<SignalLite[]>([]);
   const [loaded, setLoaded] = useState(false);
 
+  // Mount-once log so we can confirm the sheet IS mounted at root.
   useEffect(() => {
+    debugLog('Sheet', 'ConductorSheet mounted at root');
+    return () => debugLog('Sheet', 'ConductorSheet UNMOUNTED');
+  }, []);
+
+  // Every time `visible` flips we log the new value so we can see
+  // whether useSyncExternalStore is actually notifying this component.
+  useEffect(() => {
+    debugLog('Sheet', `visible→${visible} context=${context}`);
     if (!visible) return;
     let cancelled = false;
     setLoaded(false);
@@ -98,7 +108,7 @@ export function ConductorSheet() {
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [visible]);
+  }, [visible, context]);
 
   const activeSignals = useMemo(
     () =>

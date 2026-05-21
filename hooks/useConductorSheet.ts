@@ -15,6 +15,8 @@
 
 import { useSyncExternalStore } from 'react';
 
+import { debugLog } from '@/utils/debugLog';
+
 type SheetState = {
   visible: boolean;
   context: string;
@@ -42,13 +44,16 @@ function getSnapshot(): SheetState {
 }
 
 export function openConductorSheet(context: string = 'unknown') {
+  debugLog('Hook', `openConductorSheet(${context}) — listeners=${listeners.size}`);
   state = { visible: true, context };
   emit();
+  debugLog('Hook', `after emit — state.visible=${state.visible}`);
 }
 
 export function closeConductorSheet() {
   // Keep the last context around — closing then re-opening from the
   // same screen shouldn't flicker the breadcrumb back to 'unknown'.
+  debugLog('Hook', 'closeConductorSheet()');
   state = { visible: false, context: state.context };
   emit();
 }

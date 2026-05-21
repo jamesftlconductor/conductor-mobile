@@ -10,6 +10,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider as ConductorThemeProvider } from '@/app/theme';
 import { ConductorSheet } from '@/components/ConductorSheet';
+import { DebugBanner } from '@/components/DebugBanner';
 import {
   acceptIconChange,
   declineIconChange,
@@ -436,6 +437,10 @@ export default function RootLayout() {
               the same instance. Lives above <Stack> so it overlays
               every route. */}
           <ConductorSheet />
+          {/* Diagnostic banner — pinned to top, renders the most
+              recent debugLog entries. Toggle via
+              utils/debugLog.DEBUG_BANNER_ENABLED. */}
+          <DebugBanner />
           {/* Red Alert overlay — household-wide critical events.
               Renders above everything else when an active alert is
               present and the current user hasn't dismissed it. */}
