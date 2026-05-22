@@ -1,19 +1,41 @@
-// Single, root-mounted bottom sheet opened by tapping the Minimap from
-// any header. Visibility + screen-context live in useConductorSheet so
-// any screen can open this without prop drilling.
+// Root-mounted bottom sheet for The Conductor — the household's
+// always-listening intelligence. Opens from any minimap tap or device
+// shake; supports context-aware suggestion chips, free-form questions,
+// inline answer cards with voice playback, action buttons, and a
+// scrollback of recent Q&A pairs (this session only).
 //
-// Header reads "{urgent} urgent · {total} signals in motion" so the
-// user knows what Conductor is seeing right now. A small breadcrumb
-// below ("Asked from Hover" / "Asked from Settings" etc.) tells them
-// which screen the sheet was invoked from.
+// State machine:
+//   - sheet visibility lives in hooks/useConductorSheet (external store)
+//   - per-open input/history/loading state lives here; reset whenever
+//     `visible` flips to false so each open is a clean slate
 //
-// Designed to be cheap to mount — fetches signal counts only when
-// visibility flips to true. Closes via backdrop tap or swipe-down
-// (SwipeDismissSheet provides 36×4 drag handle + 80px pan threshold).
+// Backdrop arm-delay: the same tap that opens the sheet can carry
+// velocity into the SwipeDismissSheet's Pan gesture, immediately
+// dismissing it. We gate both the backdrop Pressable and the
+// SwipeDismissSheet's `enabled` prop behind a 300ms timer so the
+// opening tap can't be the closing tap.
 
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import * as Speech from 'expo-speech';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useTheme } from '@/app/theme';
 import { closeConductorSheet, useConductorSheetState } from '@/hooks/useConductorSheet';
@@ -22,71 +44,121 @@ import { SwipeDismissSheet } from './SwipeDismissSheet';
 
 const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.65);
+const MAX_HISTORY_PAIRS = 5;
 
-type SignalLite = {
-  id: number | string;
-  state?: string;
-  eta?: string | null;
-  status?: string;
+// Per-context suggestion chips. Default list covers the catch-all
+// "user opened from shake / from a non-mapped screen" case.
+const SUGGESTIONS: Record<string, string[]> = {
+  ground: [
+    "What's urgent today?",
+    "How's my week looking?",
+    "What did Conductor catch?",
+    "Tell me a joke",
+  ],
+  hover: [
+    "What's on the radar?",
+    "Show me urgent signals",
+    "What's Mia's schedule?",
+    "Tell me a joke",
+  ],
+  vault: [
+    "What's expiring soon?",
+    "What subscriptions do I have?",
+    "What's my biggest deadline?",
+  ],
+  settings: [
+    "How do I change my brief time?",
+    "What does Conductor see?",
+    "How do I add a crew member?",
+  ],
+  horizon: [
+    "What's coming this month?",
+    "What deadlines are on the edge?",
+    "What's furthest out?",
+  ],
+  crew: [
+    "Who has a birthday coming up?",
+    "What does Mia have today?",
+    "Show me crew schedules",
+  ],
+  default: [
+    "What's happening today?",
+    "Catch me up",
+    "What should I handle first?",
+    "Tell me a joke",
+  ],
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function urgentCountFrom(signals: SignalLite[]): number {
-  const now = Date.now();
-  let urgent = 0;
-  for (const s of signals) {
-    if (s.state && s.state !== 'incoming' && s.state !== 'active') continue;
-    const isDelayed = (s.status || '').toLowerCase().includes('delay');
-    const ms = s.eta ? Date.parse(s.eta) : NaN;
-    const within24h = !isNaN(ms) && ms - now < DAY_MS && ms - now > -DAY_MS;
-    if (within24h || isDelayed) urgent++;
-  }
-  return urgent;
-}
-
-// Maps the screen-context slug into a human breadcrumb. Unknown values
-// fall through to a generic "Asked from your house" so the line never
-// reads as a debug label.
 const CONTEXT_LABEL: Record<string, string> = {
-  ground: 'Asked from Ground',
-  hover: 'Asked from Hover',
-  horizon: 'Asked from Horizon',
-  programme: 'Asked from Programme',
-  calendar: 'Asked from Calendar',
-  vault: 'Asked from Vault',
-  crew: 'Asked from Crew',
-  compass: 'Asked from Compass',
-  journal: 'Asked from Journal',
-  inventory: 'Asked from Inventory',
-  providers: 'Asked from Providers',
-  maintenance: 'Asked from Maintenance',
-  network: 'Asked from Network',
-  directory: 'Asked from Directory',
-  communicate: 'Asked from Communicate',
-  transition: 'Asked from Transition',
-  junior: 'Asked from Junior',
-  settings: 'Asked from Settings',
-  'privacy-dashboard': 'Asked from Privacy',
-  'recurring-events': 'Asked from Recurring',
+  ground: 'Ground',
+  hover: 'Hover',
+  horizon: 'Horizon',
+  programme: 'Programme',
+  calendar: 'Calendar',
+  vault: 'Vault',
+  crew: 'Crew',
+  compass: 'Compass',
+  journal: 'Journal',
+  inventory: 'Inventory',
+  providers: 'Providers',
+  maintenance: 'Maintenance',
+  network: 'Network',
+  directory: 'Directory',
+  communicate: 'Communicate',
+  transition: 'Transition',
+  junior: 'Junior',
+  settings: 'Settings',
+  'privacy-dashboard': 'Privacy',
+  'recurring-events': 'Recurring',
+  channel: 'Channel',
+  shake: 'Shake',
+  'first-brief-question': 'Onboarding',
 };
 
-function breadcrumbFor(context: string): string {
-  return CONTEXT_LABEL[context] || 'Asked from your house';
+function contextLabelFor(context: string): string {
+  return CONTEXT_LABEL[context] || 'Your house';
 }
+
+function suggestionsFor(context: string): string[] {
+  return SUGGESTIONS[context] || SUGGESTIONS.default;
+}
+
+type QAPair = {
+  id: number;
+  question: string;
+  answer: string;
+};
+
+type AskResponse = {
+  answer?: string;
+  spokenAnswer?: string;
+  navigation?: { path: string; label?: string } | null;
+  createSignal?: { description?: string } | null;
+  isEasterEgg?: boolean;
+};
+
+let pairCounter = 1;
 
 export function ConductorSheet() {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const { visible, context } = useConductorSheetState();
-  const [signals, setSignals] = useState<SignalLite[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  // Backdrop arm-delay — the tap that opened the sheet bubbles
-  // through the Modal mount and hits the backdrop Pressable on the
-  // same gesture cycle, immediately closing the sheet. Gate the
-  // backdrop's onPress behind a 300ms timer so the opening tap can't
-  // also be the closing tap. Resets to false on close so the next
-  // open cycles through the arm-delay cleanly.
+
+  // Per-open state — fully reset whenever the sheet closes so each
+  // open is a fresh session. History is intentionally session-scoped
+  // (not persisted) — The Conductor isn't a chat log surface.
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState<QAPair[]>([]);
+  const [actions, setActions] = useState<AskResponse | null>(null);
+  const inputRef = useRef<TextInput | null>(null);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const submittingRef = useRef(false);
+
+  // Backdrop arm-delay — same pattern that fixed the open-tap-closes
+  // bug. Applied to backdrop Pressable AND SwipeDismissSheet enabled.
   const [backdropActive, setBackdropActive] = useState(false);
   useEffect(() => {
     if (!visible) {
@@ -97,48 +169,117 @@ export function ConductorSheet() {
     return () => clearTimeout(t);
   }, [visible]);
 
+  // Reset all per-open state on close + log every visible transition
+  // so future regressions are traceable through debugLog.
+  useEffect(() => {
+    debugLog('Sheet', `visible→${visible} context=${context}`);
+    if (!visible) {
+      setInput('');
+      setHistory([]);
+      setActions(null);
+      setLoading(false);
+      submittingRef.current = false;
+      Speech.stop();
+    }
+  }, [visible, context]);
+
   // Mount-once log so we can confirm the sheet IS mounted at root.
   useEffect(() => {
     debugLog('Sheet', 'ConductorSheet mounted at root');
     return () => debugLog('Sheet', 'ConductorSheet UNMOUNTED');
   }, []);
 
-  // Every time `visible` flips we log the new value so we can see
-  // whether useSyncExternalStore is actually notifying this component.
+  // Auto-scroll the history pane to the bottom when a new pair lands.
   useEffect(() => {
-    debugLog('Sheet', `visible→${visible} context=${context}`);
-    if (!visible) return;
-    let cancelled = false;
-    setLoaded(false);
-    (async () => {
+    if (history.length === 0) return;
+    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    return () => clearTimeout(t);
+  }, [history.length]);
+
+  async function submit(rawQuestion: string) {
+    const q = rawQuestion.trim();
+    if (!q || submittingRef.current) return;
+    submittingRef.current = true;
+    setLoading(true);
+    setInput('');
+    setActions(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+    try {
+      const res = await fetch(`${API_BASE}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: USER_ID,
+          question: q,
+          screenContext: context,
+        }),
+      });
+      const data: AskResponse = res.ok ? await res.json() : {};
+      const answer = typeof data?.answer === 'string' && data.answer.length > 0
+        ? data.answer
+        : "The Conductor couldn't answer that one. Try rephrasing?";
+
+      setHistory((prev) => {
+        const next = [...prev, { id: pairCounter++, question: q, answer }];
+        return next.slice(-MAX_HISTORY_PAIRS);
+      });
+      setActions(data || null);
+
+      // Voice playback if the user opted in.
       try {
-        const res = await fetch(`${API_BASE}/signals?userId=${USER_ID}`);
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        const list = Array.isArray(data?.signals) ? data.signals : [];
-        if (!cancelled) {
-          setSignals(list);
-          setLoaded(true);
+        const voiceOn = await AsyncStorage.getItem('voiceResponsesEnabled');
+        if (voiceOn === 'true') {
+          const speakText = (data?.spokenAnswer && data.spokenAnswer.length > 0)
+            ? data.spokenAnswer
+            : answer;
+          Speech.stop();
+          Speech.speak(speakText, { rate: 0.88, pitch: 1.0, language: 'en-US' });
         }
-      } catch { /* silent */ }
-    })();
-    return () => { cancelled = true; };
-  }, [visible, context]);
-
-  const activeSignals = useMemo(
-    () =>
-      signals.filter(
-        (s) => !s.state || s.state === 'incoming' || s.state === 'active'
-      ),
-    [signals]
-  );
-  const urgent = urgentCountFrom(signals);
-  const total = activeSignals.length;
-
-  function go(path: string) {
-    closeConductorSheet();
-    setTimeout(() => router.push(path as never), 120);
+      } catch { /* speech is best-effort */ }
+    } catch (err: any) {
+      debugLog('Sheet', `submit failed: ${err?.message || String(err)}`);
+      setHistory((prev) => {
+        const next = [...prev, {
+          id: pairCounter++,
+          question: q,
+          answer: "The Conductor can't reach the network right now.",
+        }];
+        return next.slice(-MAX_HISTORY_PAIRS);
+      });
+    } finally {
+      setLoading(false);
+      submittingRef.current = false;
+    }
   }
+
+  function handleSuggestionTap(text: string) {
+    Haptics.selectionAsync().catch(() => {});
+    submit(text);
+  }
+
+  // Action buttons — only rendered when the response carries an
+  // actionable hint. Navigate goes via expo-router and closes the
+  // sheet; Create signal opens the AddSignalSheet by routing to the
+  // host screen (Ground handles AddSignalSheet rendering).
+  function actNavigate() {
+    if (!actions?.navigation?.path) return;
+    closeConductorSheet();
+    setTimeout(() => router.push(actions.navigation!.path as never), 120);
+  }
+  function actCreateSignal() {
+    closeConductorSheet();
+    // The AddSignalSheet is mounted on Ground; routing there with a
+    // query param lets that screen surface the composer on focus.
+    setTimeout(() => router.push('/(tabs)?addSignal=1' as never), 120);
+  }
+  function actGotIt() {
+    setActions(null);
+  }
+
+  const chips = suggestionsFor(context);
+  const latestPair = history.length > 0 ? history[history.length - 1] : null;
+  const earlierPairs = history.length > 1 ? history.slice(0, -1) : [];
 
   return (
     <Modal
@@ -150,73 +291,171 @@ export function ConductorSheet() {
         style={styles.backdrop}
         onPress={backdropActive ? closeConductorSheet : undefined}>
         <SwipeDismissSheet
-          style={styles.sheet}
+          style={[styles.sheet, { height: SHEET_HEIGHT }]}
           onClose={closeConductorSheet}
           enabled={backdropActive}>
-          <Pressable onPress={() => {}}>
-            {/* Header reads as "The Conductor" — Conductor (brand) →
-                The Conductor (presence/voice). The context pill sits
-                directly below so the user knows the sheet is live. */}
-            <Text style={styles.sheetTitle}>The Conductor</Text>
-            <Text style={styles.contextPill}>📍 The Conductor is listening</Text>
-            <Text style={styles.summary}>
-              {loaded
-                ? `${urgent} urgent · ${total} signal${total === 1 ? '' : 's'} in motion`
-                : 'Reading the household…'}
-            </Text>
-            <Text style={styles.breadcrumb}>{breadcrumbFor(context)}</Text>
-            <Text style={styles.sub}>
-              {loaded && total === 0
-                ? "Conductor is watching — nothing's active right now."
-                : 'Tap a destination below to see the live picture.'}
-            </Text>
+          <Pressable onPress={() => {}} style={{ flex: 1 }}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={{ flex: 1 }}>
+              {/* Header */}
+              <View style={styles.headerRow}>
+                <Text style={styles.title}>The Conductor</Text>
+                <View style={styles.contextPill}>
+                  <Text style={styles.contextPillText}>📍 {contextLabelFor(context)}</Text>
+                </View>
+              </View>
+              <View style={styles.divider} />
 
-            <View style={styles.actionsRow}>
-              <TouchableOpacity
-                onPress={() => go('/(tabs)/hover')}
-                activeOpacity={0.6}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.actionBtn}>
-                <Text style={styles.actionEmoji}>📡</Text>
-                <Text style={styles.actionLabel}>Hover</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => go('/horizon')}
-                activeOpacity={0.6}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.actionBtn}>
-                <Text style={styles.actionEmoji}>🔭</Text>
-                <Text style={styles.actionLabel}>Horizon</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => go('/programme')}
-                activeOpacity={0.6}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.actionBtn}>
-                <Text style={styles.actionEmoji}>📅</Text>
-                <Text style={styles.actionLabel}>Programme</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => go('/calendar' as never)}
-                activeOpacity={0.6}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.actionBtn}>
-                <Text style={styles.actionEmoji}>📆</Text>
-                <Text style={styles.actionLabel}>Calendar</Text>
-              </TouchableOpacity>
-            </View>
+              {/* Suggestion chips */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.chipsRow}
+                contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+                {chips.map((chip) => (
+                  <TouchableOpacity
+                    key={chip}
+                    onPress={() => handleSuggestionTap(chip)}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                    style={styles.chip}>
+                    <Text style={styles.chipText}>{chip}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
-            <TouchableOpacity
-              onPress={closeConductorSheet}
-              activeOpacity={0.6}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={styles.closeRow}>
-              <Text style={styles.closeText}>Done</Text>
-            </TouchableOpacity>
+              {/* Conversation area — history (older pairs muted) +
+                  latest answer card. Empty until first submit. */}
+              <ScrollView
+                ref={scrollRef}
+                style={styles.conversation}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                showsVerticalScrollIndicator={false}>
+                {earlierPairs.map((p) => (
+                  <View key={p.id} style={styles.earlierPair}>
+                    <Text style={styles.earlierQuestion}>{p.question}</Text>
+                    <Text style={styles.earlierAnswer}>{p.answer}</Text>
+                  </View>
+                ))}
+
+                {loading ? <LoadingDots accentColor={accentColor} /> : null}
+
+                {!loading && latestPair ? (
+                  <View style={styles.answerCard}>
+                    <Text style={styles.answerLabel}>THE CONDUCTOR</Text>
+                    <Text style={styles.answerText}>{latestPair.answer}</Text>
+                    {(actions?.navigation || actions?.createSignal) ? (
+                      <View style={styles.actionRow}>
+                        {actions?.navigation?.path ? (
+                          <TouchableOpacity
+                            onPress={actNavigate}
+                            activeOpacity={0.6}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            style={styles.actionBtn}>
+                            <Text style={styles.actionBtnText}>
+                              {actions.navigation.label || 'Navigate'} →
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        {actions?.createSignal ? (
+                          <TouchableOpacity
+                            onPress={actCreateSignal}
+                            activeOpacity={0.6}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            style={styles.actionBtn}>
+                            <Text style={styles.actionBtnText}>Create signal</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        <TouchableOpacity
+                          onPress={actGotIt}
+                          activeOpacity={0.6}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          style={[styles.actionBtn, styles.actionBtnGhost]}>
+                          <Text style={styles.actionBtnGhostText}>Got it</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </ScrollView>
+
+              {/* Input bar */}
+              <View style={styles.inputBar}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    inputRef.current?.focus();
+                  }}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.micBtn}>
+                  <Text style={styles.micGlyph}>🎙</Text>
+                </TouchableOpacity>
+                <TextInput
+                  ref={inputRef}
+                  value={input}
+                  onChangeText={setInput}
+                  onSubmitEditing={() => submit(input)}
+                  placeholder="Ask The Conductor anything..."
+                  placeholderTextColor={theme.muted}
+                  returnKeyType="send"
+                  blurOnSubmit={false}
+                  style={styles.input}
+                  autoCorrect
+                  autoComplete="off"
+                  textContentType="none"
+                />
+                <TouchableOpacity
+                  onPress={() => submit(input)}
+                  disabled={!input.trim() || loading}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={[
+                    styles.sendBtn,
+                    { backgroundColor: input.trim() && !loading ? accentColor : theme.muted },
+                  ]}>
+                  <Text style={styles.sendGlyph}>↑</Text>
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
           </Pressable>
         </SwipeDismissSheet>
       </Pressable>
     </Modal>
+  );
+}
+
+// Three accent-colored dots that pulse in sequence while a question
+// is in flight. Sits in the conversation pane in place of the answer
+// card so the layout doesn't jump on response.
+function LoadingDots({ accentColor }: { accentColor: string }) {
+  const a = useRef(new Animated.Value(0.3)).current;
+  const b = useRef(new Animated.Value(0.3)).current;
+  const c = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    function pulse(v: Animated.Value, delay: number) {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(v, { toValue: 1, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0.3, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+      );
+    }
+    const loops = [pulse(a, 0), pulse(b, 150), pulse(c, 300)];
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+  }, [a, b, c]);
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 24, gap: 8 }}>
+      {[a, b, c].map((v, i) => (
+        <Animated.View
+          key={i}
+          style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: accentColor, opacity: v }}
+        />
+      ))}
+    </View>
   );
 }
 
@@ -226,101 +465,171 @@ type ThemeColors = {
   text: string;
   muted: string;
   border: string;
+  card?: string;
 };
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     backdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: 'rgba(0,0,0,0.55)',
       justifyContent: 'flex-end',
     },
     sheet: {
       backgroundColor: theme.surface,
       borderTopLeftRadius: 16,
       borderTopRightRadius: 16,
-      paddingTop: 18,
-      paddingBottom: 32,
-      paddingHorizontal: 22,
+      paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     },
-    sheetTitle: {
-      color: theme.text,
-      fontSize: 20,
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 4,
+      paddingBottom: 10,
+    },
+    title: {
+      color: accentColor,
+      fontSize: 16,
       fontWeight: '700',
       letterSpacing: 0.1,
-      marginTop: 2,
-      marginBottom: 4,
     },
     contextPill: {
-      alignSelf: 'flex-start',
-      color: accentColor,
-      fontSize: 11,
-      letterSpacing: 1.2,
-      fontWeight: '600',
-      marginBottom: 16,
       paddingVertical: 4,
       paddingHorizontal: 10,
       borderRadius: 12,
+      backgroundColor: theme.background,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border || 'rgba(255,255,255,0.08)',
+    },
+    contextPillText: {
+      color: theme.muted,
+      fontSize: 11,
+      letterSpacing: 0.2,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: theme.border || 'rgba(255,255,255,0.08)',
+    },
+    chipsRow: {
+      flexGrow: 0,
+      paddingVertical: 12,
+    },
+    chip: {
       borderWidth: 1,
       borderColor: accentColor,
-      overflow: 'hidden',
+      borderRadius: 16,
+      paddingVertical: 6,
+      paddingHorizontal: 14,
     },
-    summary: {
+    chipText: {
+      color: accentColor,
+      fontSize: 11,
+      fontWeight: '500',
+      letterSpacing: 0.2,
+    },
+    conversation: {
+      flex: 1,
+    },
+    earlierPair: {
+      marginBottom: 16,
+    },
+    earlierQuestion: {
+      color: theme.muted,
+      fontSize: 13,
+      fontStyle: 'italic',
+      marginBottom: 4,
+    },
+    earlierAnswer: {
       color: theme.text,
-      fontSize: 16,
-      fontWeight: '600',
-      letterSpacing: 0.1,
-      marginTop: 4,
+      fontSize: 14,
+      lineHeight: 20,
+      opacity: 0.75,
     },
-    breadcrumb: {
+    answerCard: {
+      backgroundColor: theme.background,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border || 'rgba(255,255,255,0.08)',
+      padding: 16,
+      marginVertical: 12,
+    },
+    answerLabel: {
       color: accentColor,
       fontSize: 10,
       letterSpacing: 2,
-      textTransform: 'uppercase',
       fontWeight: '600',
-      marginTop: 8,
-    },
-    sub: {
-      color: theme.muted,
-      fontSize: 13,
-      marginTop: 6,
-      marginBottom: 22,
-      lineHeight: 18,
-    },
-    actionsRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
       marginBottom: 8,
     },
+    answerText: {
+      color: theme.text,
+      fontSize: 14,
+      lineHeight: 22,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 14,
+    },
     actionBtn: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: 12,
-      borderRadius: 12,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.border,
-      backgroundColor: theme.background,
-      marginHorizontal: 4,
+      borderWidth: 1,
+      borderColor: accentColor,
+      borderRadius: 16,
+      paddingVertical: 6,
+      paddingHorizontal: 14,
     },
-    actionEmoji: {
-      fontSize: 22,
-      marginBottom: 4,
-    },
-    actionLabel: {
+    actionBtnText: {
       color: accentColor,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '600',
-      letterSpacing: 0.4,
-    },
-    closeRow: {
-      marginTop: 16,
-      alignItems: 'center',
-      paddingVertical: 10,
-    },
-    closeText: {
-      color: theme.muted,
-      fontSize: 13,
       letterSpacing: 0.3,
+    },
+    actionBtnGhost: {
+      borderColor: theme.muted,
+    },
+    actionBtnGhostText: {
+      color: theme.muted,
+      fontSize: 12,
+      fontWeight: '500',
+    },
+    inputBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: 6,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.border || 'rgba(255,255,255,0.08)',
+      backgroundColor: theme.surface,
+      gap: 8,
+    },
+    micBtn: {
+      padding: 4,
+    },
+    micGlyph: {
+      fontSize: 18,
+    },
+    input: {
+      flex: 1,
+      color: theme.text,
+      fontSize: 14,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      minHeight: 36,
+    },
+    sendBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sendGlyph: {
+      color: '#ffffff',
+      fontSize: 18,
+      fontWeight: '700',
     },
   });
 }

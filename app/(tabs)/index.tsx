@@ -1080,12 +1080,13 @@ export default function TakeoffScreen() {
     }
   }, []);
 
-  // Shake-to-ask: shake fires haptic + focuses the question input so
-  // the keyboard's native dictation button is one tap away. Reuses
-  // existing ask input so we don't need a separate "Listening" state.
+  // Shake-to-ask: shake opens The Conductor sheet from anywhere
+  // (this listener happens to live in Ground, but openConductorSheet
+  // is a global module-state mutation — the root-mounted sheet
+  // picks it up regardless of which screen is in focus).
   useShakeToAsk(() => {
     conductorHaptics.newSignal();
-    setTimeout(() => askInputRef.current?.focus(), 60);
+    openConductorSheet('shake');
   });
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
