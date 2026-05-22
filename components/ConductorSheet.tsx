@@ -134,11 +134,20 @@ type Message =
   | { role: 'user'; id: number; text: string }
   | { role: 'conductor'; id: number; text: string; showLabel?: boolean };
 
+type ActionPayload =
+  | { type: 'navigate'; destination: string }
+  | { type: 'navigate_offer'; destination: string }
+  | { type: 'confirm_setting'; setting: string; value: any; label: string }
+  | { type: 'signal_created'; signal: { id: number; description: string; eta?: string | null } }
+  | { type: 'setting_changed'; settingKey: string; newValue: any; label: string; detail: string }
+  | { type: 'signal_resolved'; signal: { id: number; description: string } }
+  | { type: 'resolve_disambiguate'; target: string; candidates: Array<{ id: number; description: string }> }
+  | { type: 'resolve_not_found'; target: string };
+
 type AskResponse = {
   answer?: string;
   spokenAnswer?: string;
-  navigation?: { path: string; label?: string } | null;
-  createSignal?: { description?: string } | null;
+  action?: ActionPayload | null;
   isEasterEgg?: boolean;
 };
 
@@ -253,6 +262,27 @@ export function ConductorSheet() {
     setLoading(false);
     submittingRef.current = false;
 
+    // Auto-navigate when The Conductor returned a hard navigate action
+    // (vs. an offer). The confirmation bubble briefly shows the answer
+    // ("Opening your vault.") then we close + push.
+    if (data?.action?.type === 'navigate' && data.action.destination) {
+      const dest = data.action.destination;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      setTimeout(() => {
+        closeConductorSheet();
+        setTimeout(() => router.push(dest as never), 120);
+      }, 400);
+    }
+
+    // Success haptic for committed actions so the user feels the change.
+    if (
+      data?.action?.type === 'signal_created' ||
+      data?.action?.type === 'setting_changed' ||
+      data?.action?.type === 'signal_resolved'
+    ) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+
     // Voice playback if the user opted in.
     try {
       const voiceOn = await AsyncStorage.getItem('voiceResponsesEnabled');
@@ -272,19 +302,22 @@ export function ConductorSheet() {
   }
 
   // Action buttons — only rendered when the response carries an
-  // actionable hint. Navigate goes via expo-router and closes the
-  // sheet; Create signal opens the AddSignalSheet by routing to the
-  // host screen (Ground handles AddSignalSheet rendering).
-  function actNavigate() {
-    if (!actions?.navigation?.path) return;
+  // actionable hint. navigate_offer goes via expo-router and closes
+  // the sheet; resolve_disambiguate offers chips per candidate.
+  function actNavigateOffer() {
+    const dest = actions?.action?.type === 'navigate_offer' ? actions.action.destination : null;
+    if (!dest) return;
     closeConductorSheet();
-    setTimeout(() => router.push(actions.navigation!.path as never), 120);
+    setTimeout(() => router.push(dest as never), 120);
   }
-  function actCreateSignal() {
+  function actConfirmSetting() {
     closeConductorSheet();
-    // The AddSignalSheet is mounted on Ground; routing there with a
-    // query param lets that screen surface the composer on focus.
-    setTimeout(() => router.push('/(tabs)?addSignal=1' as never), 120);
+    setTimeout(() => router.push('/settings' as never), 120);
+  }
+  function actResolveCandidate(description: string) {
+    // Re-ask "rest the X signal" with the canonical description so
+    // executeResolveSignal can hit a high-confidence single match.
+    submit(`Resolve ${description}`);
   }
   function actGotIt() {
     setActions(null);
@@ -367,36 +400,17 @@ export function ConductorSheet() {
                         <View style={styles.conductorBubble}>
                           <Text style={styles.conductorBubbleText}>{m.text}</Text>
                         </View>
-                        {isLastConductor && (actions?.navigation || actions?.createSignal) ? (
-                          <View style={styles.actionRow}>
-                            {actions?.navigation?.path ? (
-                              <TouchableOpacity
-                                onPress={actNavigate}
-                                activeOpacity={0.6}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                style={styles.actionBtn}>
-                                <Text style={styles.actionBtnText}>
-                                  {actions.navigation.label || 'Navigate'} →
-                                </Text>
-                              </TouchableOpacity>
-                            ) : null}
-                            {actions?.createSignal ? (
-                              <TouchableOpacity
-                                onPress={actCreateSignal}
-                                activeOpacity={0.6}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                style={styles.actionBtn}>
-                                <Text style={styles.actionBtnText}>Create signal</Text>
-                              </TouchableOpacity>
-                            ) : null}
-                            <TouchableOpacity
-                              onPress={actGotIt}
-                              activeOpacity={0.6}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              style={[styles.actionBtn, styles.actionBtnGhost]}>
-                              <Text style={styles.actionBtnGhostText}>Got it</Text>
-                            </TouchableOpacity>
-                          </View>
+                        {isLastConductor && actions?.action ? (
+                          <ActionRenderer
+                            action={actions.action}
+                            styles={styles}
+                            accentColor={accentColor}
+                            theme={theme}
+                            onNavigateOffer={actNavigateOffer}
+                            onConfirmSetting={actConfirmSetting}
+                            onResolveCandidate={actResolveCandidate}
+                            onGotIt={actGotIt}
+                          />
                         ) : null}
                       </View>
                     </View>
@@ -499,6 +513,138 @@ type ThemeColors = {
   border: string;
   card?: string;
 };
+
+// Below-bubble action surface. Renders confirmation cards for
+// committed actions (signal_created / setting_changed / signal_resolved)
+// and offer buttons for the non-committing intents (navigate_offer,
+// confirm_setting, resolve_disambiguate, resolve_not_found).
+function ActionRenderer({
+  action,
+  styles,
+  accentColor,
+  theme,
+  onNavigateOffer,
+  onConfirmSetting,
+  onResolveCandidate,
+  onGotIt,
+}: {
+  action: ActionPayload;
+  styles: any;
+  accentColor: string;
+  theme: ThemeColors;
+  onNavigateOffer: () => void;
+  onConfirmSetting: () => void;
+  onResolveCandidate: (description: string) => void;
+  onGotIt: () => void;
+}) {
+  if (action.type === 'signal_created') {
+    const etaLine = action.signal.eta ? `· ${action.signal.eta}` : '';
+    return (
+      <View style={[styles.confirmCard, { borderLeftColor: accentColor }]}>
+        <Text style={styles.confirmLabel}>Added to the radar</Text>
+        <Text style={styles.confirmDetail} numberOfLines={2}>
+          {action.signal.description} {etaLine}
+        </Text>
+        <Text style={[styles.confirmDone, { color: accentColor }]}>Done</Text>
+      </View>
+    );
+  }
+  if (action.type === 'setting_changed') {
+    return (
+      <View style={[styles.confirmCard, { borderLeftColor: accentColor }]}>
+        <Text style={styles.confirmLabel}>Setting updated</Text>
+        <Text style={styles.confirmDetail} numberOfLines={2}>{action.detail}</Text>
+        <Text style={[styles.confirmDone, { color: accentColor }]}>Done</Text>
+      </View>
+    );
+  }
+  if (action.type === 'signal_resolved') {
+    return (
+      <View style={[styles.confirmCard, { borderLeftColor: accentColor }]}>
+        <Text style={styles.confirmLabel}>Rested</Text>
+        <Text style={styles.confirmDetail} numberOfLines={2}>{action.signal.description}</Text>
+        <Text style={[styles.confirmDone, { color: accentColor }]}>Done</Text>
+      </View>
+    );
+  }
+  if (action.type === 'navigate_offer') {
+    return (
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          onPress={onNavigateOffer}
+          activeOpacity={0.6}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={styles.actionBtn}>
+          <Text style={styles.actionBtnText}>Take me there →</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onGotIt}
+          activeOpacity={0.6}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={[styles.actionBtn, styles.actionBtnGhost]}>
+          <Text style={styles.actionBtnGhostText}>Got it</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+  if (action.type === 'confirm_setting') {
+    return (
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          onPress={onConfirmSetting}
+          activeOpacity={0.6}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={styles.actionBtn}>
+          <Text style={styles.actionBtnText}>Open Your House →</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onGotIt}
+          activeOpacity={0.6}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={[styles.actionBtn, styles.actionBtnGhost]}>
+          <Text style={styles.actionBtnGhostText}>Not now</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+  if (action.type === 'resolve_disambiguate') {
+    return (
+      <View style={styles.actionRow}>
+        {action.candidates.map((c) => (
+          <TouchableOpacity
+            key={c.id}
+            onPress={() => onResolveCandidate(c.description)}
+            activeOpacity={0.6}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            style={styles.actionBtn}>
+            <Text style={styles.actionBtnText} numberOfLines={1}>{c.description}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity
+          onPress={onGotIt}
+          activeOpacity={0.6}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={[styles.actionBtn, styles.actionBtnGhost]}>
+          <Text style={styles.actionBtnGhostText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+  if (action.type === 'resolve_not_found') {
+    return (
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          onPress={onGotIt}
+          activeOpacity={0.6}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={[styles.actionBtn, styles.actionBtnGhost]}>
+          <Text style={styles.actionBtnGhostText}>Got it</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+  return null;
+}
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
@@ -620,6 +766,40 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       flexWrap: 'wrap',
       gap: 8,
       marginTop: 14,
+    },
+    confirmCard: {
+      marginTop: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderLeftWidth: 3,
+      borderLeftColor: accentColor,
+      backgroundColor: theme.background,
+      borderRadius: 6,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderRightWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.border || 'rgba(255,255,255,0.06)',
+      borderRightColor: theme.border || 'rgba(255,255,255,0.06)',
+      borderBottomColor: theme.border || 'rgba(255,255,255,0.06)',
+    },
+    confirmLabel: {
+      color: theme.muted,
+      fontSize: 10,
+      letterSpacing: 1.5,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      marginBottom: 4,
+    },
+    confirmDetail: {
+      color: theme.text,
+      fontSize: 13,
+      lineHeight: 18,
+      marginBottom: 6,
+    },
+    confirmDone: {
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 0.4,
     },
     actionBtn: {
       borderWidth: 1,
