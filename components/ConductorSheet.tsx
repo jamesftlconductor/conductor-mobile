@@ -128,7 +128,12 @@ function suggestionsFor(context: string): string[] {
 type QAPair = {
   id: number;
   question: string;
-  answer: string;
+  // null while the answer is in flight — lets the UI render the
+  // user's question bubble immediately on submit and add the
+  // Conductor's response bubble below when the network call
+  // resolves, instead of disappearing the question and showing only
+  // loading dots.
+  answer: string | null;
 };
 
 type AskResponse = {
@@ -189,22 +194,35 @@ export function ConductorSheet() {
     return () => debugLog('Sheet', 'ConductorSheet UNMOUNTED');
   }, []);
 
-  // Auto-scroll the history pane to the bottom when a new pair lands.
+  // Auto-scroll to the bottom whenever the history grows OR the
+  // pending answer fills in.
   useEffect(() => {
     if (history.length === 0) return;
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     return () => clearTimeout(t);
-  }, [history.length]);
+  }, [history.length, history[history.length - 1]?.answer]);
 
   async function submit(rawQuestion: string) {
     const q = rawQuestion.trim();
     if (!q || submittingRef.current) return;
     submittingRef.current = true;
-    setLoading(true);
     setInput('');
     setActions(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
+    // Add the user's question to history IMMEDIATELY so it renders
+    // as a right-aligned bubble before the network call returns.
+    // answer: null marks the pair as pending — the renderer shows
+    // loading dots in place of the Conductor bubble.
+    const pairId = pairCounter++;
+    setHistory((prev) => {
+      const next = [...prev, { id: pairId, question: q, answer: null }];
+      return next.slice(-MAX_HISTORY_PAIRS);
+    });
+    setLoading(true);
+
+    let answer: string;
+    let data: AskResponse = {};
     try {
       const res = await fetch(`${API_BASE}/ask`, {
         method: 'POST',
@@ -215,42 +233,36 @@ export function ConductorSheet() {
           screenContext: context,
         }),
       });
-      const data: AskResponse = res.ok ? await res.json() : {};
-      const answer = typeof data?.answer === 'string' && data.answer.length > 0
+      data = res.ok ? await res.json() : {};
+      answer = typeof data?.answer === 'string' && data.answer.length > 0
         ? data.answer
         : "The Conductor couldn't answer that one. Try rephrasing?";
-
-      setHistory((prev) => {
-        const next = [...prev, { id: pairCounter++, question: q, answer }];
-        return next.slice(-MAX_HISTORY_PAIRS);
-      });
-      setActions(data || null);
-
-      // Voice playback if the user opted in.
-      try {
-        const voiceOn = await AsyncStorage.getItem('voiceResponsesEnabled');
-        if (voiceOn === 'true') {
-          const speakText = (data?.spokenAnswer && data.spokenAnswer.length > 0)
-            ? data.spokenAnswer
-            : answer;
-          Speech.stop();
-          Speech.speak(speakText, { rate: 0.88, pitch: 1.0, language: 'en-US' });
-        }
-      } catch { /* speech is best-effort */ }
     } catch (err: any) {
       debugLog('Sheet', `submit failed: ${err?.message || String(err)}`);
-      setHistory((prev) => {
-        const next = [...prev, {
-          id: pairCounter++,
-          question: q,
-          answer: "The Conductor can't reach the network right now.",
-        }];
-        return next.slice(-MAX_HISTORY_PAIRS);
-      });
-    } finally {
-      setLoading(false);
-      submittingRef.current = false;
+      answer = "The Conductor can't reach the network right now.";
     }
+
+    // Fill the pending pair's answer field in place — preserves
+    // chronological position even if the user submitted a follow-up
+    // while waiting. Match by pairId rather than slot index.
+    setHistory((prev) =>
+      prev.map((p) => (p.id === pairId ? { ...p, answer } : p)),
+    );
+    setActions(data || null);
+    setLoading(false);
+    submittingRef.current = false;
+
+    // Voice playback if the user opted in.
+    try {
+      const voiceOn = await AsyncStorage.getItem('voiceResponsesEnabled');
+      if (voiceOn === 'true') {
+        const speakText = (data?.spokenAnswer && data.spokenAnswer.length > 0)
+          ? data.spokenAnswer
+          : answer;
+        Speech.stop();
+        Speech.speak(speakText, { rate: 0.88, pitch: 1.0, language: 'en-US' });
+      }
+    } catch { /* speech is best-effort */ }
   }
 
   function handleSuggestionTap(text: string) {
@@ -279,7 +291,9 @@ export function ConductorSheet() {
 
   const chips = suggestionsFor(context);
   const latestPair = history.length > 0 ? history[history.length - 1] : null;
-  const earlierPairs = history.length > 1 ? history.slice(0, -1) : [];
+  // Index of the first Conductor response across the visible history,
+  // used to decide where to render the "THE CONDUCTOR" label.
+  const firstAnsweredIdx = history.findIndex((p) => p.answer !== null);
 
   return (
     <Modal
@@ -296,7 +310,13 @@ export function ConductorSheet() {
           enabled={backdropActive}>
           <Pressable onPress={() => {}} style={{ flex: 1 }}>
             <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              // The sheet sits at the bottom of the screen (height
+              // SHEET_HEIGHT). KAV measures keyboard height against
+              // the screen, so we don't need a screen-relative
+              // offset — but a small offset prevents a one-pixel
+              // gap on devices with a home indicator.
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
               style={{ flex: 1 }}>
               {/* Header */}
               <View style={styles.headerRow}>
@@ -325,59 +345,79 @@ export function ConductorSheet() {
                 ))}
               </ScrollView>
 
-              {/* Conversation area — history (older pairs muted) +
-                  latest answer card. Empty until first submit. */}
+              {/* Conversation area — chat bubbles. Each pair renders
+                  a user bubble (right-aligned, accent) immediately on
+                  submit; the Conductor bubble (left-aligned, surface)
+                  appears below when answer fills in. While answer is
+                  null, loading dots render in place of the response
+                  bubble. */}
               <ScrollView
                 ref={scrollRef}
                 style={styles.conversation}
-                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 16 }}
                 showsVerticalScrollIndicator={false}>
-                {earlierPairs.map((p) => (
-                  <View key={p.id} style={styles.earlierPair}>
-                    <Text style={styles.earlierQuestion}>{p.question}</Text>
-                    <Text style={styles.earlierAnswer}>{p.answer}</Text>
+                {history.map((p, idx) => (
+                  <View key={p.id}>
+                    {/* User bubble — always rendered */}
+                    <View style={styles.userBubbleRow}>
+                      <View style={styles.userBubble}>
+                        <Text style={styles.userBubbleText}>{p.question}</Text>
+                      </View>
+                    </View>
+
+                    {/* Conductor bubble OR loading dots */}
+                    {p.answer === null ? (
+                      <View style={styles.conductorBubbleRow}>
+                        <LoadingDots accentColor={accentColor} />
+                      </View>
+                    ) : (
+                      <View style={styles.conductorBubbleRow}>
+                        <View style={{ maxWidth: '75%' }}>
+                          {idx === firstAnsweredIdx ? (
+                            <Text style={styles.conductorLabel}>THE CONDUCTOR</Text>
+                          ) : null}
+                          <View style={styles.conductorBubble}>
+                            <Text style={styles.conductorBubbleText}>{p.answer}</Text>
+                          </View>
+                          {/* Action buttons attach to the latest
+                              answered pair only. */}
+                          {idx === history.length - 1
+                            && (actions?.navigation || actions?.createSignal) ? (
+                            <View style={styles.actionRow}>
+                              {actions?.navigation?.path ? (
+                                <TouchableOpacity
+                                  onPress={actNavigate}
+                                  activeOpacity={0.6}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  style={styles.actionBtn}>
+                                  <Text style={styles.actionBtnText}>
+                                    {actions.navigation.label || 'Navigate'} →
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                              {actions?.createSignal ? (
+                                <TouchableOpacity
+                                  onPress={actCreateSignal}
+                                  activeOpacity={0.6}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  style={styles.actionBtn}>
+                                  <Text style={styles.actionBtnText}>Create signal</Text>
+                                </TouchableOpacity>
+                              ) : null}
+                              <TouchableOpacity
+                                onPress={actGotIt}
+                                activeOpacity={0.6}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                style={[styles.actionBtn, styles.actionBtnGhost]}>
+                                <Text style={styles.actionBtnGhostText}>Got it</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    )}
                   </View>
                 ))}
-
-                {loading ? <LoadingDots accentColor={accentColor} /> : null}
-
-                {!loading && latestPair ? (
-                  <View style={styles.answerCard}>
-                    <Text style={styles.answerLabel}>THE CONDUCTOR</Text>
-                    <Text style={styles.answerText}>{latestPair.answer}</Text>
-                    {(actions?.navigation || actions?.createSignal) ? (
-                      <View style={styles.actionRow}>
-                        {actions?.navigation?.path ? (
-                          <TouchableOpacity
-                            onPress={actNavigate}
-                            activeOpacity={0.6}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            style={styles.actionBtn}>
-                            <Text style={styles.actionBtnText}>
-                              {actions.navigation.label || 'Navigate'} →
-                            </Text>
-                          </TouchableOpacity>
-                        ) : null}
-                        {actions?.createSignal ? (
-                          <TouchableOpacity
-                            onPress={actCreateSignal}
-                            activeOpacity={0.6}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            style={styles.actionBtn}>
-                            <Text style={styles.actionBtnText}>Create signal</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                        <TouchableOpacity
-                          onPress={actGotIt}
-                          activeOpacity={0.6}
-                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          style={[styles.actionBtn, styles.actionBtnGhost]}>
-                          <Text style={styles.actionBtnGhostText}>Got it</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : null}
               </ScrollView>
 
               {/* Input bar */}
@@ -532,40 +572,56 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     conversation: {
       flex: 1,
     },
-    earlierPair: {
-      marginBottom: 16,
-    },
-    earlierQuestion: {
-      color: theme.muted,
-      fontSize: 13,
-      fontStyle: 'italic',
+    // User bubble — right-aligned, accent background, asymmetric
+    // radius (sharp corner toward sender). max width 75% of column.
+    userBubbleRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      marginTop: 10,
       marginBottom: 4,
     },
-    earlierAnswer: {
-      color: theme.text,
+    userBubble: {
+      maxWidth: '75%',
+      backgroundColor: accentColor,
+      borderRadius: 16,
+      borderBottomRightRadius: 4,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+    },
+    userBubbleText: {
+      color: '#ffffff',
       fontSize: 14,
       lineHeight: 20,
-      opacity: 0.75,
     },
-    answerCard: {
-      backgroundColor: theme.background,
-      borderRadius: 12,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.border || 'rgba(255,255,255,0.08)',
-      padding: 16,
-      marginVertical: 12,
+    // Conductor bubble — left-aligned, surface background, sharp
+    // corner toward sender (bottom-left).
+    conductorBubbleRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      marginTop: 4,
+      marginBottom: 12,
     },
-    answerLabel: {
+    conductorLabel: {
       color: accentColor,
       fontSize: 10,
       letterSpacing: 2,
       fontWeight: '600',
-      marginBottom: 8,
+      marginBottom: 4,
+      marginLeft: 4,
     },
-    answerText: {
+    conductorBubble: {
+      backgroundColor: theme.background,
+      borderRadius: 16,
+      borderBottomLeftRadius: 4,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border || 'rgba(255,255,255,0.08)',
+    },
+    conductorBubbleText: {
       color: theme.text,
       fontSize: 14,
-      lineHeight: 22,
+      lineHeight: 20,
     },
     actionRow: {
       flexDirection: 'row',
