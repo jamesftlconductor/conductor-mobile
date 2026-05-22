@@ -125,16 +125,14 @@ function suggestionsFor(context: string): string[] {
   return SUGGESTIONS[context] || SUGGESTIONS.default;
 }
 
-type QAPair = {
-  id: number;
-  question: string;
-  // null while the answer is in flight — lets the UI render the
-  // user's question bubble immediately on submit and add the
-  // Conductor's response bubble below when the network call
-  // resolves, instead of disappearing the question and showing only
-  // loading dots.
-  answer: string | null;
-};
+// Flat role-keyed message list. The user message is pushed
+// immediately on submit; the conductor message is pushed when the
+// network call resolves. Decoupling user/conductor entries lets us
+// render either side independently without the renderer guessing
+// which "half" of a pair a row represents.
+type Message =
+  | { role: 'user'; id: number; text: string }
+  | { role: 'conductor'; id: number; text: string; showLabel?: boolean };
 
 type AskResponse = {
   answer?: string;
@@ -144,7 +142,7 @@ type AskResponse = {
   isEasterEgg?: boolean;
 };
 
-let pairCounter = 1;
+let msgCounter = 1;
 
 export function ConductorSheet() {
   const { theme, accentColor } = useTheme();
@@ -156,7 +154,7 @@ export function ConductorSheet() {
   // (not persisted) — The Conductor isn't a chat log surface.
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<QAPair[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [actions, setActions] = useState<AskResponse | null>(null);
   const inputRef = useRef<TextInput | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -180,7 +178,7 @@ export function ConductorSheet() {
     debugLog('Sheet', `visible→${visible} context=${context}`);
     if (!visible) {
       setInput('');
-      setHistory([]);
+      setMessages([]);
       setActions(null);
       setLoading(false);
       submittingRef.current = false;
@@ -194,33 +192,31 @@ export function ConductorSheet() {
     return () => debugLog('Sheet', 'ConductorSheet UNMOUNTED');
   }, []);
 
-  // Auto-scroll to the bottom whenever the history grows OR the
-  // pending answer fills in.
+  // Auto-scroll to the bottom whenever a new message lands.
   useEffect(() => {
-    if (history.length === 0) return;
+    if (messages.length === 0) return;
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     return () => clearTimeout(t);
-  }, [history.length, history[history.length - 1]?.answer]);
+  }, [messages.length]);
 
   async function submit(rawQuestion: string) {
     const q = rawQuestion.trim();
+    debugLog('Sheet', `submit("${q.slice(0, 40)}") submitting=${submittingRef.current}`);
     if (!q || submittingRef.current) return;
     submittingRef.current = true;
     setInput('');
     setActions(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
-    // Add the user's question to history IMMEDIATELY so it renders
-    // as a right-aligned bubble before the network call returns.
-    // answer: null marks the pair as pending — the renderer shows
-    // loading dots in place of the Conductor bubble.
-    const pairId = pairCounter++;
-    setHistory((prev) => {
-      const next = [...prev, { id: pairId, question: q, answer: null }];
-      return next.slice(-MAX_HISTORY_PAIRS);
+    // 1. Push the user bubble IMMEDIATELY so it renders before the
+    //    network call returns.
+    setMessages((prev) => {
+      const next: Message[] = [...prev, { role: 'user', id: msgCounter++, text: q }];
+      return next.slice(-MAX_HISTORY_PAIRS * 2);
     });
     setLoading(true);
 
+    // 2. Fire the network call and resolve the answer.
     let answer: string;
     let data: AskResponse = {};
     try {
@@ -242,12 +238,17 @@ export function ConductorSheet() {
       answer = "The Conductor can't reach the network right now.";
     }
 
-    // Fill the pending pair's answer field in place — preserves
-    // chronological position even if the user submitted a follow-up
-    // while waiting. Match by pairId rather than slot index.
-    setHistory((prev) =>
-      prev.map((p) => (p.id === pairId ? { ...p, answer } : p)),
-    );
+    // 3. Push the conductor bubble. showLabel flags the first
+    //    Conductor response in the thread so we render the "THE
+    //    CONDUCTOR" label once, not above every bubble.
+    setMessages((prev) => {
+      const hasConductorAlready = prev.some((m) => m.role === 'conductor');
+      const next: Message[] = [
+        ...prev,
+        { role: 'conductor', id: msgCounter++, text: answer, showLabel: !hasConductorAlready },
+      ];
+      return next.slice(-MAX_HISTORY_PAIRS * 2);
+    });
     setActions(data || null);
     setLoading(false);
     submittingRef.current = false;
@@ -290,10 +291,6 @@ export function ConductorSheet() {
   }
 
   const chips = suggestionsFor(context);
-  const latestPair = history.length > 0 ? history[history.length - 1] : null;
-  // Index of the first Conductor response across the visible history,
-  // used to decide where to render the "THE CONDUCTOR" label.
-  const firstAnsweredIdx = history.findIndex((p) => p.answer !== null);
 
   return (
     <Modal
@@ -311,12 +308,7 @@ export function ConductorSheet() {
           <Pressable onPress={() => {}} style={{ flex: 1 }}>
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              // The sheet sits at the bottom of the screen (height
-              // SHEET_HEIGHT). KAV measures keyboard height against
-              // the screen, so we don't need a screen-relative
-              // offset — but a small offset prevents a one-pixel
-              // gap on devices with a home indicator.
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+              keyboardVerticalOffset={20}
               style={{ flex: 1 }}>
               {/* Header */}
               <View style={styles.headerRow}>
@@ -345,79 +337,79 @@ export function ConductorSheet() {
                 ))}
               </ScrollView>
 
-              {/* Conversation area — chat bubbles. Each pair renders
-                  a user bubble (right-aligned, accent) immediately on
-                  submit; the Conductor bubble (left-aligned, surface)
-                  appears below when answer fills in. While answer is
-                  null, loading dots render in place of the response
-                  bubble. */}
+              {/* Conversation area — flat role-keyed bubble list.
+                  Each message renders independently in its own
+                  alignment. Loading dots render below the latest
+                  user message when a request is in flight. */}
               <ScrollView
                 ref={scrollRef}
                 style={styles.conversation}
                 contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 16 }}
                 showsVerticalScrollIndicator={false}>
-                {history.map((p, idx) => (
-                  <View key={p.id}>
-                    {/* User bubble — always rendered */}
-                    <View style={styles.userBubbleRow}>
-                      <View style={styles.userBubble}>
-                        <Text style={styles.userBubbleText}>{p.question}</Text>
-                      </View>
-                    </View>
-
-                    {/* Conductor bubble OR loading dots */}
-                    {p.answer === null ? (
-                      <View style={styles.conductorBubbleRow}>
-                        <LoadingDots accentColor={accentColor} />
-                      </View>
-                    ) : (
-                      <View style={styles.conductorBubbleRow}>
-                        <View style={{ maxWidth: '75%' }}>
-                          {idx === firstAnsweredIdx ? (
-                            <Text style={styles.conductorLabel}>THE CONDUCTOR</Text>
-                          ) : null}
-                          <View style={styles.conductorBubble}>
-                            <Text style={styles.conductorBubbleText}>{p.answer}</Text>
-                          </View>
-                          {/* Action buttons attach to the latest
-                              answered pair only. */}
-                          {idx === history.length - 1
-                            && (actions?.navigation || actions?.createSignal) ? (
-                            <View style={styles.actionRow}>
-                              {actions?.navigation?.path ? (
-                                <TouchableOpacity
-                                  onPress={actNavigate}
-                                  activeOpacity={0.6}
-                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                  style={styles.actionBtn}>
-                                  <Text style={styles.actionBtnText}>
-                                    {actions.navigation.label || 'Navigate'} →
-                                  </Text>
-                                </TouchableOpacity>
-                              ) : null}
-                              {actions?.createSignal ? (
-                                <TouchableOpacity
-                                  onPress={actCreateSignal}
-                                  activeOpacity={0.6}
-                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                  style={styles.actionBtn}>
-                                  <Text style={styles.actionBtnText}>Create signal</Text>
-                                </TouchableOpacity>
-                              ) : null}
-                              <TouchableOpacity
-                                onPress={actGotIt}
-                                activeOpacity={0.6}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                style={[styles.actionBtn, styles.actionBtnGhost]}>
-                                <Text style={styles.actionBtnGhostText}>Got it</Text>
-                              </TouchableOpacity>
-                            </View>
-                          ) : null}
+                {messages.map((m, idx) => {
+                  if (m.role === 'user') {
+                    return (
+                      <View key={m.id} style={styles.userBubbleRow}>
+                        <View style={styles.userBubble}>
+                          <Text style={styles.userBubbleText}>{m.text}</Text>
                         </View>
                       </View>
-                    )}
+                    );
+                  }
+                  // conductor
+                  const isLastConductor = idx === messages.length - 1;
+                  return (
+                    <View key={m.id} style={styles.conductorBubbleRow}>
+                      <View style={{ maxWidth: '75%' }}>
+                        {m.showLabel ? (
+                          <Text style={styles.conductorLabel}>THE CONDUCTOR</Text>
+                        ) : null}
+                        <View style={styles.conductorBubble}>
+                          <Text style={styles.conductorBubbleText}>{m.text}</Text>
+                        </View>
+                        {isLastConductor && (actions?.navigation || actions?.createSignal) ? (
+                          <View style={styles.actionRow}>
+                            {actions?.navigation?.path ? (
+                              <TouchableOpacity
+                                onPress={actNavigate}
+                                activeOpacity={0.6}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                style={styles.actionBtn}>
+                                <Text style={styles.actionBtnText}>
+                                  {actions.navigation.label || 'Navigate'} →
+                                </Text>
+                              </TouchableOpacity>
+                            ) : null}
+                            {actions?.createSignal ? (
+                              <TouchableOpacity
+                                onPress={actCreateSignal}
+                                activeOpacity={0.6}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                style={styles.actionBtn}>
+                                <Text style={styles.actionBtnText}>Create signal</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                            <TouchableOpacity
+                              onPress={actGotIt}
+                              activeOpacity={0.6}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              style={[styles.actionBtn, styles.actionBtnGhost]}>
+                              <Text style={styles.actionBtnGhostText}>Got it</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
+                {/* Loading dots render below the latest user message
+                    while a request is in flight — placed AFTER the
+                    last message so it always sits at the bottom. */}
+                {loading ? (
+                  <View style={styles.conductorBubbleRow}>
+                    <LoadingDots accentColor={accentColor} />
                   </View>
-                ))}
+                ) : null}
               </ScrollView>
 
               {/* Input bar */}
