@@ -356,8 +356,20 @@ export function ConductorSheet() {
               {/* Header */}
               <View style={styles.headerRow}>
                 <Text style={styles.title}>The Conductor</Text>
-                <View style={styles.contextPill}>
-                  <Text style={styles.contextPillText}>📍 {contextLabelFor(context)}</Text>
+                <View style={styles.headerRight}>
+                  <View style={styles.contextPill}>
+                    <Text style={styles.contextPillText}>📍 {contextLabelFor(context)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      closeConductorSheet();
+                    }}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.closeBtn}>
+                    <Text style={styles.closeBtnText}>Done</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
               <View style={styles.divider} />
@@ -680,6 +692,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       fontWeight: '700',
       letterSpacing: 0.1,
     },
+    headerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
     contextPill: {
       paddingVertical: 4,
       paddingHorizontal: 10,
@@ -691,6 +708,16 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     contextPillText: {
       color: theme.muted,
       fontSize: 11,
+      letterSpacing: 0.2,
+    },
+    closeBtn: {
+      paddingVertical: 4,
+      paddingHorizontal: 6,
+    },
+    closeBtnText: {
+      color: accentColor,
+      fontSize: 14,
+      fontWeight: '600',
       letterSpacing: 0.2,
     },
     divider: {
