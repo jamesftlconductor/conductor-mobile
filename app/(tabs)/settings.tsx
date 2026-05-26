@@ -14,6 +14,7 @@ import {
   type IconKey,
 } from '@/hooks/useDynamicIcon';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
+import { useUserId } from '@/hooks/useUserId';
 import { getCatchphrase, type Detail, type Tone } from '@/utils/catchphrases';
 import { ChevronRight, Lock } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -41,7 +42,6 @@ const SAGE = '#86efac';
 const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 // Shared so the three failure paths in handleInvite (network, non-2xx,
@@ -153,7 +153,7 @@ function buildFlaggedCategories(map: Record<CategoryKey, boolean>): string[] {
   return CATEGORIES.filter((c) => map[c.key]).map((c) => c.label.toLowerCase());
 }
 
-async function persistAndSync(settings: Settings) {
+async function persistAndSync(settings: Settings, userId: string) {
   // Local persistence: one key per setting per spec.
   const writes: [string, string][] = [
     ['takeoffTime', settings.takeoffTime],
@@ -178,7 +178,7 @@ async function persistAndSync(settings: Settings) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      userId: USER_ID,
+      userId: userId,
       preferences: {
         takeoffTime: settings.takeoffTime,
         clearanceTime: settings.clearanceTime,
@@ -778,6 +778,8 @@ function OverwatchPickerRow({
 }
 
 function HouseholdNameRow() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [name, setName] = useState<string>('');
@@ -788,7 +790,7 @@ function HouseholdNameRow() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${userId}`);
         const data = await res.json();
         if (cancelled) return;
         if (data?.profile?.householdName) setName(data.profile.householdName);
@@ -803,7 +805,7 @@ function HouseholdNameRow() {
       await fetch(`${API_BASE}/signals?type=profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, householdName: name.trim() || null }),
+        body: JSON.stringify({ userId: userId, householdName: name.trim() || null }),
       });
     } catch { /* best-effort */ }
     setEditing(false);
@@ -846,6 +848,8 @@ function HouseholdNameRow() {
 }
 
 function LanguageRow() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [lang, setLang] = useState<'en' | 'es'>('en');
@@ -854,7 +858,7 @@ function LanguageRow() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${userId}`);
         const data = await res.json();
         if (data?.preferences?.language === 'es') setLang('es');
       } catch { /* skip */ }
@@ -868,10 +872,10 @@ function LanguageRow() {
       await fetch(`${API_BASE}/signals?type=preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, preferences: { language: next } }),
+        body: JSON.stringify({ userId: userId, preferences: { language: next } }),
       });
       // Bust takeoff cache so next brief reflects new language.
-      fetch(`${API_BASE}/brief?userId=${USER_ID}&mode=takeoff&forceFresh=1`).catch(() => {});
+      fetch(`${API_BASE}/brief?userId=${userId}&mode=takeoff&forceFresh=1`).catch(() => {});
     } catch { /* skip */ }
   }
 
@@ -1035,6 +1039,8 @@ const HOBBY_OPTIONS: { id: string; label: string }[] = [
 ];
 
 function WhatYouLoveBlock() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
@@ -1046,7 +1052,7 @@ function WhatYouLoveBlock() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=hobbies&userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/signals?type=hobbies&userId=${userId}`);
         if (!res.ok || cancelled) return;
         const data = await res.json();
         const list: string[] = Array.isArray(data?.hobbies) ? data.hobbies : [];
@@ -1074,7 +1080,7 @@ function WhatYouLoveBlock() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId: USER_ID,
+        userId: userId,
         hobbies: Array.from(next),
       }),
     }).catch(() => { /* silent */ });
@@ -1121,6 +1127,8 @@ function WhatYouLoveBlock() {
 }
 
 function VoiceStyleBlock() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [tone, setTone] = useState<StyleTone>('balanced');
@@ -1132,7 +1140,7 @@ function VoiceStyleBlock() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${userId}`);
         const data = await res.json();
         if (cancelled) return;
         const p = data?.preferences || {};
@@ -1150,11 +1158,11 @@ function VoiceStyleBlock() {
       await fetch(`${API_BASE}/signals?type=preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, preferences: patch }),
+        body: JSON.stringify({ userId: userId, preferences: patch }),
       });
       // Bust takeoff cache so the next brief reflects new voice
       // immediately, not after the cache TTL expires.
-      fetch(`${API_BASE}/brief?userId=${USER_ID}&mode=takeoff&forceFresh=1`, { method: 'GET' })
+      fetch(`${API_BASE}/brief?userId=${userId}&mode=takeoff&forceFresh=1`, { method: 'GET' })
         .catch(() => {});
     } catch { /* best-effort */ }
   }
@@ -1344,6 +1352,8 @@ function HeyConductorBlock() {
 }
 
 function ReferralBlock() {
+  const userId = useUserId();
+  if (!userId) return null;
   const [data, setData] = useState<{
     referralCode?: string;
     referralCount?: number;
@@ -1357,7 +1367,7 @@ function ReferralBlock() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=referral&userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/signals?type=referral&userId=${userId}`);
         const json = await res.json();
         if (cancelled) return;
         if (res.ok && json?.ok) setData(json);
@@ -1471,9 +1481,9 @@ function comingSoon(label: string) {
   Alert.alert(label, 'Still coming.');
 }
 
-async function handleInviteMember() {
+async function handleInviteMember(userId: string) {
   try {
-    const r = await fetch(`${API_BASE}/invite/generate?userId=${USER_ID}`);
+    const r = await fetch(`${API_BASE}/invite/generate?userId=${userId}`);
     if (!r.ok) {
       Alert.alert('Invite a member', INVITE_FAILED_MESSAGE);
       return;
@@ -1493,6 +1503,8 @@ async function handleInviteMember() {
 }
 
 export default function SettingsScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme: t_theme, accentColor: t_accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(t_theme, t_accentColor), [t_theme, t_accentColor]);
   const settingsUrgentCount = useUrgentCount();
@@ -1564,7 +1576,7 @@ export default function SettingsScreen() {
     (async () => {
       try {
         const res = await fetch(
-          `https://conductor-ivory.vercel.app/api/calendar?action=list&userId=${USER_ID}`
+          `https://conductor-ivory.vercel.app/api/calendar?action=list&userId=${userId}`
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -1595,7 +1607,7 @@ export default function SettingsScreen() {
       await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, preferences: { workCalendarName: name } }),
+        body: JSON.stringify({ userId: userId, preferences: { workCalendarName: name } }),
       });
       Animated.sequence([
         Animated.timing(workCalSavedOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
@@ -1613,7 +1625,7 @@ export default function SettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      fetch(`${API_BASE}/signals?type=missedcues&userId=${USER_ID}`)
+      fetch(`${API_BASE}/signals?type=missedcues&userId=${userId}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (cancelled || !d) return;
@@ -1623,7 +1635,7 @@ export default function SettingsScreen() {
       // Vault count = items with renewalDate within the next 90 days. The
       // server returns all active items; we filter client-side so the
       // threshold can change without an API tweak.
-      fetch(`${API_BASE}/signals?type=vault&userId=${USER_ID}`)
+      fetch(`${API_BASE}/signals?type=vault&userId=${userId}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (cancelled || !d) return;
@@ -1638,14 +1650,14 @@ export default function SettingsScreen() {
         .catch(() => {});
       // Oura connection state — polled on focus so the row reflects
       // an OAuth flow that just completed in Safari.
-      fetch(`${API_BASE}/oura/status?userId=${USER_ID}`)
+      fetch(`${API_BASE}/oura/status?userId=${userId}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (cancelled || !d) return;
           setOuraConnected(d.connected === true);
         })
         .catch(() => {});
-      fetch(`${API_BASE}/nextdoor/status?userId=${USER_ID}`)
+      fetch(`${API_BASE}/nextdoor/status?userId=${userId}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (cancelled || !d) return;
@@ -1656,7 +1668,7 @@ export default function SettingsScreen() {
       // Household location — first hit also runs IP-based auto-detection
       // server-side, so subsequent renders show a real city even if the
       // user has never manually set it.
-      fetch(`${API_BASE}/signals?type=location&userId=${USER_ID}`)
+      fetch(`${API_BASE}/signals?type=location&userId=${userId}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (cancelled || !d?.location) return;
@@ -1671,7 +1683,8 @@ export default function SettingsScreen() {
 
   function update(next: Settings) {
     setSettings(next);
-    persistAndSync(next).catch(() => {});
+    if (!userId) return;
+    persistAndSync(next, userId).catch(() => {});
   }
 
   function setHealth(v: boolean) { update({ ...settings, healthEnabled: v }); }
@@ -1680,11 +1693,11 @@ export default function SettingsScreen() {
   function setMidday(v: boolean) { update({ ...settings, middayEnabled: v }); }
 
   function handleConnectOura() {
-    Linking.openURL(`${API_BASE}/oura/auth?userId=${USER_ID}`);
+    Linking.openURL(`${API_BASE}/oura/auth?userId=${userId}`);
   }
 
   function handleConnectNextdoor() {
-    Linking.openURL(`${API_BASE}/nextdoor/auth?userId=${USER_ID}`);
+    Linking.openURL(`${API_BASE}/nextdoor/auth?userId=${userId}`);
   }
 
   async function handleDisconnectNextdoor() {
@@ -1698,7 +1711,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await fetch(`${API_BASE}/nextdoor/disconnect?userId=${USER_ID}`, { method: 'GET' });
+              await fetch(`${API_BASE}/nextdoor/disconnect?userId=${userId}`, { method: 'GET' });
               setNextdoorConnected(false);
               setNextdoorNeighborhood(null);
             } catch {
@@ -1721,7 +1734,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await fetch(`${API_BASE}/oura/disconnect?userId=${USER_ID}`, { method: 'GET' });
+              await fetch(`${API_BASE}/oura/disconnect?userId=${userId}`, { method: 'GET' });
               setOuraConnected(false);
             } catch { /* best-effort */ }
           },
@@ -1736,7 +1749,7 @@ export default function SettingsScreen() {
     if (apiKey) return;
     setApiKeyLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/ingest/key?userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/ingest/key?userId=${userId}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (typeof data?.apiKey === 'string') setApiKey(data.apiKey);
@@ -1763,7 +1776,7 @@ export default function SettingsScreen() {
       const res = await fetch(`${API_BASE}/signals?type=location`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, city, state }),
+        body: JSON.stringify({ userId: userId, city, state }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -1867,7 +1880,7 @@ export default function SettingsScreen() {
 
         <SectionHeader title="Household" />
         <Row label="RangerOaks925" subtext="Your household" />
-        <ChevronRow label="Invite a member" onPress={handleInviteMember} />
+        <ChevronRow label="Invite a member" onPress={() => handleInviteMember(userId)} />
         <Row
           label="Missed Cues"
           onPress={() => router.push('/missed-cues')}

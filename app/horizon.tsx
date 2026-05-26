@@ -22,9 +22,9 @@ import {
 } from 'react-native';
 
 import { metaFor, type Signal } from '@/components/signalTypes';
+import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const FAINT = '#3a3835';
@@ -152,20 +152,21 @@ function buildItems(args: {
   vault: VaultItem[];
   crew: CrewMember[];
   today: Date;
+  userId: string;
 }): { items: Item[]; memberMap: Map<string, string> } {
-  const { signals, vault, crew, today } = args;
+  const { signals, vault, crew, today, userId } = args;
   const items: Item[] = [];
   const fourteen = today.getTime() + 14 * DAY_MS;
 
   const memberMap = new Map<string, string>();
   for (const m of crew || []) {
     if (!m) continue;
-    if (m.memberType === 'member' && m.userId && m.firstName && m.userId !== USER_ID) {
+    if (m.memberType === 'member' && m.userId && m.firstName && m.userId !== userId) {
       memberMap.set(m.userId, m.firstName);
     }
   }
   const ownerTagFor = (uid?: string) => {
-    if (!uid || uid === USER_ID) return undefined;
+    if (!uid || uid === userId) return undefined;
     const name = memberMap.get(uid);
     return name ? `${name}'s` : undefined;
   };
@@ -316,6 +317,8 @@ function matchesFilter(item: Item, filter: FilterKey): boolean {
 // ---------- screen ----------
 
 export default function HorizonScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -330,9 +333,9 @@ export default function HorizonScreen() {
 
   const load = useCallback(async () => {
     const [sigRes, vaultRes, crewRes] = await Promise.allSettled([
-      fetch(`${API_BASE}/signals?userId=${USER_ID}`),
-      fetch(`${API_BASE}/signals?type=vault&userId=${USER_ID}`),
-      fetch(`${API_BASE}/signals?type=crew&userId=${USER_ID}`),
+      fetch(`${API_BASE}/signals?userId=${userId}`),
+      fetch(`${API_BASE}/signals?type=vault&userId=${userId}`),
+      fetch(`${API_BASE}/signals?type=crew&userId=${userId}`),
     ]);
     async function jsonOk<T>(r: PromiseSettledResult<Response>): Promise<T | null> {
       if (r.status !== 'fulfilled' || !r.value.ok) return null;
@@ -358,12 +361,12 @@ export default function HorizonScreen() {
   }
 
   const filteredSignals = useMemo(
-    () => applyMeCrewHouse(signals, meCrewHouse, USER_ID),
+    () => applyMeCrewHouse(signals, meCrewHouse, userId),
     [signals, meCrewHouse]
   );
 
   const grouped = useMemo(() => {
-    const { items } = buildItems({ signals: filteredSignals, vault, crew, today: new Date() });
+    const { items } = buildItems({ signals: filteredSignals, vault, crew, today: new Date(), userId });
     const filtered = items.filter((i) => matchesFilter(i, filter));
     const buckets: Record<'coming' | 'further' | 'edge', Item[]> = {
       coming: [], further: [], edge: [],
@@ -397,7 +400,7 @@ export default function HorizonScreen() {
       await fetch(`${API_BASE}/signals`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: item.signalRef.id, userId: USER_ID, [field]: next }),
+        body: JSON.stringify({ id: item.signalRef.id, userId: userId, [field]: next }),
       });
     } catch { load(); }
   }
@@ -412,7 +415,7 @@ export default function HorizonScreen() {
       await fetch(`${API_BASE}/signals`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: item.signalRef.id, userId: USER_ID, state: 'active', notedAt }),
+        body: JSON.stringify({ id: item.signalRef.id, userId: userId, state: 'active', notedAt }),
       });
     } catch { load(); }
   }
@@ -424,7 +427,7 @@ export default function HorizonScreen() {
       await fetch(`${API_BASE}/signals`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: item.signalRef.id, userId: USER_ID, state: 'resolved' }),
+        body: JSON.stringify({ id: item.signalRef.id, userId: userId, state: 'resolved' }),
       });
     } catch { load(); }
   }
@@ -449,7 +452,7 @@ export default function HorizonScreen() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  userId: USER_ID,
+                  userId: userId,
                   action: 'add',
                   item: {
                     description: s.description,
@@ -463,7 +466,7 @@ export default function HorizonScreen() {
               await fetch(`${API_BASE}/signals`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: s.id, userId: USER_ID }),
+                body: JSON.stringify({ id: s.id, userId: userId }),
               });
               setSignals((prev) => prev.filter((x) => String(x.id) !== String(s.id)));
               await load();

@@ -7,6 +7,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
+import { useUserId } from '@/hooks/useUserId';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -66,12 +67,10 @@ export default function PrivacyDashboardScreen() {
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  const activeUserId = useUserId();
   useEffect(() => {
-    (async () => {
-      const stored = await AsyncStorage.getItem('user_id');
-      setUserId(stored || 'james_totalhome_gmail_com');
-    })();
-  }, []);
+    setUserId(activeUserId || '');
+  }, [activeUserId]);
 
   const load = useCallback(async () => {
     if (!userId) return;

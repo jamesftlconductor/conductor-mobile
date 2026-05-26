@@ -39,10 +39,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useTheme } from '@/app/theme';
 import { closeConductorSheet, useConductorSheetState } from '@/hooks/useConductorSheet';
+import { useUserId } from '@/hooks/useUserId';
 import { debugLog } from '@/utils/debugLog';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.65);
@@ -154,6 +154,8 @@ type AskResponse = {
 let msgCounter = 1;
 
 export function ConductorSheet() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const { visible, context } = useConductorSheetState();
@@ -233,7 +235,7 @@ export function ConductorSheet() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           question: q,
           screenContext: context,
         }),

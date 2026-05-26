@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { AddCrewSheet } from '@/components/AddCrewSheet';
 import { HelpButton } from '@/components/HelpButton';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { useUserId } from '@/hooks/useUserId';
 import {
   ActivityIndicator,
   Alert,
@@ -39,7 +40,6 @@ async function pickImageBase64(): Promise<string | null> {
   return `data:image/jpeg;base64,${result.assets[0].base64}`;
 }
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const BG = '#0f0f0f';
@@ -156,6 +156,8 @@ function SignalChipsRow({
   signals: AttributedSignal[];
   onChanged?: () => void;
 }) {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   // Long-press target — when non-null, render a centered popover
@@ -172,7 +174,7 @@ function SignalChipsRow({
       await fetch(`${API_BASE}/signals`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: target.id, state, userId: USER_ID }),
+        body: JSON.stringify({ id: target.id, state, userId: userId }),
       });
     } catch { /* best-effort */ }
     setWorking(false);
@@ -187,7 +189,7 @@ function SignalChipsRow({
       await fetch(`${API_BASE}/signals?type=crew-attribution`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, signalId: target.id, crewMemberName: null }),
+        body: JSON.stringify({ userId: userId, signalId: target.id, crewMemberName: null }),
       });
     } catch { /* best-effort */ }
     setWorking(false);
@@ -272,6 +274,7 @@ function SignalChipsRow({
 }
 
 async function patchCrewField(
+  userId: string,
   memberName: string,
   memberType: string | undefined,
   updates: Record<string, any>
@@ -280,7 +283,7 @@ async function patchCrewField(
     const res = await fetch(`${API_BASE}/signals?type=crew`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: USER_ID, memberName, memberType, updates }),
+      body: JSON.stringify({ userId, memberName, memberType, updates }),
     });
     return res.ok;
   } catch {
@@ -289,6 +292,7 @@ async function patchCrewField(
 }
 
 async function uploadCrewPhoto(
+  userId: string,
   memberName: string,
   memberType: string | undefined,
   base64: string
@@ -298,7 +302,7 @@ async function uploadCrewPhoto(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId: USER_ID,
+        userId,
         crewMemberName: memberName,
         memberType,
         photo: base64,
@@ -358,10 +362,12 @@ function NotesEditor({
   memberType?: string;
   initial?: string | null;
 }) {
+  const userId = useUserId();
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [value, setValue] = useState<string>(initial || '');
   const [saved, setSaved] = useState<string>(initial || '');
+  if (!userId) return null;
   return (
     <View style={styles.notesWrap}>
       <Text style={styles.bioSectionHeader}>NOTES</Text>
@@ -371,7 +377,7 @@ function NotesEditor({
         onBlur={async () => {
           const next = value.trim();
           if (next === saved.trim()) return;
-          const ok = await patchCrewField(memberName, memberType, {
+          const ok = await patchCrewField(userId, memberName, memberType, {
             notes: next.length > 0 ? next : null,
           });
           if (ok) setSaved(next);
@@ -466,6 +472,8 @@ type EditTarget =
   | { kind: 'other'; memberType: string; name: string; birthday: string; anniversary: string };
 
 export default function CrewScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [crew, setCrew] = useState<CrewMember[]>([]);
@@ -509,7 +517,7 @@ export default function CrewScreen() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      userId: USER_ID,
+                      userId: userId,
                       action: 'remove',
                       memberName: (member as any).name,
                     }),
@@ -531,7 +539,7 @@ export default function CrewScreen() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/signals?type=crew&userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/signals?type=crew&userId=${userId}`);
       if (!res.ok) return;
       const json = await res.json();
       if (Array.isArray(json.crew)) setCrew(json.crew);
@@ -570,7 +578,7 @@ export default function CrewScreen() {
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
-        userId: USER_ID,
+        userId: userId,
         birthday: birthdayVal,
         anniversary: anniversaryVal,
       };
@@ -782,7 +790,7 @@ export default function CrewScreen() {
 
       <AddCrewSheet
         visible={showAddCrew}
-        userId={USER_ID}
+        userId={userId}
         onClose={() => setShowAddCrew(false)}
         onAdded={() => load()}
       />
@@ -792,6 +800,7 @@ export default function CrewScreen() {
 }
 
 function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) {
+  const userId = useUserId();
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const display = member.name || member.fullName || 'Member';
@@ -811,7 +820,8 @@ function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) 
     const b64 = await pickImageBase64();
     if (!b64) return;
     setPhotoUrl(b64);
-    const final = await uploadCrewPhoto(display, 'member', b64);
+    if (!userId) return;
+    const final = await uploadCrewPhoto(userId, display, 'member', b64);
     if (final) setPhotoUrl(final);
   }
   return (
@@ -845,6 +855,7 @@ function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) 
 }
 
 function ChildCard({ child, onMenu, onChanged }: { child: Child; onMenu?: () => void; onChanged?: () => void }) {
+  const userId = useUserId();
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const name = child.name || 'Child';
@@ -855,7 +866,8 @@ function ChildCard({ child, onMenu, onChanged }: { child: Child; onMenu?: () => 
     const b64 = await pickImageBase64();
     if (!b64) return;
     setPhotoUrl(b64); // optimistic
-    const final = await uploadCrewPhoto(name, 'child', b64);
+    if (!userId) return;
+    const final = await uploadCrewPhoto(userId, name, 'child', b64);
     if (final) setPhotoUrl(final);
   }
   return (
@@ -963,6 +975,8 @@ function isoWeekOfYear(d: Date): number {
 }
 
 function CustodySection({ child, onChanged }: { child: Child; onChanged?: () => void }) {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const initial: CustodySchedule = ((child as any).custodySchedule || {}) as CustodySchedule;
@@ -982,7 +996,7 @@ function CustodySection({ child, onChanged }: { child: Child; onChanged?: () => 
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${userId}`);
         const data = await res.json();
         const mods: string[] = Array.isArray(data?.profile?.modifiers) ? data.profile.modifiers : [];
         if (!cancelled && mods.includes('co_parent')) setEnabled(true);
@@ -1007,7 +1021,7 @@ function CustodySection({ child, onChanged }: { child: Child; onChanged?: () => 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           action: 'edit',
           memberName: child.name,
           member: { custodySchedule: payload },
@@ -1030,7 +1044,7 @@ function CustodySection({ child, onChanged }: { child: Child; onChanged?: () => 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           action: 'edit',
           memberName: child.name,
           member: { custodySchedule: null },
@@ -1172,6 +1186,7 @@ function CustodySection({ child, onChanged }: { child: Child; onChanged?: () => 
 }
 
 function PetCard({ pet, onMenu, onChanged }: { pet: Pet; onMenu?: () => void; onChanged?: () => void }) {
+  const userId = useUserId();
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const name = pet.name || 'Pet';
@@ -1185,7 +1200,8 @@ function PetCard({ pet, onMenu, onChanged }: { pet: Pet; onMenu?: () => void; on
     const b64 = await pickImageBase64();
     if (!b64) return;
     setPhotoUrl(b64);
-    const final = await uploadCrewPhoto(name, 'pet', b64);
+    if (!userId) return;
+    const final = await uploadCrewPhoto(userId, name, 'pet', b64);
     if (final) setPhotoUrl(final);
   }
   return (
@@ -1259,6 +1275,7 @@ function ExtendedCard({
   onMenu?: () => void;
   onChanged?: () => void;
 }) {
+  const userId = useUserId();
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const name = ext.name || 'Family member';
@@ -1268,7 +1285,8 @@ function ExtendedCard({
     const b64 = await pickImageBase64();
     if (!b64) return;
     setPhotoUrl(b64);
-    const final = await uploadCrewPhoto(name, 'extended', b64);
+    if (!userId) return;
+    const final = await uploadCrewPhoto(userId, name, 'extended', b64);
     if (final) setPhotoUrl(final);
   }
   return (

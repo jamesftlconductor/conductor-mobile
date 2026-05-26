@@ -17,8 +17,8 @@ import {
 import { useTheme } from './theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
@@ -73,6 +73,8 @@ function formatLastUsed(p: Provider): string {
 }
 
 export default function ProvidersScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -83,7 +85,7 @@ export default function ProvidersScreen() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/signals?type=providers&userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/signals?type=providers&userId=${userId}`);
       if (!res.ok) return;
       const data = await res.json();
       setProviders(Array.isArray(data?.providers) ? data.providers : []);
@@ -196,6 +198,8 @@ function AddProviderModal({
   onClose: () => void;
   onAdded: (p: Provider) => void;
 }) {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -228,7 +232,7 @@ function AddProviderModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           name: name.trim(),
           serviceType,
           phone: phone.trim() || null,

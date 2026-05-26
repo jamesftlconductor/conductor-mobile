@@ -24,8 +24,8 @@ import {
 } from 'react-native';
 
 import { useTheme } from './theme';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const FAINT = '#3a3835';
@@ -180,6 +180,8 @@ export default function VaultScreenSecured() {
 }
 
 function VaultScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -195,7 +197,7 @@ function VaultScreen() {
     try {
       // Server-side sort applied via the ?sort= param; search stays
       // client-side so typing feels instant.
-      const res = await fetch(`${API_BASE}/signals?type=vault&userId=${USER_ID}&sort=${sort}`);
+      const res = await fetch(`${API_BASE}/signals?type=vault&userId=${userId}&sort=${sort}`);
       if (!res.ok) return;
       const data = await res.json();
       setItems(Array.isArray(data?.items) ? data.items : []);
@@ -260,7 +262,7 @@ function VaultScreen() {
       await fetch(`${API_BASE}/signals?type=vault`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, itemId, updates }),
+        body: JSON.stringify({ userId: userId, itemId, updates }),
       });
     } catch { load(); }
   }
@@ -271,7 +273,7 @@ function VaultScreen() {
       await fetch(`${API_BASE}/signals?type=vault`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, action: 'handle', id: item.id }),
+        body: JSON.stringify({ userId: userId, action: 'handle', id: item.id }),
       });
     } catch { load(); }
   }
@@ -291,7 +293,7 @@ function VaultScreen() {
               await fetch(`${API_BASE}/signals?type=vault`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: USER_ID, action: 'delete', id: item.id }),
+                body: JSON.stringify({ userId: userId, action: 'delete', id: item.id }),
               });
             } catch { load(); }
           },
@@ -666,6 +668,8 @@ function AddVaultModal({
   onClose: () => void;
   onAdded: (item: VaultItem) => void;
 }) {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -869,7 +873,7 @@ function AddVaultModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           action: 'add',
           item,
         }),
@@ -1252,7 +1256,7 @@ function AddVaultModal({
 
       <CameraScanner
         visible={showScanner}
-        userId={USER_ID}
+        userId={userId}
         scanType="document"
         onClose={() => setShowScanner(false)}
         onResult={applyScanResult}

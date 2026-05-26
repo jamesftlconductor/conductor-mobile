@@ -25,11 +25,13 @@ import {
   setAutoUpdateEnabled,
   type IconKey,
 } from '@/hooks/useDynamicIcon';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 export default function IconSelectorScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [autoUpdate, setAutoUpdate] = useState(true);
@@ -55,7 +57,7 @@ export default function IconSelectorScreen() {
     // backend so a re-install on the same household still surfaces
     // the exclusive without needing a local cache.
     try {
-      const res = await fetch(`${API_BASE}/signals?type=householdStatus&userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/signals?type=householdStatus&userId=${userId}`);
       if (res.ok) {
         const data = await res.json();
         if (data?.foundingHousehold === true) setIsFounding(true);

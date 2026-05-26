@@ -31,8 +31,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
@@ -57,6 +57,8 @@ const COMM_TYPES: { value: CommType; label: string; hint: string }[] = [
 type Phase = 'compose' | 'review' | 'sent';
 
 export default function CommunicateScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const BRASS = accentColor;
@@ -99,7 +101,7 @@ export default function CommunicateScreen() {
       const res = await fetch(`${API_BASE}/contacts?action=match`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, query: q.trim() }),
+        body: JSON.stringify({ userId: userId, query: q.trim() }),
       });
       const data = await res.json();
       if (Array.isArray(data?.matches)) setMatches(data.matches);
@@ -129,7 +131,7 @@ export default function CommunicateScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           recipientName: recipientName.trim(),
           recipientEmail: recipientEmail.trim() || null,
           communicationType: commType,
@@ -166,7 +168,7 @@ export default function CommunicateScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           recipientEmail: recipientEmail.trim(),
           subject,
           body,

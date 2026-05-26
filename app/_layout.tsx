@@ -11,6 +11,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider as ConductorThemeProvider } from '@/app/theme';
 import { ConductorSheet } from '@/components/ConductorSheet';
 import { DebugBanner } from '@/components/DebugBanner';
+import { setHouseholdId, setUserId, useUserId, useUserIdLoaded } from '@/hooks/useUserId';
 import {
   acceptIconChange,
   declineIconChange,
@@ -23,7 +24,6 @@ import {
   type MonthIcon,
 } from '@/hooks/useDynamicIcon';
 
-const ALERT_USER_ID = 'james_totalhome_gmail_com';
 const ALERT_API_BASE = 'https://conductor-ivory.vercel.app/api';
 const ALERT_POLL_MS = 60 * 1000;
 
@@ -112,14 +112,16 @@ type ActiveAlert = {
 };
 
 function RedAlertOverlay() {
+  const userId = useUserId();
   const [alert, setAlert] = useState<ActiveAlert | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     async function check() {
       try {
-        const res = await fetch(`${ALERT_API_BASE}/alert?action=active&userId=${ALERT_USER_ID}`);
+        const res = await fetch(`${ALERT_API_BASE}/alert?action=active&userId=${userId}`);
         if (!res.ok || cancelled) return;
         const data = await res.json();
         if (cancelled) return;
@@ -137,7 +139,7 @@ function RedAlertOverlay() {
       cancelled = true;
       clearInterval(t);
     };
-  }, []);
+  }, [userId]);
 
   // When a new alert appears (and isn't already dismissed for this
   // session), speak the description out loud. expo-speech is the
@@ -168,7 +170,7 @@ function RedAlertOverlay() {
           // mobile side from caching the id.
           householdId: 'RangerOaks925',
           alertId: targetId,
-          userId: ALERT_USER_ID,
+          userId,
         }),
       });
     } catch { /* ignore — local dismissal still applies */ }
@@ -402,6 +404,73 @@ const iconSuggestStyles = StyleSheet.create({
   },
 });
 
+// Deep-link handler — catches the `conductormobile://onboard-success?
+// userId=...&householdId=...` URL emitted by /api/success after OAuth
+// completes, persists the resolved userId (and householdId) to
+// AsyncStorage via setUserId/setHouseholdId, and signals every screen
+// that uses useUserId() to rerender against the new identity. Without
+// this, the app has no other channel to learn what userId Google's
+// OAuth produced — Sarah's app would forever read James's brief.
+function parseDeepLinkParam(url: string, key: string): string | null {
+  try {
+    const re = new RegExp(`[?&]${key}=([^&]+)`);
+    const match = url.match(re);
+    if (!match) return null;
+    const raw = decodeURIComponent(match[1]);
+    return raw && raw.length > 0 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function DeepLinkHandler() {
+  useEffect(() => {
+    let mounted = true;
+    async function handleUrl(url: string | null) {
+      if (!url || !mounted) return;
+      if (!url.startsWith('conductormobile://onboard-success')) return;
+      const id = parseDeepLinkParam(url, 'userId');
+      if (!id) return;
+      await setUserId(id);
+      // Capture the household id at the same time so screens that
+      // need it for cross-member views (Compass, Crew, etc) don't
+      // have to round-trip to the server.
+      const hid = parseDeepLinkParam(url, 'householdId');
+      if (hid) {
+        try { await setHouseholdId(hid); } catch { /* ignore */ }
+      }
+      // After onboarding completion the user is most usefully landed on
+      // the Ground tab; if they were mid-onboarding, the onboarding
+      // route can stay on screen and finish — useUserId() will start
+      // returning the real id and the boot guard stops redirecting.
+      try { router.replace('/(tabs)' as never); } catch { /* ignore */ }
+    }
+    Linking.getInitialURL().then(handleUrl).catch(() => {});
+    const sub = Linking.addEventListener('url', (event) => handleUrl(event.url));
+    return () => {
+      mounted = false;
+      try { sub.remove(); } catch { /* ignore */ }
+    };
+  }, []);
+  return null;
+}
+
+// Boot guard — if no userId is in AsyncStorage by the time the initial
+// AsyncStorage read completes, force the user into /onboarding. This
+// is what prevents Sarah's freshly-installed app from rendering Ground
+// against James's userId. Waits for `loaded` to flip true before
+// deciding so a 50ms launch race doesn't bounce a legitimate user.
+function BootGuard() {
+  const userId = useUserId();
+  const loaded = useUserIdLoaded();
+  useEffect(() => {
+    if (!loaded) return;
+    if (userId) return;
+    try { router.replace('/onboarding' as never); } catch { /* ignore */ }
+  }, [loaded, userId]);
+  return null;
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -410,6 +479,8 @@ export default function RootLayout() {
       <ConductorThemeProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <DeepLinkHandler />
+          <BootGuard />
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />

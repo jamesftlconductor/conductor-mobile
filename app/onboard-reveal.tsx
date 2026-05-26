@@ -19,8 +19,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const BG = '#0f0f0f';
@@ -58,6 +58,8 @@ function formatEta(eta: string): string {
 }
 
 export default function OnboardRevealScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const [reveal, setReveal] = useState<Reveal | null>(null);
   const [error, setError] = useState(false);
   const [cardCount, setCardCount] = useState(0);
@@ -69,7 +71,7 @@ export default function OnboardRevealScreen() {
     async function poll() {
       try {
         const res = await fetch(
-          `${API_BASE}/onboard?action=reveal&userId=${USER_ID}`
+          `${API_BASE}/onboard?action=reveal&userId=${userId}`
         );
         const data = await res.json();
         if (cancelled) return;

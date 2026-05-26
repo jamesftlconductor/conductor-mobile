@@ -19,8 +19,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const BG = '#0f0f0f';
@@ -57,6 +57,8 @@ function formatRange(startISO: string, endISO: string): string {
 }
 
 export default function SummaryCardScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const params = useLocalSearchParams<{ period?: string }>();
   const period = params?.period === 'month' ? 'month' : 'week';
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -67,7 +69,7 @@ export default function SummaryCardScreen() {
     (async () => {
       try {
         const res = await fetch(
-          `${API_BASE}/summary?userId=${USER_ID}&period=${period}`
+          `${API_BASE}/summary?userId=${userId}&period=${period}`
         );
         if (res.ok) {
           const data = await res.json();

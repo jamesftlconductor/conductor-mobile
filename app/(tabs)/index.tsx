@@ -14,6 +14,7 @@ import { Minimap } from '@/components/Minimap';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
+import { getUserId, useUserId } from '@/hooks/useUserId';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
@@ -104,10 +105,11 @@ const DEFAULT_SIGNAL_COLOR = '#ef4444';
 const PENDING_SIGNAL_KEY = 'conductor:pendingSignalId';
 const EXPO_PUSH_TOKEN_KEY = 'expoPushToken';
 const HEALTH_CONTEXT_KEY = 'healthContext';
-const PUSH_USER_ID = 'james_totalhome_gmail_com';
 
 async function syncHealthIfStale() {
   try {
+    const userId = await getUserId();
+    if (!userId) return;
     const cachedRaw = await AsyncStorage.getItem(HEALTH_CONTEXT_KEY);
     const cached: HealthSnapshot | null = cachedRaw ? JSON.parse(cachedRaw) : null;
     // Refresh once per local calendar day. Comparing toDateString() handles
@@ -124,7 +126,7 @@ async function syncHealthIfStale() {
     await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: PUSH_USER_ID, healthData: snapshot }),
+      body: JSON.stringify({ userId, healthData: snapshot }),
     });
   } catch {
     // Best-effort — never block app startup on health sync.
@@ -172,6 +174,8 @@ async function registerNotificationCategories() {
 async function registerForPushNotifications() {
   try {
     if (!Device.isDevice) return;
+    const userId = await getUserId();
+    if (!userId) return;
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
@@ -207,7 +211,7 @@ async function registerForPushNotifications() {
     const res = await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: PUSH_USER_ID, expoPushToken: token }),
+      body: JSON.stringify({ userId, expoPushToken: token }),
     });
     if (!res.ok) return;
 
@@ -809,9 +813,11 @@ function JokeOfferCard({
   theme: any;
   accentColor: string;
 }) {
+  const userId = useUserId();
   const [loading, setLoading] = useState(false);
   const [setup, setSetup] = useState<string | null>(null);
   const [punchline, setPunchline] = useState<string | null>(null);
+  if (!userId) return null;
   return (
     <View style={base}>
       {setup ? (
@@ -852,7 +858,7 @@ function JokeOfferCard({
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    userId: 'james_totalhome_gmail_com',
+                    userId,
                     question: 'tell me a joke',
                   }),
                 });
@@ -884,8 +890,14 @@ function JokeOfferCard({
 }
 
 export default function TakeoffScreen() {
+  const userId = useUserId();
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  // userId-gated render: if AsyncStorage hasn't yielded an id yet, drop
+  // a null surface. The boot guard in _layout.tsx is already steering
+  // unidentified users to /onboarding; this is the secondary belt for
+  // the brief few frames before the redirect fires.
+  if (!userId) return null;
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
   const [transparency, setTransparency] = useState<string | null>(null);
@@ -1147,13 +1159,13 @@ export default function TakeoffScreen() {
         const actionId = response.actionIdentifier;
         const data: any = response.notification.request.content.data || {};
         const signalId = data.signalId;
-        const userId = data.userId || 'james_totalhome_gmail_com';
+        const targetUserId = data.userId || userId;
         if (!signalId) return;
         if (actionId === 'REST') {
           fetch('https://conductor-ivory.vercel.app/api/signals', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: signalId, userId, state: 'resolved' }),
+            body: JSON.stringify({ id: signalId, userId: targetUserId, state: 'resolved' }),
           }).catch(() => {});
         } else if (actionId === 'HOLD') {
           fetch('https://conductor-ivory.vercel.app/api/signals', {
@@ -1161,7 +1173,7 @@ export default function TakeoffScreen() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               id: signalId,
-              userId,
+              userId: targetUserId,
               state: 'active',
               notedAt: new Date().toISOString(),
             }),
@@ -1176,7 +1188,7 @@ export default function TakeoffScreen() {
 
   async function checkConnection() {
     try {
-      const res = await fetch('https://conductor-ivory.vercel.app/api/signals?userId=james_totalhome_gmail_com');
+      const res = await fetch(`https://conductor-ivory.vercel.app/api/signals?userId=${userId}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!Array.isArray(data.signals)) throw new Error('Invalid response: missing signals array');
@@ -1217,7 +1229,6 @@ export default function TakeoffScreen() {
       return;
     }
     try {
-      const userId = 'james_totalhome_gmail_com'; // temporary hardcode — will come from OAuth
       const res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/${endpoint}?userId=${userId}`);
       const data = await res.json();
       if (typeof data.user === 'string' && data.user.length > 0) {
@@ -1366,7 +1377,7 @@ export default function TakeoffScreen() {
     // Fire-and-forget — populates the Took Care Of band after the
     // main brief renders so the brief isn't blocked on this fetch.
     fetch(
-      'https://conductor-ivory.vercel.app/api/signals?type=autoResolutions&userId=james_totalhome_gmail_com'
+      `https://conductor-ivory.vercel.app/api/signals?type=autoResolutions&userId=${userId}`
     )
       .then((r) => r.json())
       .then((d) => {
@@ -1442,7 +1453,7 @@ export default function TakeoffScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: 'james_totalhome_gmail_com',
+          userId,
           question: q,
         }),
       });
@@ -1494,7 +1505,7 @@ export default function TakeoffScreen() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId: 'james_totalhome_gmail_com',
+        userId,
         briefType,
         rating,
         briefDate: new Date().toISOString(),
@@ -1550,7 +1561,7 @@ export default function TakeoffScreen() {
         </GestureDetector>
         <YesterdayModal
           visible={showYesterday}
-          userId="james_totalhome_gmail_com"
+          userId={userId}
           onClose={() => setShowYesterday(false)}
         />
       </>
@@ -1844,8 +1855,8 @@ export default function TakeoffScreen() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             signalId: handoff.signalId,
-                            acknowledgedBy: 'james_totalhome_gmail_com',
-                            userId: 'james_totalhome_gmail_com',
+                            acknowledgedBy: userId,
+                            userId,
                           }),
                         }
                       );
@@ -1970,7 +1981,7 @@ export default function TakeoffScreen() {
                     fetch('https://conductor-ivory.vercel.app/api/maintenance', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action: 'dismiss', userId: 'james_totalhome_gmail_com' }),
+                      body: JSON.stringify({ action: 'dismiss', userId }),
                     }).catch(() => {});
                   }}
                   style={styles.maintOfferSecondary}
@@ -2005,7 +2016,7 @@ export default function TakeoffScreen() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          userId: 'james_totalhome_gmail_com',
+                          userId,
                           question: q,
                           response: 'acknowledged',
                         }),
@@ -2038,7 +2049,7 @@ export default function TakeoffScreen() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          userId: 'james_totalhome_gmail_com',
+                          userId,
                           question: q,
                           response: 'dismissed',
                         }),
@@ -2100,7 +2111,7 @@ export default function TakeoffScreen() {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
-                            userId: 'james_totalhome_gmail_com',
+                            userId,
                             question: 'tell me a joke',
                           }),
                         });
@@ -2309,7 +2320,7 @@ export default function TakeoffScreen() {
 
       <YesterdayModal
         visible={showYesterday}
-        userId="james_totalhome_gmail_com"
+        userId={userId}
         onClose={() => setShowYesterday(false)}
       />
 
@@ -2370,13 +2381,13 @@ export default function TakeoffScreen() {
                     body: JSON.stringify({
                       id: t.signalId,
                       state: 'resolved',
-                      userId: 'james_totalhome_gmail_com',
+                      userId,
                     }),
                   }).then(() => {
                     // Refresh the Took Care Of band so the just-rested
                     // signal joins it without a manual pull-to-refresh.
                     return fetch(
-                      'https://conductor-ivory.vercel.app/api/signals?type=autoResolutions&userId=james_totalhome_gmail_com'
+                      `https://conductor-ivory.vercel.app/api/signals?type=autoResolutions&userId=${userId}`
                     );
                   })
                   .then((r) => r?.json?.())
@@ -2400,7 +2411,7 @@ export default function TakeoffScreen() {
                     body: JSON.stringify({
                       id: t.signalId,
                       state: 'snoozed',
-                      userId: 'james_totalhome_gmail_com',
+                      userId,
                     }),
                   }).catch(() => {});
                 }}>
@@ -2420,7 +2431,7 @@ export default function TakeoffScreen() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      userId: 'james_totalhome_gmail_com',
+                      userId,
                       signalId: t.signalId,
                     }),
                   }).catch(() => {});
@@ -2431,7 +2442,7 @@ export default function TakeoffScreen() {
                     body: JSON.stringify({
                       id: t.signalId,
                       state: 'expired',
-                      userId: 'james_totalhome_gmail_com',
+                      userId,
                     }),
                   }).catch(() => {});
                 }}>

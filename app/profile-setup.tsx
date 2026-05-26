@@ -6,6 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { useUserId } from '@/hooks/useUserId';
 import {
   Alert,
   ScrollView,
@@ -50,12 +51,10 @@ export default function ProfileSetupScreen() {
   const [ownOrRent, setOwnOrRent] = useState<OwnRent>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const activeUserId = useUserId();
   useEffect(() => {
-    (async () => {
-      const stored = await AsyncStorage.getItem('user_id');
-      setUserId(stored || 'james_totalhome_gmail_com');
-    })();
-  }, []);
+    setUserId(activeUserId || '');
+  }, [activeUserId]);
 
   // Renting card pre-selects rent for the second question — it's
   // already implied by the choice, but we surface the second question

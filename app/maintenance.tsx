@@ -30,8 +30,8 @@ import {
 } from 'react-native';
 
 import { useTheme } from '@/app/theme';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 // Semantic colors that should NOT flip with the theme — these carry
@@ -95,6 +95,8 @@ function fmtUSD(n: number | undefined): string {
 }
 
 export default function MaintenanceScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const BRASS = accentColor;
@@ -111,7 +113,7 @@ export default function MaintenanceScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${userId}`);
         const data = await res.json();
         const housing = data?.profile?.housing;
         if (housing === 'rent' || housing === 'living_with_family') setIsRenter(true);
@@ -123,7 +125,7 @@ export default function MaintenanceScreen() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/maintenance?userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/maintenance?userId=${userId}`);
       if (!res.ok) return;
       const data = await res.json();
       if (data?.plan) setPlan(data.plan as Plan);
@@ -137,7 +139,7 @@ export default function MaintenanceScreen() {
       const res = await fetch(`${API_BASE}/maintenance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', userId: USER_ID }),
+        body: JSON.stringify({ action: 'generate', userId: userId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -174,7 +176,7 @@ export default function MaintenanceScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'addToRadar',
-          userId: USER_ID,
+          userId: userId,
           task: item.task,
           month,
           category: item.category,

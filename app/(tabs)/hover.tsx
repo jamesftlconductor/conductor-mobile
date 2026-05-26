@@ -36,8 +36,8 @@ import {
 import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
 import { useTheme } from '../theme';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const PENDING_SIGNAL_KEY = 'conductor:pendingSignalId';
 
@@ -897,16 +897,11 @@ function Ripple({
 }
 
 // Family vs personal view: family shows every household signal; personal
-// filters to signal.userId === USER_ID or unowned (no userId). Toggle
+// filters to signal.userId === userId or unowned (no userId). Toggle
 // persists in AsyncStorage so the choice survives app restarts. Minimap
 // on Ground reads the same key to stay in sync with Hover.
 const VIEW_MODE_KEY = 'hoverViewMode';
 type ViewMode = 'family' | 'personal';
-
-const FIRST_NAME = (() => {
-  const raw = USER_ID.split('_')[0] || '';
-  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
-})();
 
 // Crew avatar accent palette — referenced defensively here in case any
 // render path expects it. Kept as a stable export-shape constant so
@@ -920,6 +915,12 @@ const crewColor = (index: number): string =>
   CREW_COLORS[Math.max(0, index ?? 0) % CREW_COLORS.length];
 
 export default function HoverScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
+  const FIRST_NAME = (() => {
+    const raw = userId.split('_')[0] || '';
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
+  })();
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const { width, height } = useWindowDimensions();
@@ -979,7 +980,7 @@ export default function HoverScreen() {
     (async () => {
       try {
         const res = await fetch(
-          `https://conductor-ivory.vercel.app/api/signals?type=crew&userId=${USER_ID}`
+          `https://conductor-ivory.vercel.app/api/signals?type=crew&userId=${userId}`
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -1060,7 +1061,7 @@ export default function HoverScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           signalId: s.id,
           signalType: s.type || 'unknown',
           description: s.description || '',
@@ -1074,7 +1075,7 @@ export default function HoverScreen() {
 
   async function loadSignals(): Promise<Signal[]> {
     try {
-      const res = await fetch(`${API_BASE}/signals?userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/signals?userId=${userId}`);
       const data = await res.json();
       const active: Signal[] = (data.signals || []).filter(
         (s: Signal) => !s.state || s.state === 'incoming' || s.state === 'active'
@@ -1150,7 +1151,7 @@ export default function HoverScreen() {
         if (!cm || String(cm).toLowerCase().trim() !== crewFilter.toLowerCase().trim()) {
           continue;
         }
-      } else if (viewMode === 'personal' && s.userId && s.userId !== USER_ID) {
+      } else if (viewMode === 'personal' && s.userId && s.userId !== userId) {
         // Default personal view: drop signals owned by someone else.
         // Unowned (userId null) signals appear in both modes.
         continue;
@@ -1211,7 +1212,7 @@ export default function HoverScreen() {
     fetch(`${API_BASE}/signals`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: signal.id, state: 'resolved', userId: USER_ID }),
+      body: JSON.stringify({ id: signal.id, state: 'resolved', userId: userId }),
     }).catch(() => {});
   }
 
@@ -1231,7 +1232,7 @@ export default function HoverScreen() {
     fetch(`${API_BASE}/signals`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, state: 'active', userId: USER_ID }),
+      body: JSON.stringify({ id, state: 'active', userId: userId }),
     }).catch(() => {});
     setSignals((prev) =>
       prev.map((s) => (String(s.id) === String(id) ? { ...s, state: 'active' } : s))
@@ -1587,7 +1588,7 @@ export default function HoverScreen() {
 
         <AddSignalSheet
           visible={showAddSignal}
-          userId={USER_ID}
+          userId={userId}
           onClose={() => setShowAddSignal(false)}
           onAdded={handleSignalAdded}
         />
@@ -1606,7 +1607,7 @@ export default function HoverScreen() {
 
         <YesterdayModal
           visible={showYesterday}
-          userId={USER_ID}
+          userId={userId}
           onClose={() => setShowYesterday(false)}
         />
 
@@ -1616,7 +1617,7 @@ export default function HoverScreen() {
             visible={!!selected}
             signal={selected}
             resolving={resolving}
-            userId={USER_ID}
+            userId={userId}
             onClose={handleClose}
             onRest={handleRest}
             onHold={handleHold}

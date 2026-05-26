@@ -20,9 +20,9 @@ import { SMSComposerSheet } from './SMSComposerSheet';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 import { Tooltip } from './Tooltip';
 import { useTheme } from '../app/theme';
+import { useUserId } from '@/hooks/useUserId';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
-const USER_ID = 'james_totalhome_gmail_com';
 
 type ThemeColors = { background: string; surface: string; text: string; muted: string };
 
@@ -62,6 +62,8 @@ type CategoryProps = {
 type FinaleSheetProps = SingleProps | CategoryProps;
 
 export function FinaleSheet(props: FinaleSheetProps) {
+  const userId = useUserId();
+  if (!userId) return null;
   if (props.mode === 'single') {
     return <SingleSheet {...props} />;
   }
@@ -547,7 +549,7 @@ function SingleSheet({
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                  userId: USER_ID,
+                                  userId: userId,
                                   ruleType: 'sender',
                                   value: senderName,
                                 }),

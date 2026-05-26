@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 
 import { useTheme } from '@/app/theme';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 type CamouflageRule = {
@@ -23,6 +23,8 @@ type CamouflageRule = {
 };
 
 export default function SignalFiltersScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [rules, setRules] = useState<CamouflageRule[]>([]);
@@ -30,7 +32,7 @@ export default function SignalFiltersScreen() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/signals?type=camouflage&userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/signals?type=camouflage&userId=${userId}`);
       if (!res.ok) return;
       const data = await res.json();
       setRules(Array.isArray(data?.rules) ? data.rules : []);
@@ -57,7 +59,7 @@ export default function SignalFiltersScreen() {
             setRules((prev) => prev.filter((r) => !(r.type === rule.type && r.value === rule.value)));
             try {
               await fetch(
-                `${API_BASE}/signals?type=camouflage&userId=${USER_ID}&value=${encodeURIComponent(rule.value)}`,
+                `${API_BASE}/signals?type=camouflage&userId=${userId}&value=${encodeURIComponent(rule.value)}`,
                 { method: 'DELETE' }
               );
             } catch {

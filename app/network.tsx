@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { useTheme } from '@/app/theme';
+import { useUserId } from '@/hooks/useUserId';
 import {
   ActivityIndicator,
   Alert,
@@ -20,7 +21,6 @@ import {
   View,
 } from 'react-native';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
@@ -65,6 +65,8 @@ function loadColor(load: string | undefined, accentColor: string, muted: string)
 }
 
 export default function NetworkScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const BRASS = accentColor;
@@ -96,7 +98,7 @@ export default function NetworkScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           vaultItemId: shareItemId,
           targetHouseholdId,
           permissionLevel: sharePermission,
@@ -119,7 +121,7 @@ export default function NetworkScreen() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/network?action=status&userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/network?action=status&userId=${userId}`);
       const data = await res.json();
       setConnections(data.connections || []);
     } catch (err) {
@@ -144,7 +146,7 @@ export default function NetworkScreen() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           inviteEmail: inviteEmail.trim() || null,
           permissionLevel: invitePermission,
         }),
@@ -186,7 +188,7 @@ export default function NetworkScreen() {
               await fetch(`${API_BASE}/network?action=disconnect`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ userId: USER_ID, targetHouseholdId }),
+                body: JSON.stringify({ userId: userId, targetHouseholdId }),
               });
               load();
             } catch (err: any) {

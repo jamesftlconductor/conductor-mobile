@@ -26,8 +26,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const BORDER = 'rgba(255,255,255,0.06)';
@@ -59,6 +59,8 @@ const CARDS: Card[] = [
 type Step = 'pick' | 'form' | 'done';
 
 export default function TransitionScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const BRASS = accentColor;
@@ -140,7 +142,7 @@ export default function TransitionScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           transitionType: type,
           transitionDate: dateForServer || undefined,
           details,

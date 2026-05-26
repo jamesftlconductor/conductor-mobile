@@ -12,6 +12,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { useUserId } from '@/hooks/useUserId';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -97,16 +98,13 @@ export default function JuniorScreen() {
   const [sending, setSending] = useState(false);
   const [lastSent, setLastSent] = useState<string | null>(null);
 
+  const activeUserId = useUserId();
   useEffect(() => {
-    (async () => {
-      // Junior screen uses the same active userId as the rest of the
-      // app for now — a future PIN-gate would swap this for a stored
-      // junior userId.
-      const stored = await AsyncStorage.getItem('user_id');
-      const resolved = stored || 'james_totalhome_gmail_com';
-      setUserId(resolved);
-    })();
-  }, []);
+    // Junior screen reads the active userId from the shared hook so
+    // it stays in lockstep with the rest of the app. A future PIN-gate
+    // could overlay a stored junior userId on top of this.
+    setUserId(activeUserId || '');
+  }, [activeUserId]);
 
   const load = useCallback(async () => {
     if (!userId) return;

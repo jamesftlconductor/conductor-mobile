@@ -20,9 +20,9 @@ import {
 import { HelpButton } from '@/components/HelpButton';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TYPE_META } from '@/components/signalTypes';
+import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 // Module-level fallbacks — only used for ActivityIndicator color prop
@@ -86,6 +86,8 @@ export default function JournalScreenSecured() {
 }
 
 function JournalScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -100,8 +102,8 @@ function JournalScreen() {
   const load = useCallback(async () => {
     try {
       const [res, yrs] = await Promise.all([
-        fetch(`${API_BASE}/signals?type=journal&userId=${USER_ID}&days=30`),
-        fetch(`${API_BASE}/signals?type=yearInReview&userId=${USER_ID}`),
+        fetch(`${API_BASE}/signals?type=journal&userId=${userId}&days=30`),
+        fetch(`${API_BASE}/signals?type=yearInReview&userId=${userId}`),
       ]);
       if (res.ok) {
         const d = await res.json();
@@ -125,7 +127,7 @@ function JournalScreen() {
     setYearLoading(true);
     try {
       const res = await fetch(
-        `${API_BASE}/signals?type=yearInReview&userId=${USER_ID}&year=${y}`
+        `${API_BASE}/signals?type=yearInReview&userId=${userId}&year=${y}`
       );
       if (res.ok) {
         const d = await res.json();

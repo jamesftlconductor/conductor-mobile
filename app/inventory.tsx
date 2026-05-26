@@ -15,8 +15,8 @@ import {
 } from 'react-native';
 import { useTheme } from './theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const FAINT = '#3a3835';
@@ -114,6 +114,8 @@ export default function InventoryScreenSecured() {
 }
 
 function InventoryScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -124,8 +126,8 @@ function InventoryScreen() {
   const load = useCallback(async () => {
     try {
       const [invRes, sugRes] = await Promise.all([
-        fetch(`${API_BASE}/signals?type=inventory&userId=${USER_ID}`),
-        fetch(`${API_BASE}/signals?type=inventorySuggestions&userId=${USER_ID}`),
+        fetch(`${API_BASE}/signals?type=inventory&userId=${userId}`),
+        fetch(`${API_BASE}/signals?type=inventorySuggestions&userId=${userId}`),
       ]);
       if (invRes.ok) {
         const data = await invRes.json();
@@ -151,7 +153,7 @@ function InventoryScreen() {
       await fetch(`${API_BASE}/signals?type=confirmInventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, suggestionId: s.id, confirmed }),
+        body: JSON.stringify({ userId: userId, suggestionId: s.id, confirmed }),
       });
       if (confirmed) load();
     } catch {
@@ -179,7 +181,7 @@ function InventoryScreen() {
       await fetch(`${API_BASE}/signals?type=inventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, updates }),
+        body: JSON.stringify({ userId: userId, updates }),
       });
     } catch { load(); }
   }

@@ -12,9 +12,9 @@ import {
 import { HelpButton } from '@/components/HelpButton';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TYPE_META } from '@/components/signalTypes';
+import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const SAGE = '#86efac';
@@ -175,6 +175,7 @@ type SpendData = {
 };
 
 function SpendCard() {
+  const userId = useUserId();
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -182,10 +183,11 @@ function SpendCard() {
   const [data, setData] = useState<SpendData | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=spend&userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/signals?type=spend&userId=${userId}`);
         if (!res.ok) return;
         const json = await res.json();
         if (!cancelled && json?.ok) setData(json as SpendData);
@@ -193,7 +195,7 @@ function SpendCard() {
       finally { if (!cancelled) setLoaded(true); }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [userId]);
   if (!loaded) {
     return (
       <View style={styles.card}>
@@ -244,6 +246,8 @@ type StreakData = {
 };
 
 export default function CompassScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -256,8 +260,8 @@ export default function CompassScreen() {
     (async () => {
       try {
         const [compassRes, streakRes] = await Promise.all([
-          fetch(`${API_BASE}/signals?type=compass&userId=${USER_ID}`),
-          fetch(`${API_BASE}/signals?type=streak&userId=${USER_ID}`),
+          fetch(`${API_BASE}/signals?type=compass&userId=${userId}`),
+          fetch(`${API_BASE}/signals?type=streak&userId=${userId}`),
         ]);
         if (compassRes.ok) {
           const d = await compassRes.json();

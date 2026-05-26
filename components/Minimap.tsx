@@ -7,9 +7,9 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { useTheme } from '@/app/theme';
 import { useHouseholdState } from '@/hooks/useHouseholdState';
+import { useUserId } from '@/hooks/useUserId';
 import { debugLog } from '@/utils/debugLog';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 // Mirrors Hover's view-mode toggle. Reads from the same AsyncStorage key
@@ -240,6 +240,8 @@ const DISCOVERY_KEY = 'minimapDiscovered';
 const DISCOVERY_AUTOHIDE_MS = 4000;
 
 export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp }: MinimapProps = {}) {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   // Weather-vane state drives the border color + pulse cadence. The
   // urgentCount that came in via prop (legacy callers) is overridden
@@ -254,7 +256,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
 
   async function loadSignals() {
     try {
-      const res = await fetch(`${API_BASE}/signals?userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/signals?userId=${userId}`);
       const data = await res.json();
       const active = (data.signals || []).filter(
         (s: Signal) => !s.state || s.state === 'incoming' || s.state === 'active'
@@ -290,7 +292,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
   const grouped = useMemo(() => {
     const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
     for (const s of signals) {
-      if (viewMode === 'personal' && s.userId && s.userId !== USER_ID) continue;
+      if (viewMode === 'personal' && s.userId && s.userId !== userId) continue;
       out[ringForSignal(s)].push(s);
     }
     return out;

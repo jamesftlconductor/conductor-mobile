@@ -10,7 +10,8 @@
 
 import { useEffect, useState } from 'react';
 
-const USER_ID = 'james_totalhome_gmail_com';
+import { useUserId } from './useUserId';
+
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const POLL_MS = 5 * 60 * 1000;
 
@@ -43,6 +44,7 @@ const STATE_CONFIG: Record<WeatherState, { color: string; pulse: number | null }
 };
 
 export function useHouseholdState(): HouseholdWeatherState {
+  const userId = useUserId();
   const [state, setState] = useState<HouseholdWeatherState>({
     weatherState: 'clear',
     borderColor: STATE_CONFIG.clear.color,
@@ -51,12 +53,13 @@ export function useHouseholdState(): HouseholdWeatherState {
   });
 
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     async function fetchState() {
       try {
         const [urgentRes, alertRes] = await Promise.all([
-          fetch(`${API_BASE}/signals?type=urgentCount&userId=${USER_ID}`),
-          fetch(`${API_BASE}/alert?action=active&userId=${USER_ID}`),
+          fetch(`${API_BASE}/signals?type=urgentCount&userId=${userId}`),
+          fetch(`${API_BASE}/alert?action=active&userId=${userId}`),
         ]);
 
         const urgentData: { count?: number; emotionalState?: string; emotionalIntensity?: string } =
@@ -103,7 +106,7 @@ export function useHouseholdState(): HouseholdWeatherState {
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [userId]);
 
   return state;
 }

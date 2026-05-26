@@ -25,6 +25,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -34,8 +35,9 @@ import {
   View,
 } from 'react-native';
 
+import { useUserId } from '@/hooks/useUserId';
+
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
-const USER_ID = 'james_totalhome_gmail_com';
 
 const BG = '#0f0f0f';
 const OFF_WHITE = '#f0ede8';
@@ -168,6 +170,11 @@ type HouseholdPreview = {
 };
 
 export default function OnboardingScreen() {
+  // userId arrives via the deep-link from /api/success after OAuth.
+  // Until then this screen renders a Connect CTA so the user has a
+  // path forward — without OAuth they cannot reach the personalization
+  // steps because the pipeline + status calls all require a userId.
+  const userId = useUserId();
   // Initial phase is 'language' so the screen renders something
   // immediately. The async mount effect may switch to 'joining' if
   // it detects an invite code; until it resolves, the user sees the
@@ -195,8 +202,10 @@ export default function OnboardingScreen() {
   // or joinType flag set) and full new-household onboarding. Wrapped
   // in try/catch so an AsyncStorage failure can't take down the
   // screen before it renders — the ErrorBoundary in _layout.tsx is
-  // the last line of defense.
+  // the last line of defense. Gated on userId so the Connect CTA
+  // shows first when OAuth hasn't completed yet.
   useEffect(() => {
+    if (!userId) return;
     (async () => {
       try {
         let invite: string | null = null;
@@ -216,7 +225,7 @@ export default function OnboardingScreen() {
           try {
             const q = householdIdToJoin
               ? `&householdId=${encodeURIComponent(householdIdToJoin)}`
-              : `&userId=${encodeURIComponent(USER_ID)}`;
+              : `&userId=${encodeURIComponent(userId)}`;
             const res = await fetch(`${API_BASE}/onboard?action=householdPreview${q}`);
             const data = await res.json();
             if (data?.ok) {
@@ -264,7 +273,7 @@ export default function OnboardingScreen() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     AsyncStorage.setItem(STEP_KEY, phase).catch(() => {});
@@ -278,20 +287,22 @@ export default function OnboardingScreen() {
       await fetch(`${API_BASE}/onboard`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID }),
+        body: JSON.stringify({ userId: userId }),
       });
     } catch { /* best-effort */ }
   }
 
   // Status polling — runs the whole time until pipelineReady.
+  // Gated on userId so it doesn't fire before OAuth completes.
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
       if (cancelled || pipelineReady) return;
       try {
-        const res = await fetch(`${API_BASE}/onboard?userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/onboard?userId=${userId}`);
         const data = await res.json();
         const state = data?.status?.state;
         if (state === 'complete' || state === 'completed' || data?.status?.finishedAt) {
@@ -315,7 +326,7 @@ export default function OnboardingScreen() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [phase, pipelineReady, progress]);
+  }, [phase, pipelineReady, progress, userId]);
 
   // Once interstitial reached AND pipeline complete → navigate.
   useEffect(() => {
@@ -359,7 +370,7 @@ export default function OnboardingScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           who: w,
           housing: h,
           modifiers: mods,
@@ -377,7 +388,7 @@ export default function OnboardingScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           preferences: {
             communicationTone: tone,
             communicationDetail: detail,
@@ -395,7 +406,7 @@ export default function OnboardingScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: USER_ID,
+          userId: userId,
           priorities: Array.from(picked),
         }),
       });
@@ -417,7 +428,7 @@ export default function OnboardingScreen() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userId: USER_ID,
+            userId: userId,
             hobbies: Array.from(hobbiesPicked),
           }),
         });
@@ -457,6 +468,36 @@ export default function OnboardingScreen() {
   const previewKey = `${tone}+${detail}+${humor}`;
   const preview = VOICE_PREVIEW[previewKey] || '';
 
+  // Connect-gate: until OAuth completes and the deep-link populates
+  // userId in AsyncStorage, render only the Connect CTA. After the
+  // deep-link fires, useUserId emits the resolved id and the next
+  // render falls through to the normal onboarding flow.
+  if (!userId) {
+    return (
+      <View style={styles.connectContainer}>
+        <View style={styles.connectLogo}>
+          <Text style={styles.connectLogoMark}>C</Text>
+        </View>
+        <Text style={styles.connectTitle}>Conductor</Text>
+        <Text style={styles.connectSubtitle}>Your household, orchestrated.</Text>
+        <View style={styles.connectDivider} />
+        <Text style={styles.connectBody}>
+          Connect your Gmail and Google Calendar. Conductor reads your
+          signals and delivers a calm morning brief — what&apos;s arriving,
+          what&apos;s scheduled, what matters today.
+        </Text>
+        <TouchableOpacity
+          style={styles.connectButton}
+          onPress={() => Linking.openURL(`${API_BASE}/auth`).catch(() => {})}>
+          <Text style={styles.connectButtonText}>Connect your household</Text>
+        </TouchableOpacity>
+        <Text style={styles.connectPrivacy}>
+          We only read what you choose to share. Your emails stay private.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.progressTrack}>
@@ -482,7 +523,7 @@ export default function OnboardingScreen() {
                 await fetch(`${API_BASE}/signals?type=preferences`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ userId: USER_ID, preferences: { language: lang } }),
+                  body: JSON.stringify({ userId: userId, preferences: { language: lang } }),
                 });
               } catch { /* best-effort */ }
               setPhase('step1');
@@ -1064,6 +1105,54 @@ function StepDots({ active }: { active: 0 | 1 | 2 | 3 }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
+
+  connectContainer: {
+    flex: 1,
+    backgroundColor: BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  connectLogo: {
+    width: 56,
+    height: 56,
+    backgroundColor: OFF_WHITE,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 22,
+  },
+  connectLogoMark: { color: BG, fontSize: 28, fontWeight: '700' },
+  connectTitle: { color: OFF_WHITE, fontSize: 26, fontWeight: '500', marginBottom: 6 },
+  connectSubtitle: { color: FAINT, fontSize: 13, marginBottom: 24 },
+  connectDivider: {
+    width: 32,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: SOFT_BORDER,
+    marginBottom: 24,
+  },
+  connectBody: {
+    color: FAINT,
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 12,
+  },
+  connectButton: {
+    backgroundColor: BRASS,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    marginBottom: 22,
+  },
+  connectButtonText: { color: BG, fontSize: 15, fontWeight: '600' },
+  connectPrivacy: {
+    color: MUTED,
+    fontSize: 11,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
 
   progressTrack: {
     height: 3,

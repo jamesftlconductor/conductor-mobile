@@ -31,8 +31,8 @@ import {
 
 import { useTheme } from '@/app/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const POLL_MS = 10_000;
 
@@ -49,6 +49,8 @@ type ChannelMessage = {
 };
 
 export default function ChannelScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
@@ -58,7 +60,7 @@ export default function ChannelScreen() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/channel?userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/channel?userId=${userId}`);
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data?.messages)) {
@@ -73,7 +75,7 @@ export default function ChannelScreen() {
     fetch(`${API_BASE}/channel/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: USER_ID }),
+      body: JSON.stringify({ userId: userId }),
     }).catch(() => {});
     pollTimer.current = setInterval(load, POLL_MS);
     return () => {
@@ -95,7 +97,7 @@ export default function ChannelScreen() {
       await fetch(`${API_BASE}/channel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, text }),
+        body: JSON.stringify({ userId: userId, text }),
       });
 
       if (isAskConductor) {
@@ -106,7 +108,7 @@ export default function ChannelScreen() {
             const askRes = await fetch(`${API_BASE}/ask`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: USER_ID, question }),
+              body: JSON.stringify({ userId: userId, question }),
             });
             if (askRes.ok) {
               const askData = await askRes.json();
@@ -116,7 +118,7 @@ export default function ChannelScreen() {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    userId: USER_ID,
+                    userId: userId,
                     senderId: 'conductor',
                     text: answer,
                   }),
@@ -137,7 +139,7 @@ export default function ChannelScreen() {
 
   function renderItem({ item }: { item: ChannelMessage }) {
     const isConductor = item.senderId === 'conductor';
-    const isMine = item.senderId === USER_ID;
+    const isMine = item.senderId === userId;
 
     if (isConductor) {
       return (

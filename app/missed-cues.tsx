@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 
 import { metaFor, Signal } from '@/components/signalTypes';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const AMBER = '#f59e0b';
@@ -54,6 +54,8 @@ function ageDescription(s: Signal, accentColor: string, muted: string): { label:
 }
 
 export default function MissedCuesScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const BRASS = accentColor;
@@ -65,7 +67,7 @@ export default function MissedCuesScreen() {
 
   async function load() {
     try {
-      const res = await fetch(`${API_BASE}/signals?type=missedcues&userId=${USER_ID}`);
+      const res = await fetch(`${API_BASE}/signals?type=missedcues&userId=${userId}`);
       if (!res.ok) return;
       const data = await res.json();
       setSignals(Array.isArray(data?.signals) ? data.signals : []);
@@ -92,7 +94,7 @@ export default function MissedCuesScreen() {
       await fetch(`${API_BASE}/signals`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, state, userId: USER_ID }),
+        body: JSON.stringify({ id, state, userId: userId }),
       });
     } catch {
       // Best-effort; reconcile on next refresh.

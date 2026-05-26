@@ -15,8 +15,8 @@ import { SignalFilterPills } from '@/components/SignalFilterPills';
 import { applyFilter as applyMeCrewHouse, useSignalFilter } from '@/hooks/useSignalFilter';
 import { metaFor, type Signal } from '@/components/signalTypes';
 import { useTheme } from './theme';
+import { useUserId } from '@/hooks/useUserId';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
@@ -137,8 +137,9 @@ function buildItems(args: {
   today: Date;
   horizonEnd: Date;
   accentColor: string;
+  userId: string;
 }): { items: ProgrammeItem[]; memberMap: Map<string, string> } {
-  const { signals, vault, crew, calendar, today, horizonEnd, accentColor } = args;
+  const { signals, vault, crew, calendar, today, horizonEnd, accentColor, userId } = args;
   const BRASS = accentColor;
   const items: ProgrammeItem[] = [];
   const startMs = startOfLocalDay(today).getTime();
@@ -149,12 +150,12 @@ function buildItems(args: {
   // their own items never carry an [X's] tag.
   const memberMap = new Map<string, string>();
   for (const m of crew || []) {
-    if (m.memberType === 'member' && m.userId && m.firstName && m.userId !== USER_ID) {
+    if (m.memberType === 'member' && m.userId && m.firstName && m.userId !== userId) {
       memberMap.set(m.userId, m.firstName);
     }
   }
   function ownerTagFor(uid: string | undefined): string | undefined {
-    if (!uid || uid === USER_ID) return undefined;
+    if (!uid || uid === userId) return undefined;
     const name = memberMap.get(uid);
     return name ? `${name}'s` : undefined;
   }
@@ -285,6 +286,8 @@ function buildItems(args: {
 // --- screen ---
 
 export default function ProgrammeScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
@@ -301,10 +304,10 @@ export default function ProgrammeScreen() {
     // is independently best-effort. A failed endpoint doesn't block the
     // others; the rendered timeline just omits that data category.
     const [sigRes, vaultRes, crewRes, calRes] = await Promise.allSettled([
-      fetch(`${API_BASE}/signals?userId=${USER_ID}`),
-      fetch(`${API_BASE}/signals?type=vault&userId=${USER_ID}`),
-      fetch(`${API_BASE}/signals?type=crew&userId=${USER_ID}`),
-      fetch(`${API_BASE}/signals?type=calendar&userId=${USER_ID}`),
+      fetch(`${API_BASE}/signals?userId=${userId}`),
+      fetch(`${API_BASE}/signals?type=vault&userId=${userId}`),
+      fetch(`${API_BASE}/signals?type=crew&userId=${userId}`),
+      fetch(`${API_BASE}/signals?type=calendar&userId=${userId}`),
     ]);
 
     async function jsonOk<T = any>(r: PromiseSettledResult<Response>): Promise<T | null> {
@@ -338,8 +341,8 @@ export default function ProgrammeScreen() {
   const grouped = useMemo(() => {
     const today = new Date();
     const horizonEnd = new Date(today.getTime() + (HORIZON_DAYS - 1) * DAY_MS);
-    const filteredSignals = applyMeCrewHouse(signals, meCrewHouse, USER_ID);
-    const { items } = buildItems({ signals: filteredSignals, vault, crew, calendar, today, horizonEnd, accentColor });
+    const filteredSignals = applyMeCrewHouse(signals, meCrewHouse, userId);
+    const { items } = buildItems({ signals: filteredSignals, vault, crew, calendar, today, horizonEnd, accentColor, userId });
 
     // Bucket by YMD, preserving the sorted order produced above.
     const buckets = new Map<string, ProgrammeItem[]>();

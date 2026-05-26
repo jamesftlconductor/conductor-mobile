@@ -23,9 +23,9 @@ import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { metaForRing, type Signal, TYPE_META } from '@/components/signalTypes';
+import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
 
-const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 // Crew avatar accent palette — kept in sync with hover.tsx so a member
@@ -100,6 +100,8 @@ function todayYmd(): string {
 }
 
 export default function CalendarScreen() {
+  const userId = useUserId();
+  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const { width } = useWindowDimensions();
@@ -125,7 +127,7 @@ export default function CalendarScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=crew&userId=${USER_ID}`);
+        const res = await fetch(`${API_BASE}/signals?type=crew&userId=${userId}`);
         if (!res.ok) return;
         const json = await res.json();
         if (cancelled) return;
@@ -145,7 +147,7 @@ export default function CalendarScreen() {
     setLoading(true);
     try {
       const res = await fetch(
-        `${API_BASE}/signals?type=calendar-month&userId=${USER_ID}&month=${monthParam}`
+        `${API_BASE}/signals?type=calendar-month&userId=${userId}&month=${monthParam}`
       );
       if (!res.ok) {
         setData(null);
@@ -425,7 +427,7 @@ export default function CalendarScreen() {
 
       <AddSignalSheet
         visible={addSheetOpen}
-        userId={USER_ID}
+        userId={userId}
         initialEta={addSheetEta}
         onClose={() => setAddSheetOpen(false)}
         onAdded={() => {
