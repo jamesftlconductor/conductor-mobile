@@ -1558,6 +1558,11 @@ export default function SettingsScreen() {
     { id: string; summary: string; backgroundColor: string | null; isWorkCalendar: boolean; primary: boolean }[]
   >([]);
   const [detectedWorkCalendar, setDetectedWorkCalendar] = useState<string | null>(null);
+  // Picker needs to know if the user is on a consumer email so it can
+  // refuse to save their primary calendar as the work calendar. Without
+  // this, a user could accidentally privacy-strip their own personal
+  // calendar — exactly the bug Fix B addresses on the backend.
+  const [userIsConsumer, setUserIsConsumer] = useState<boolean>(false);
   const [showCalPicker, setShowCalPicker] = useState(false);
   // "Saved" confirmation flag for the work-calendar input. Animated.Value
   // holds the opacity so the affordance can fade in immediately, hold for
@@ -1591,6 +1596,7 @@ export default function SettingsScreen() {
             }))
           );
           setDetectedWorkCalendar(typeof data?.detectedWorkCalendar === 'string' ? data.detectedWorkCalendar : null);
+          setUserIsConsumer(data?.userIsConsumer === true);
         }
       } catch {
         // ignore — fall through to TextInput
@@ -1599,6 +1605,20 @@ export default function SettingsScreen() {
   }, []);
 
   async function selectWorkCalendar(name: string) {
+    // Consumer-primary guard: a user on a consumer email account
+    // (gmail.com, icloud.com, etc.) cannot save their own primary
+    // calendar as their work calendar — that would silently
+    // privacy-strip every personal event they own. Refuse + alert.
+    const picked = calendarList.find((c) => c.summary === name);
+    if (picked && picked.primary && userIsConsumer) {
+      Alert.alert(
+        'That looks personal',
+        'This looks like your personal calendar — please select a work calendar instead. ' +
+        'Conductor privacy-strips events from your work calendar to time blocks; doing that ' +
+        'to your primary would hide every event you own.',
+      );
+      return;
+    }
     setShowCalPicker(false);
     setWorkCalDraft(name);
     const next = { ...settings, workCalendarName: name };
