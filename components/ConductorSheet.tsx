@@ -333,18 +333,26 @@ export function ConductorSheet() {
       animationType="slide"
       transparent
       onRequestClose={closeConductorSheet}>
-      <Pressable
-        style={styles.backdrop}
-        onPress={backdropActive ? closeConductorSheet : undefined}>
-        <SwipeDismissSheet
-          style={[styles.sheet, { height: SHEET_HEIGHT }]}
-          onClose={closeConductorSheet}
-          enabled={backdropActive}>
-          <Pressable onPress={() => {}} style={{ flex: 1 }}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={20}
-              style={{ flex: 1 }}>
+      {/* KeyboardAvoidingView lives OUTSIDE SwipeDismissSheet so the
+          entire sheet rises with the keyboard. Wrapping the KAV inside
+          the fixed-height sheet (the previous structure) couldn't grow
+          the sheet beyond SHEET_HEIGHT, so the input bar disappeared
+          behind the keyboard. Moving KAV to the screen-level flex
+          container — with the backdrop's justifyContent:flex-end
+          anchoring the sheet to the bottom — lets padding/height
+          behavior push the whole sheet upward by the keyboard's height. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={20}
+        style={{ flex: 1 }}>
+        <Pressable
+          style={styles.backdrop}
+          onPress={backdropActive ? closeConductorSheet : undefined}>
+          <SwipeDismissSheet
+            style={[styles.sheet, { height: SHEET_HEIGHT }]}
+            onClose={closeConductorSheet}
+            enabled={backdropActive}>
+            <Pressable onPress={() => {}} style={{ flex: 1 }}>
               {/* Header */}
               <View style={styles.headerRow}>
                 <Text style={styles.title}>The Conductor</Text>
@@ -466,10 +474,10 @@ export function ConductorSheet() {
                   <Text style={styles.sendGlyph}>↑</Text>
                 </TouchableOpacity>
               </View>
-            </KeyboardAvoidingView>
-          </Pressable>
-        </SwipeDismissSheet>
-      </Pressable>
+            </Pressable>
+          </SwipeDismissSheet>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
