@@ -1,131 +1,81 @@
 // First-tap feature introduction modal. Pairs with useDiscovered to
-// onboard a user to surfaces they haven't met yet — Pulse, signal
-// chips, Minimap, feedback thumbs. Dimmed-feature tap opens this
-// modal; "Got it →" or tap-outside marks the feature discovered so
-// the dim treatment goes away permanently.
+// onboard a user to surfaces they haven't met yet. Caller passes the
+// content as props so the same modal renders any intro the calling
+// screen needs.
 
-import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React from 'react';
+import { Modal, View, Text, TouchableOpacity } from 'react-native';
 
 import { useTheme } from '@/app/theme';
 
-export type FeatureIntro = {
-  icon: string;
-  name: string;
-  description: string;
-};
-
-// Canonical intro copy, indexed by featureId. Callers pass the id
-// instead of repeating these strings at every dimmed surface.
-export const FEATURE_INTROS: Record<string, FeatureIntro> = {
-  pulse: {
-    icon: '◉',
-    name: 'The Pulse',
-    description:
-      'One sentence that synthesizes your health, the weather, and your signal load into what kind of day it actually is.',
-  },
-  signals: {
-    icon: '●',
-    name: 'Signals',
-    description:
-      "Anything your household needs to know or act on. Tap any signal to see details, context, and next steps.",
-  },
-  minimap: {
-    icon: '⌖',
-    name: 'The Conductor',
-    description:
-      'Your household in miniature. Tap from any screen to ask The Conductor anything.',
-  },
-  feedback: {
-    icon: '✓',
-    name: 'Brief feedback',
-    description:
-      "Tell The Conductor how it's doing. Your feedback shapes tomorrow's brief.",
-  },
-};
-
-export function FeatureIntroduction({
-  visible,
-  featureId,
-  onDismiss,
-}: {
+interface Props {
   visible: boolean;
   featureId: string;
+  name: string;
+  description: string;
+  icon: string;
   onDismiss: () => void;
-}) {
-  const { theme, accentColor } = useTheme();
-  const intro = FEATURE_INTROS[featureId];
-  if (!intro) return null;
+}
 
+export default function FeatureIntroduction({
+  visible,
+  name,
+  description,
+  icon,
+  onDismiss,
+}: Props) {
+  const { theme, accentColor } = useTheme();
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={onDismiss}>
-      {/* Tap-outside-to-dismiss backdrop. Inner Pressable swallows
-          the tap so the card itself doesn't trigger dismiss. */}
-      <Pressable style={styles.backdrop} onPress={onDismiss}>
-        <Pressable
-          onPress={() => {}}
-          style={[styles.card, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.icon, { color: accentColor }]}>{intro.icon}</Text>
-          <Text style={[styles.name, { color: theme.text }]}>{intro.name}</Text>
-          <Text style={[styles.description, { color: theme.muted }]}>
-            {intro.description}
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+      {/* Outer TouchableOpacity is the tap-outside-to-dismiss
+          backdrop. activeOpacity:1 keeps it from visibly flashing
+          on tap; only the dismiss handler fires. */}
+      <TouchableOpacity
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 32,
+        }}
+        activeOpacity={1}
+        onPress={onDismiss}>
+        <View
+          style={{
+            backgroundColor: theme.surface,
+            borderRadius: 16,
+            padding: 24,
+            width: '100%',
+            alignItems: 'center',
+          }}>
+          <Text style={{ fontSize: 32, marginBottom: 12 }}>{icon}</Text>
+          <Text
+            style={{
+              color: '#F5F0E8',
+              fontSize: 18,
+              fontWeight: '700',
+              textAlign: 'center',
+              marginBottom: 8,
+            }}>
+            {name}
           </Text>
-          <TouchableOpacity
-            onPress={onDismiss}
-            activeOpacity={0.6}
-            hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-            style={styles.button}>
-            <Text style={[styles.buttonText, { color: accentColor }]}>Got it →</Text>
+          <Text
+            style={{
+              color: theme.muted,
+              fontSize: 14,
+              lineHeight: 22,
+              textAlign: 'center',
+              marginBottom: 20,
+            }}>
+            {description}
+          </Text>
+          <TouchableOpacity onPress={onDismiss}>
+            <Text style={{ color: accentColor, fontSize: 15, fontWeight: '600' }}>
+              Got it →
+            </Text>
           </TouchableOpacity>
-        </Pressable>
-      </Pressable>
+        </View>
+      </TouchableOpacity>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-  },
-  icon: {
-    fontSize: 32,
-    textAlign: 'center',
-  },
-  name: {
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 12,
-    letterSpacing: 0.2,
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  button: {
-    marginTop: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  buttonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-});

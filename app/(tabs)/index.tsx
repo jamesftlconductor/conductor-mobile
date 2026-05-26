@@ -16,7 +16,36 @@ import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { useDiscovered } from '@/hooks/useDiscovered';
 import { getUserId, useUserId } from '@/hooks/useUserId';
-import { FeatureIntroduction } from '@/components/FeatureIntroduction';
+import FeatureIntroduction from '@/components/FeatureIntroduction';
+
+// Per-feature intro content. Lives next to the call site so copy
+// changes don't require touching the modal component.
+const FEATURE_INTROS: Record<string, { name: string; icon: string; description: string }> = {
+  pulse: {
+    name: 'The Pulse',
+    icon: '◉',
+    description:
+      'One sentence that synthesizes your health, the weather, and your signal load into what kind of day it actually is.',
+  },
+  signals: {
+    name: 'Signals',
+    icon: '●',
+    description:
+      "Anything your household needs to know or act on. Tap any signal to see details, context, and next steps.",
+  },
+  minimap: {
+    name: 'The Conductor',
+    icon: '⌖',
+    description:
+      'Your household in miniature. Tap from any screen to ask The Conductor anything.',
+  },
+  feedback: {
+    name: 'Brief feedback',
+    icon: '✓',
+    description:
+      "Tell The Conductor how it's doing. Your feedback shapes tomorrow's brief.",
+  },
+};
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
@@ -2406,7 +2435,10 @@ export default function TakeoffScreen() {
           fetch. */}
       <FeatureIntroduction
         visible={introFeatureId != null}
-        featureId={introFeatureId || 'pulse'}
+        featureId={introFeatureId || ''}
+        name={(introFeatureId && FEATURE_INTROS[introFeatureId]?.name) || ''}
+        icon={(introFeatureId && FEATURE_INTROS[introFeatureId]?.icon) || ''}
+        description={(introFeatureId && FEATURE_INTROS[introFeatureId]?.description) || ''}
         onDismiss={dismissIntro}
       />
       <Modal

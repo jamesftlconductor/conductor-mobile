@@ -752,9 +752,8 @@ function CollapsibleNavBar({
   useEffect(() => {
     Animated.spring(heightAnim, {
       toValue: expanded ? EXPANDED_H : COLLAPSED_H,
-      damping: 14,
-      stiffness: 140,
-      mass: 0.9,
+      tension: 180,
+      friction: 26,
       useNativeDriver: false,
     }).start();
   }, [expanded, heightAnim]);
@@ -803,7 +802,7 @@ function CollapsibleNavBar({
           onPress={() => setExpanded((v) => !v)}
           style={styles.collapsibleHandleArea}
           hitSlop={{ top: 4, bottom: 0, left: 0, right: 0 }}>
-          <View style={styles.collapsibleHandle} />
+          <Text style={styles.collapsibleHandle}>···</Text>
           {urgentCount > 0 && !expanded ? (
             <View style={styles.collapsibleBadge}>
               <Text style={styles.collapsibleBadgeText}>{urgentCount}</Text>
@@ -1952,11 +1951,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     position: 'relative',
   },
   collapsibleHandle: {
-    width: 40,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: theme.muted,
-    opacity: 0.5,
+    color: theme.muted,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 2,
+    lineHeight: 18,
   },
   collapsibleBadge: {
     position: 'absolute',

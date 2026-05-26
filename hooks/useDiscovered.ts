@@ -3,32 +3,25 @@
 // then permanently lights up to 100% for that device.
 //
 // Backed by AsyncStorage keys `discovered:{featureId}`. Default state
-// while AsyncStorage is being read is `true` (no dimming) so a slow
-// disk read doesn't flash dimmed-then-bright on every cold start for
-// users who already discovered everything. First-install users
-// (no key present) will see a brief flash of "discovered" then flip
-// to "undiscovered" once the read resolves — acceptable because the
-// AsyncStorage read finishes in ~10ms on a real device.
+// while AsyncStorage is being read is `true` (no dimming) so already-
+// discovered users don't see a flash. First-install users with no
+// key present flip to `false` once the read resolves.
 
+import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState } from 'react';
 
-export function useDiscovered(featureId: string): [boolean, () => Promise<void>] {
+export function useDiscovered(featureId: string): [boolean, () => void] {
   const [discovered, setDiscovered] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
-    AsyncStorage.getItem(`discovered:${featureId}`)
-      .then((val) => {
-        if (cancelled) return;
-        setDiscovered(val === 'true');
-      })
-      .catch(() => { /* default to discovered on read failure */ });
-    return () => { cancelled = true; };
+    AsyncStorage.getItem(`discovered:${featureId}`).then((val) => {
+      if (val === null) setDiscovered(false);
+      else setDiscovered(val === 'true');
+    });
   }, [featureId]);
 
   const markDiscovered = async () => {
-    try { await AsyncStorage.setItem(`discovered:${featureId}`, 'true'); } catch { /* ignore */ }
+    await AsyncStorage.setItem(`discovered:${featureId}`, 'true');
     setDiscovered(true);
   };
 
