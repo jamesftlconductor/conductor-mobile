@@ -768,6 +768,40 @@ const NAV_CATALOG: Record<string, NavCatalogEntry> = {
 const DEFAULT_NAV_KEYS = ['horizon', 'programme', 'calendar', 'cues', 'conductor'];
 const NAV_STORAGE_KEY = 'hoverId:navItems';
 
+// Signal-category pills for the expanded bar. Each pill has a
+// predicate against a Signal so categorization stays in one place.
+// "All" is the default and matches everything; "Other" is a
+// catch-all for signals that don't fit any of the explicit
+// categories.
+type SignalPill = {
+  id: string;
+  icon: string;
+  label: string;
+  match: (s: Signal) => boolean;
+};
+
+const SIGNAL_PILLS: SignalPill[] = [
+  { id: 'all',       icon: '',   label: 'All',       match: () => true },
+  { id: 'delivery',  icon: '📦', label: 'Delivery',  match: (s) => ['package', 'delivery', 'food', 'grocery'].includes(s.type || '') },
+  { id: 'deadline',  icon: '📅', label: 'Deadline',  match: (s) => ['deadline', 'appointment', 'reservation'].includes(s.type || '') },
+  { id: 'service',   icon: '🔧', label: 'Service',   match: (s) => s.type === 'service' },
+  { id: 'financial', icon: '💳', label: 'Financial', match: (s) => /payment|bill|invoice|charge|refund|subscription|due|balance/i.test(`${s.description || ''} ${s.sender || ''}`) },
+  { id: 'travel',    icon: '✈️', label: 'Travel',    match: (s) => s.type === 'travel' },
+  { id: 'home',      icon: '🏠', label: 'Home',      match: (s) => /maintenance|home|hvac|plumb|roof|appliance|lawn|garden|pest|electrician/i.test(`${s.description || ''} ${s.sender || ''}`) },
+  { id: 'crew',      icon: '👤', label: 'Crew',      match: (s) => !!s.userId },
+  {
+    id: 'other',
+    icon: '📋',
+    label: 'Other',
+    match: (s) => {
+      const t = s.type || '';
+      const matchedByExplicit =
+        ['package', 'delivery', 'food', 'grocery', 'deadline', 'appointment', 'reservation', 'service', 'travel'].includes(t);
+      return !matchedByExplicit;
+    },
+  },
+];
+
 // Sort active signals by urgency for the expanded list. ETA in the
 // past or within today comes first, then soonest future ETAs, then
 // no-ETA signals last. Stable order within tie-buckets so the list
@@ -809,12 +843,15 @@ function CollapsibleNavBar({
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
 
   const COLLAPSED_H = 36;
-  const EXPANDED_H = 250;
+  const EXPANDED_H = 296;
   const [expanded, setExpanded] = useState(false);
   // Edit mode toggles via long-press. ✕ overlay on each icon to
   // remove; tile labelled + at the end opens the add picker.
   const [editMode, setEditMode] = useState(false);
   const [showAddPicker, setShowAddPicker] = useState(false);
+  // Signal-category pill filter. Resets to 'all' on collapse so the
+  // bar always reopens to the unfiltered view.
+  const [selectedPillId, setSelectedPillId] = useState<string>('all');
   // Persisted nav selection. Defaults applied while AsyncStorage
   // load is in flight; first-install users see the spec defaults.
   const [navKeys, setNavKeys] = useState<string[]>(DEFAULT_NAV_KEYS);
@@ -857,6 +894,7 @@ function CollapsibleNavBar({
     if (next === false) {
       setEditMode(false);
       setShowAddPicker(false);
+      setSelectedPillId('all');
     }
   }
 
@@ -900,6 +938,10 @@ function CollapsibleNavBar({
   }
 
   const sortedSignals = useMemo(() => sortByUrgency(signals || []), [signals]);
+  const filteredSignals = useMemo(() => {
+    const pill = SIGNAL_PILLS.find((p) => p.id === selectedPillId) || SIGNAL_PILLS[0];
+    return sortedSignals.filter(pill.match);
+  }, [sortedSignals, selectedPillId]);
   const availableToAdd = useMemo(
     () => Object.keys(NAV_CATALOG).filter((k) => !navKeys.includes(k)),
     [navKeys]
@@ -944,16 +986,51 @@ function CollapsibleNavBar({
           </Pressable>
           {expanded ? (
             <>
-              {/* Signals scroll list — most urgent first. Tapping a
-                  row opens the FinaleSheet via the parent. Empty
-                  state shows a muted "All clear." line so the panel
-                  doesn't render as a void. */}
+              {/* Category pills — horizontal scroll above the
+                  signals list. Tap to filter; selection resets
+                  to 'all' on bar collapse. */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.collapsiblePillsRow}
+                contentContainerStyle={styles.collapsiblePillsContent}>
+                {SIGNAL_PILLS.map((pill) => {
+                  const active = pill.id === selectedPillId;
+                  return (
+                    <TouchableOpacity
+                      key={pill.id}
+                      onPress={() => setSelectedPillId(pill.id)}
+                      activeOpacity={0.6}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                      style={[
+                        styles.collapsiblePill,
+                        active && { backgroundColor: accentColor, borderColor: accentColor },
+                      ]}>
+                      <Text
+                        style={[
+                          styles.collapsiblePillText,
+                          active && styles.collapsiblePillTextActive,
+                        ]}>
+                        {pill.icon ? `${pill.icon} ${pill.label}` : pill.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Signals scroll list — most urgent first, filtered
+                  by the selected category pill. Tapping a row opens
+                  the FinaleSheet via the parent. Empty state shows
+                  a muted "All clear." line so the panel doesn't
+                  render as a void. */}
               <View style={styles.collapsibleSignalsWrap}>
-                {sortedSignals.length === 0 ? (
-                  <Text style={styles.collapsibleEmpty}>All clear.</Text>
+                {filteredSignals.length === 0 ? (
+                  <Text style={styles.collapsibleEmpty}>
+                    {selectedPillId === 'all' ? 'All clear.' : 'Nothing in this category.'}
+                  </Text>
                 ) : (
                   <FlatList
-                    data={sortedSignals}
+                    data={filteredSignals}
                     keyExtractor={(s) => String(s.id)}
                     showsVerticalScrollIndicator
                     keyboardShouldPersistTaps="handled"
@@ -2233,6 +2310,37 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontWeight: '500',
     letterSpacing: 0.2,
     textAlign: 'center',
+  },
+  // Category filter pills (horizontal scroll above the signals
+  // list). Active pill flips to accentColor; inactive uses surface
+  // with muted text.
+  collapsiblePillsRow: {
+    flexGrow: 0,
+    paddingVertical: 6,
+  },
+  collapsiblePillsContent: {
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  collapsiblePill: {
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: theme.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapsiblePillText: {
+    color: theme.muted,
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+  collapsiblePillTextActive: {
+    color: '#ffffff',
+    fontWeight: '600',
   },
   // Signals list (expanded). Caps at 120px so the nav row + add
   // picker have guaranteed real estate; FlatList scrolls inside.
