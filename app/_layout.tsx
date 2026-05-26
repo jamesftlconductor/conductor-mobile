@@ -11,7 +11,9 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider as ConductorThemeProvider } from '@/app/theme';
 import { ConductorSheet } from '@/components/ConductorSheet';
 import { DebugBanner } from '@/components/DebugBanner';
+import { DebugStorage } from '@/components/DebugStorage';
 import { setHouseholdId, setUserId, useUserId, useUserIdLoaded } from '@/hooks/useUserId';
+import { debugLog } from '@/utils/debugLog';
 import {
   acceptIconChange,
   declineIconChange,
@@ -460,13 +462,26 @@ function DeepLinkHandler() {
 // is what prevents Sarah's freshly-installed app from rendering Ground
 // against James's userId. Waits for `loaded` to flip true before
 // deciding so a 50ms launch race doesn't bounce a legitimate user.
+// Logs every decision so the debug banner can show why a redirect did
+// or did not fire — the previous build silently failed and we lost a
+// day of testing to it.
 function BootGuard() {
   const userId = useUserId();
   const loaded = useUserIdLoaded();
   useEffect(() => {
+    debugLog('Boot', `tick loaded=${loaded} userId=${userId ?? '(null)'}`);
     if (!loaded) return;
-    if (userId) return;
-    try { router.replace('/onboarding' as never); } catch { /* ignore */ }
+    if (userId) {
+      debugLog('Boot', `userId present — staying put`);
+      return;
+    }
+    debugLog('Boot', `no userId — router.replace(/onboarding)`);
+    try {
+      router.replace('/onboarding' as never);
+      debugLog('Boot', `router.replace OK`);
+    } catch (err: any) {
+      debugLog('Boot', `router.replace threw: ${err?.message || String(err)}`);
+    }
   }, [loaded, userId]);
   return null;
 }
@@ -481,6 +496,7 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <DeepLinkHandler />
           <BootGuard />
+          <DebugStorage />
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
