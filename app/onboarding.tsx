@@ -87,12 +87,46 @@ const MODIFIER_OPTIONS: { id: Modifier; label: string }[] = [
   { id: 'work_from_home', label: 'We work from home' },
 ];
 
-const INTERSTITIAL_PHRASES = [
-  'Reading your recent emails…',
-  'Building your signal picture…',
-  'Checking your calendar…',
-  'Almost ready…',
+// Interstitial copy — categorized so the cycler can rotate through
+// different beats (what Conductor is doing → privacy reassurance →
+// product expectation → trust). The rotation by category ensures the
+// user never sees the same category twice in a row even with single-
+// phrase pools, and that the texture of the wait feels intentional
+// rather than a four-string carousel.
+type InterstitialPhrase = { category: 'doing' | 'privacy' | 'personality' | 'reassurance'; text: string };
+
+const INTERSTITIAL_PHRASES: InterstitialPhrase[] = [
+  // What Conductor is actually doing right now.
+  { category: 'doing', text: 'Reading your inbox for signals that matter.' },
+  { category: 'doing', text: 'Looking for deadlines, renewals, and things that need attention.' },
+  { category: 'doing', text: 'Checking your calendar for conflicts and upcoming events.' },
+  { category: 'doing', text: 'Finding your service providers and adding them to your household.' },
+  { category: 'doing', text: "Building your household's signal picture for the first time." },
+  // Privacy / trust.
+  { category: 'privacy', text: 'Conductor reads signals. It never stores the content of your emails.' },
+  { category: 'privacy', text: 'Your data lives in your household. Never shared, never sold.' },
+  { category: 'privacy', text: 'Everything Conductor sees is in service of your morning brief. Nothing else.' },
+  // Brand personality + what to expect.
+  { category: 'personality', text: 'Tomorrow morning at 7am, your first brief arrives.' },
+  { category: 'personality', text: 'The Conductor is thorough. This first scan sets the foundation.' },
+  { category: 'personality', text: 'Most households surface 15-30 signals on day one.' },
+  { category: 'personality', text: 'The brief gets smarter every day as Conductor learns your household.' },
+  // Reassurance about the wait itself.
+  { category: 'reassurance', text: 'This only happens once. Future syncs run quietly in the background.' },
+  { category: 'reassurance', text: 'Almost there. The first scan is the most thorough one.' },
+  { category: 'reassurance', text: 'Worth the wait. The Conductor is building something specific to your household.' },
 ];
+
+const INTERSTITIAL_CATEGORY_ORDER: InterstitialPhrase['category'][] = [
+  'doing', 'privacy', 'personality', 'reassurance',
+];
+
+const INTERSTITIAL_CATEGORY_LABEL: Record<InterstitialPhrase['category'], string> = {
+  doing: 'CONNECTING',
+  privacy: 'PRIVACY',
+  personality: 'WHAT TO EXPECT',
+  reassurance: 'ALMOST THERE',
+};
 
 const PRIORITY_OPTIONS = [
   { id: 'deadlines', label: '📅 Deadlines and renewals' },
@@ -568,7 +602,7 @@ export default function OnboardingScreen() {
         ) : null}
 
         {phase === 'interstitial' ? (
-          <InterstitialBlock pipelineReady={pipelineReady} />
+          <InterstitialBlock pipelineReady={pipelineReady} progress={progress} />
         ) : null}
 
         {phase === 'step1' || phase === 'step2' || phase === 'step3' || phase === 'step4' ? (
@@ -1048,35 +1082,144 @@ function Step4({
 }
 
 // ---------- Interstitial: cycling phrases ----------
+//
+// Rebuilt to use the wait time meaningfully:
+//   - Phrases cycle every ~3.7s (350ms fade out + 3000ms hold +
+//     350ms fade in), smooth opacity transition between each.
+//   - Rotates through four categories in order so the user gets a
+//     rhythm of "what Conductor's doing → privacy → expectation →
+//     reassurance" — never two phrases from the same category back
+//     to back.
+//   - Within each category, picks a random phrase, excluding the
+//     phrase shown last time that category was visited.
+//   - Conductor mark pulses gently (scale + opacity loop) so the
+//     screen never feels frozen.
+//   - Progress line at the bottom is driven off the screen-level
+//     progress Animated.Value so the user sees the pipeline
+//     advancing alongside the prose.
 
-function InterstitialBlock({ pipelineReady }: { pipelineReady: boolean }) {
-  const [idx, setIdx] = useState(0);
+function InterstitialBlock({
+  pipelineReady,
+  progress,
+}: {
+  pipelineReady: boolean;
+  progress: Animated.Value;
+}) {
+  // Bucket phrases by category once per mount — the lookup happens
+  // every cycle so memoizing keeps re-renders cheap.
+  const phrasesByCategory = useMemo(() => {
+    const m: Record<InterstitialPhrase['category'], InterstitialPhrase[]> = {
+      doing: [], privacy: [], personality: [], reassurance: [],
+    };
+    for (const p of INTERSTITIAL_PHRASES) m[p.category].push(p);
+    return m;
+  }, []);
+
+  // Track which category to draw from next + the last phrase index
+  // shown for each category. lastByCategory prevents the same phrase
+  // repeating when a category comes back around.
+  const categoryIdxRef = useRef(0);
+  const lastByCategoryRef = useRef<Record<InterstitialPhrase['category'], number>>({
+    doing: -1, privacy: -1, personality: -1, reassurance: -1,
+  });
+  const [phrase, setPhrase] = useState<InterstitialPhrase>(() => {
+    const cat = INTERSTITIAL_CATEGORY_ORDER[0];
+    const pool = phrasesByCategory[cat];
+    return pool[0];
+  });
+
   const opacity = useRef(new Animated.Value(0)).current;
+  const markScale = useRef(new Animated.Value(1)).current;
+  const markOpacity = useRef(new Animated.Value(0.85)).current;
 
+  function pickNext(): InterstitialPhrase {
+    const cat = INTERSTITIAL_CATEGORY_ORDER[categoryIdxRef.current];
+    const pool = phrasesByCategory[cat];
+    const last = lastByCategoryRef.current[cat];
+    // Random index in pool, excluding the index used last time.
+    let nextLocal: number;
+    if (pool.length === 1) {
+      nextLocal = 0;
+    } else {
+      do { nextLocal = Math.floor(Math.random() * pool.length); }
+      while (nextLocal === last);
+    }
+    lastByCategoryRef.current[cat] = nextLocal;
+    categoryIdxRef.current = (categoryIdxRef.current + 1) % INTERSTITIAL_CATEGORY_ORDER.length;
+    return pool[nextLocal];
+  }
+
+  // Phrase-cycle loop. Fade in → hold → fade out → swap phrase → repeat.
   useEffect(() => {
     let cancelled = false;
     const cycle = () => {
       if (cancelled) return;
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.delay(2000),
-        Animated.timing(opacity, { toValue: 0, duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 350, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.delay(3000),
+        Animated.timing(opacity, { toValue: 0, duration: 350, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ]).start(({ finished }) => {
         if (cancelled || !finished) return;
-        setIdx((i) => (i + 1) % INTERSTITIAL_PHRASES.length);
+        setPhrase(pickNext());
         cycle();
       });
     };
     cycle();
     return () => { cancelled = true; };
-  }, [opacity]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Gentle pulse on the Conductor mark — 2.4s loop, scale 1→1.06,
+  // opacity 0.85→1. Native driver so it doesn't compete with JS.
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(markScale, { toValue: 1.06, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(markScale, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(markOpacity, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(markOpacity, { toValue: 0.85, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [markScale, markOpacity]);
+
+  const progressWidth = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+    extrapolate: 'clamp',
+  });
 
   return (
     <View style={styles.interstitialWrap}>
-      <ActivityIndicator color={BRASS} />
-      <Animated.Text style={[styles.interstitialPhrase, { opacity }]}>
-        {pipelineReady ? 'Ready.' : INTERSTITIAL_PHRASES[idx]}
-      </Animated.Text>
+      <Animated.View
+        style={[
+          styles.interstitialMark,
+          { transform: [{ scale: markScale }], opacity: markOpacity },
+        ]}>
+        <Text style={styles.interstitialMarkText}>C</Text>
+      </Animated.View>
+
+      {pipelineReady ? (
+        <Text style={styles.interstitialReady}>Ready.</Text>
+      ) : (
+        <Animated.View style={{ opacity }}>
+          <Text style={styles.interstitialCategory}>
+            {INTERSTITIAL_CATEGORY_LABEL[phrase.category]}
+          </Text>
+          <Text style={styles.interstitialPhrase}>{phrase.text}</Text>
+        </Animated.View>
+      )}
+
+      <View style={styles.interstitialProgressTrack}>
+        <Animated.View
+          style={[styles.interstitialProgressFill, { width: progressWidth }]}
+        />
+      </View>
     </View>
   );
 }
@@ -1301,18 +1444,67 @@ const styles = StyleSheet.create({
   dotDone: { borderColor: BRASS, backgroundColor: 'transparent' },
 
   interstitialWrap: {
-    paddingVertical: 80,
+    paddingVertical: 60,
+    paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 28,
+    minHeight: 360,
+  },
+  interstitialMark: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: BRASS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: BRASS,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  interstitialMarkText: {
+    color: BG,
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  interstitialCategory: {
+    color: BRASS,
+    fontSize: 10,
+    letterSpacing: 2.4,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 10,
+    textTransform: 'uppercase',
   },
   interstitialPhrase: {
     color: OFF_WHITE,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '300',
     textAlign: 'center',
     letterSpacing: 0.3,
-    lineHeight: 24,
-    maxWidth: 280,
+    lineHeight: 26,
+    maxWidth: 300,
+  },
+  interstitialReady: {
+    color: BRASS,
+    fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  interstitialProgressTrack: {
+    width: '70%',
+    maxWidth: 240,
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 1,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  interstitialProgressFill: {
+    height: '100%',
+    backgroundColor: BRASS,
   },
 });
