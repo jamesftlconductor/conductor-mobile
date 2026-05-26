@@ -730,36 +730,121 @@ const WHEEL_BASE: WheelItem[] = [
 
 // CollapsibleNavBar — replaces the legacy InfiniteLedger wheel.
 // Collapsed: a thin 36px strip at the bottom with a center grab
-// handle and an urgent-count badge when > 0. Expanded: 160px tall
-// horizontal row of 5 nav options (Horizon / Programme / Calendar /
-// Missed Cues / The Conductor). Toggle on tap of the handle area;
-// swipe up expands, swipe down collapses. Spring animation on the
+// handle and an urgent-count badge when > 0. Expanded: ~240px tall:
+// scrollable signals list on top, hairline divider, customizable
+// nav row below. Toggle on tap of the handle area; swipe up
+// expands, swipe down collapses. LayoutAnimation drives the
 // height transition.
-type NavOption = {
-  key: string;
+//
+// Customization: long-press any nav icon to enter edit mode. Each
+// icon shows ✕ to remove. A "+" tile appears to add from the
+// destination catalog. Selection persists in AsyncStorage under
+// the key `hoverId:navItems` as a JSON array of catalog keys.
+
+type NavCatalogEntry = {
   icon: string;
   label: string;
   route?: string;
-  action?: () => void;
+  isConductor?: boolean;
 };
+
+const NAV_CATALOG: Record<string, NavCatalogEntry> = {
+  horizon:     { icon: '📅', label: 'Horizon',      route: '/horizon' },
+  programme:   { icon: '📋', label: 'Programme',    route: '/programme' },
+  calendar:    { icon: '🗓',  label: 'Calendar',     route: '/calendar' },
+  cues:        { icon: '⚠️', label: 'Missed Cues',  route: '/missed-cues' },
+  conductor:   { icon: '◉',  label: 'The Conductor', isConductor: true },
+  vault:       { icon: '🗂',  label: 'Vault',        route: '/vault' },
+  crew:        { icon: '👨‍👩‍👧', label: 'Crew',     route: '/crew' },
+  compass:     { icon: '🧭', label: 'Compass',      route: '/compass' },
+  journal:     { icon: '📓', label: 'Journal',      route: '/journal' },
+  inventory:   { icon: '🏠', label: 'Inventory',    route: '/inventory' },
+  providers:   { icon: '🔧', label: 'Providers',    route: '/providers' },
+  network:     { icon: '🕸',  label: 'Network',      route: '/network' },
+  communicate: { icon: '💬', label: 'Communicate',  route: '/communicate' },
+  directory:   { icon: '📇', label: 'Directory',    route: '/directory' },
+};
+
+const DEFAULT_NAV_KEYS = ['horizon', 'programme', 'calendar', 'cues', 'conductor'];
+const NAV_STORAGE_KEY = 'hoverId:navItems';
+
+// Sort active signals by urgency for the expanded list. ETA in the
+// past or within today comes first, then soonest future ETAs, then
+// no-ETA signals last. Stable order within tie-buckets so the list
+// doesn't jitter on tick.
+function sortByUrgency(signals: Signal[]): Signal[] {
+  const now = Date.now();
+  const rank = (s: Signal) => {
+    if (!s.eta) return Number.POSITIVE_INFINITY;
+    const t = Date.parse(s.eta);
+    if (isNaN(t)) return Number.POSITIVE_INFINITY;
+    return t - now;
+  };
+  return [...signals].sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    // Past/imminent first.
+    if (ra < 0 && rb >= 0) return -1;
+    if (rb < 0 && ra >= 0) return 1;
+    return ra - rb;
+  });
+}
 
 function CollapsibleNavBar({
   bottomInset,
   urgentCount,
   opacity,
   onOpenConductor,
+  signals,
+  onSignalPress,
 }: {
   bottomInset: number;
   urgentCount: number;
   opacity: Animated.AnimatedInterpolation<number> | Animated.Value;
   onOpenConductor: () => void;
+  signals: Signal[];
+  onSignalPress: (s: Signal) => void;
 }) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
 
   const COLLAPSED_H = 36;
-  const EXPANDED_H = 160;
+  const EXPANDED_H = 250;
   const [expanded, setExpanded] = useState(false);
+  // Edit mode toggles via long-press. ✕ overlay on each icon to
+  // remove; tile labelled + at the end opens the add picker.
+  const [editMode, setEditMode] = useState(false);
+  const [showAddPicker, setShowAddPicker] = useState(false);
+  // Persisted nav selection. Defaults applied while AsyncStorage
+  // load is in flight; first-install users see the spec defaults.
+  const [navKeys, setNavKeys] = useState<string[]>(DEFAULT_NAV_KEYS);
+  const [navKeysLoaded, setNavKeysLoaded] = useState(false);
+
+  // Load on mount.
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(NAV_STORAGE_KEY)
+      .then((raw) => {
+        if (cancelled) return;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.every((k) => typeof k === 'string' && NAV_CATALOG[k])) {
+              setNavKeys(parsed);
+            }
+          } catch { /* fall through to defaults */ }
+        }
+        setNavKeysLoaded(true);
+      })
+      .catch(() => setNavKeysLoaded(true));
+    return () => { cancelled = true; };
+  }, []);
+
+  // Save whenever navKeys changes after initial load.
+  useEffect(() => {
+    if (!navKeysLoaded) return;
+    AsyncStorage.setItem(NAV_STORAGE_KEY, JSON.stringify(navKeys)).catch(() => {});
+  }, [navKeys, navKeysLoaded]);
 
   // LayoutAnimation handles the height transition without any
   // Animated.Value. This eliminates the cross-driver conflict
@@ -769,6 +854,10 @@ function CollapsibleNavBar({
   function toggleBar(next?: boolean) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpanded((v) => (typeof next === 'boolean' ? next : !v));
+    if (next === false) {
+      setEditMode(false);
+      setShowAddPicker(false);
+    }
   }
 
   // Pan gesture — vertical swipe toggles. Threshold 30px in either
@@ -781,32 +870,46 @@ function CollapsibleNavBar({
       else if (e.translationY > 30) toggleBar(false);
     });
 
-  const options: NavOption[] = [
-    { key: 'horizon',    icon: '📅', label: 'Horizon',    route: '/horizon' },
-    { key: 'programme',  icon: '📋', label: 'Programme',  route: '/programme' },
-    { key: 'calendar',   icon: '🗓',  label: 'Calendar',   route: '/calendar' },
-    { key: 'cues',       icon: '⚠️', label: 'Missed Cues', route: '/missed-cues' },
-    { key: 'conductor',  icon: '◉',  label: 'The Conductor', action: onOpenConductor },
-  ];
-
-  function tapOption(opt: NavOption) {
+  function tapNav(key: string) {
+    if (editMode) return; // edit mode disables navigation taps
+    const entry = NAV_CATALOG[key];
+    if (!entry) return;
     toggleBar(false);
-    if (opt.action) opt.action();
-    else if (opt.route) {
-      // brief delay so the collapse animation reads visually
-      // before the route push tears down the screen.
-      setTimeout(() => router.push(opt.route as never), 160);
+    if (entry.isConductor) {
+      onOpenConductor();
+    } else if (entry.route) {
+      setTimeout(() => router.push(entry.route as never), 160);
     }
   }
 
+  function removeNav(key: string) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setNavKeys((prev) => prev.filter((k) => k !== key));
+  }
+
+  function addNav(key: string) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setNavKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    setShowAddPicker(false);
+  }
+
+  function tapSignal(s: Signal) {
+    toggleBar(false);
+    // Open Finale after the collapse animation has a moment to read.
+    setTimeout(() => onSignalPress(s), 160);
+  }
+
+  const sortedSignals = useMemo(() => sortByUrgency(signals || []), [signals]);
+  const availableToAdd = useMemo(
+    () => Object.keys(NAV_CATALOG).filter((k) => !navKeys.includes(k)),
+    [navKeys]
+  );
+
   return (
     // Outer Animated.View handles `opacity` only — that's the parent
-    // screen's native-driven legendOpacity fade. It's never paired
-    // with any JS-driven Animated.Value, so the cross-driver
-    // promotion that broke the previous build can't happen.
-    //
-    // Inner View uses LayoutAnimation for the expand/collapse. No
-    // Animated.Value, no shared nodes, no driver to argue with.
+    // screen's native-driven legendOpacity fade. Inner View uses
+    // LayoutAnimation for height + add/remove transitions; no
+    // Animated.Value on this subtree.
     <Animated.View
       style={[styles.collapsibleOuter, { opacity }]}
       pointerEvents="box-none">
@@ -830,26 +933,133 @@ function CollapsibleNavBar({
                 <Text style={styles.collapsibleBadgeText}>{urgentCount}</Text>
               </View>
             ) : null}
+            {editMode ? (
+              <Pressable
+                onPress={() => setEditMode(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.collapsibleDone}>
+                <Text style={[styles.collapsibleDoneText, { color: accentColor }]}>Done</Text>
+              </Pressable>
+            ) : null}
           </Pressable>
-          {/* Expanded options — only mounted when expanded. The
-              LayoutAnimation pass animates create/destroy via the
-              easeInEaseOut preset, so the options fade in alongside
-              the height transition without needing an Animated.Value
-              for opacity. */}
           {expanded ? (
-            <View style={styles.collapsibleOptions}>
-              {options.map((opt) => (
-                <TouchableOpacity
-                  key={opt.key}
-                  onPress={() => tapOption(opt)}
-                  activeOpacity={0.6}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  style={styles.collapsibleOption}>
-                  <Text style={styles.collapsibleOptionIcon}>{opt.icon}</Text>
-                  <Text style={styles.collapsibleOptionLabel}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <>
+              {/* Signals scroll list — most urgent first. Tapping a
+                  row opens the FinaleSheet via the parent. Empty
+                  state shows a muted "All clear." line so the panel
+                  doesn't render as a void. */}
+              <View style={styles.collapsibleSignalsWrap}>
+                {sortedSignals.length === 0 ? (
+                  <Text style={styles.collapsibleEmpty}>All clear.</Text>
+                ) : (
+                  <FlatList
+                    data={sortedSignals}
+                    keyExtractor={(s) => String(s.id)}
+                    showsVerticalScrollIndicator
+                    keyboardShouldPersistTaps="handled"
+                    renderItem={({ item }) => {
+                      const meta = TYPE_META[item.type || 'unknown'] || TYPE_META.unknown;
+                      const desc = (item.description || '').slice(0, 45);
+                      const urgent =
+                        item.eta && !isNaN(Date.parse(item.eta))
+                          ? Date.parse(item.eta) - Date.now() < 24 * 60 * 60 * 1000
+                          : false;
+                      return (
+                        <TouchableOpacity
+                          onPress={() => tapSignal(item)}
+                          activeOpacity={0.6}
+                          style={styles.collapsibleSignalRow}>
+                          <Text style={styles.collapsibleSignalEmoji}>{meta.emoji}</Text>
+                          <Text
+                            numberOfLines={1}
+                            style={styles.collapsibleSignalDesc}>
+                            {desc}
+                          </Text>
+                          <View
+                            style={[
+                              styles.collapsibleSignalDot,
+                              { backgroundColor: urgent ? '#ef4444' : meta.color },
+                            ]}
+                          />
+                        </TouchableOpacity>
+                      );
+                    }}
+                  />
+                )}
+              </View>
+
+              <View style={styles.collapsibleDivider} />
+
+              {/* Nav row — customizable. Long-press any icon to
+                  enter edit mode; ✕ overlay removes that item. A "+"
+                  tile appears at the end in edit mode for adding
+                  new destinations from NAV_CATALOG. */}
+              <View style={styles.collapsibleOptions}>
+                {navKeys.map((key) => {
+                  const entry = NAV_CATALOG[key];
+                  if (!entry) return null;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      onPress={() => tapNav(key)}
+                      onLongPress={() => setEditMode(true)}
+                      delayLongPress={350}
+                      activeOpacity={0.6}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      style={styles.collapsibleOption}>
+                      <Text style={styles.collapsibleOptionIcon}>{entry.icon}</Text>
+                      <Text style={styles.collapsibleOptionLabel} numberOfLines={1}>
+                        {entry.label}
+                      </Text>
+                      {editMode ? (
+                        <Pressable
+                          onPress={() => removeNav(key)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.collapsibleRemoveBadge}>
+                          <Text style={styles.collapsibleRemoveBadgeText}>✕</Text>
+                        </Pressable>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+                {editMode && availableToAdd.length > 0 ? (
+                  <TouchableOpacity
+                    onPress={() => setShowAddPicker((v) => !v)}
+                    activeOpacity={0.6}
+                    style={[styles.collapsibleOption, styles.collapsibleAddTile]}>
+                    <Text style={[styles.collapsibleOptionIcon, { color: accentColor }]}>＋</Text>
+                    <Text style={[styles.collapsibleOptionLabel, { color: accentColor }]}>Add</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* Add picker — inline strip listing destinations not
+                  yet in nav. Tap one → added. Stays open until the
+                  user dismisses or taps another available item. */}
+              {editMode && showAddPicker ? (
+                <View style={styles.collapsibleAddPicker}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}>
+                    {availableToAdd.map((key) => {
+                      const entry = NAV_CATALOG[key];
+                      return (
+                        <TouchableOpacity
+                          key={key}
+                          onPress={() => addNav(key)}
+                          activeOpacity={0.6}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          style={styles.collapsibleAddOption}>
+                          <Text style={styles.collapsibleAddIcon}>{entry.icon}</Text>
+                          <Text style={styles.collapsibleAddLabel}>{entry.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              ) : null}
+            </>
           ) : null}
         </View>
       </GestureDetector>
@@ -1724,6 +1934,8 @@ export default function HoverScreen() {
           urgentCount={urgentCount}
           opacity={legendOpacity}
           onOpenConductor={() => openConductorSheet('hover')}
+          signals={signals}
+          onSignalPress={setSelected}
         />
 
         <AddSignalSheet
@@ -2001,7 +2213,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     alignItems: 'center',
     paddingTop: 8,
     paddingHorizontal: 8,
-    flex: 1,
+    paddingBottom: 4,
   },
   collapsibleOption: {
     alignItems: 'center',
@@ -2009,6 +2221,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 8,
     paddingHorizontal: 6,
     minWidth: 56,
+    position: 'relative',
   },
   collapsibleOptionIcon: {
     fontSize: 22,
@@ -2016,10 +2229,113 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   collapsibleOptionLabel: {
     color: theme.muted,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     letterSpacing: 0.2,
     textAlign: 'center',
+  },
+  // Signals list (expanded). Caps at 120px so the nav row + add
+  // picker have guaranteed real estate; FlatList scrolls inside.
+  collapsibleSignalsWrap: {
+    maxHeight: 120,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  collapsibleEmpty: {
+    color: theme.muted,
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 16,
+  },
+  collapsibleSignalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  collapsibleSignalEmoji: {
+    fontSize: 16,
+    width: 22,
+    textAlign: 'center',
+  },
+  collapsibleSignalDesc: {
+    flex: 1,
+    color: theme.text,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  collapsibleSignalDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  collapsibleDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginHorizontal: 12,
+  },
+  // Edit-mode chrome — ✕ remove badges + Done button + add picker.
+  collapsibleRemoveBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapsibleRemoveBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 12,
+  },
+  collapsibleAddTile: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: accentColor,
+    borderRadius: 10,
+    borderStyle: 'dashed',
+  },
+  collapsibleDone: {
+    position: 'absolute',
+    right: 14,
+    top: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  collapsibleDoneText: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  collapsibleAddPicker: {
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  collapsibleAddOption: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    minWidth: 70,
+  },
+  collapsibleAddIcon: {
+    fontSize: 18,
+    marginBottom: 4,
+  },
+  collapsibleAddLabel: {
+    color: theme.muted,
+    fontSize: 10,
+    letterSpacing: 0.2,
   },
   wheelIndicator: {
     // Short vertical tick marking the snap zone — sits across the wheel's
