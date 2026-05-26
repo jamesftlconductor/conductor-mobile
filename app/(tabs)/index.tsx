@@ -14,7 +14,9 @@ import { Minimap } from '@/components/Minimap';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
+import { useDiscovered } from '@/hooks/useDiscovered';
 import { getUserId, useUserId } from '@/hooks/useUserId';
+import { FeatureIntroduction } from '@/components/FeatureIntroduction';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
@@ -898,6 +900,24 @@ export default function TakeoffScreen() {
   // unidentified users to /onboarding; this is the secondary belt for
   // the brief few frames before the redirect fires.
   if (!userId) return null;
+  // Feature-discovery dimming state. Each of these surfaces renders
+  // at 45% opacity until the user taps it once and reads the intro,
+  // then permanently lights up. introFeatureId tracks which intro
+  // modal is currently open; clearing it on dismiss flips the
+  // discovered state for that feature.
+  const [pulseDiscovered, markPulseDiscovered] = useDiscovered('pulse');
+  const [signalsDiscovered, markSignalsDiscovered] = useDiscovered('signals');
+  const [minimapDiscovered, markMinimapDiscovered] = useDiscovered('minimap');
+  const [feedbackDiscovered, markFeedbackDiscovered] = useDiscovered('feedback');
+  const [introFeatureId, setIntroFeatureId] = useState<string | null>(null);
+  function dismissIntro() {
+    const id = introFeatureId;
+    setIntroFeatureId(null);
+    if (id === 'pulse') markPulseDiscovered();
+    else if (id === 'signals') markSignalsDiscovered();
+    else if (id === 'minimap') markMinimapDiscovered();
+    else if (id === 'feedback') markFeedbackDiscovered();
+  }
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
   const [transparency, setTransparency] = useState<string | null>(null);
@@ -1596,10 +1616,24 @@ export default function TakeoffScreen() {
         <ScrollView
           style={styles.scrollFlex}
           contentContainerStyle={styles.content}>
-          <Minimap
-            urgentCount={urgentCount}
-            onPress={() => openConductorSheet('ground')}
-          />
+          {/* Minimap with discovery dimming. When undiscovered, an
+              outer Pressable catches the tap and shows the intro
+              modal; the Minimap inside is pointerEvents:none so its
+              own onPress doesn't fire. */}
+          {minimapDiscovered ? (
+            <Minimap
+              urgentCount={urgentCount}
+              onPress={() => openConductorSheet('ground')}
+            />
+          ) : (
+            <Pressable
+              onPress={() => setIntroFeatureId('minimap')}
+              style={{ opacity: 0.45 }}>
+              <View pointerEvents="none">
+                <Minimap urgentCount={urgentCount} onPress={() => {}} />
+              </View>
+            </Pressable>
+          )}
           <View style={styles.header}>
             <Text style={[styles.greeting, { color: bandTheme.greeting }]}>
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
@@ -1613,10 +1647,13 @@ export default function TakeoffScreen() {
             // card via LayoutAnimation. Card sections render from
             // pulseData with per-field null guards.
             <TouchableOpacity
-              onPress={togglePulse}
+              onPress={() => {
+                if (!pulseDiscovered) { setIntroFeatureId('pulse'); return; }
+                togglePulse();
+              }}
               activeOpacity={0.6}
               hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
-              style={styles.pulseWrap}>
+              style={[styles.pulseWrap, { opacity: pulseDiscovered ? 1 : 0.45 }]}>
               <Text style={styles.pulseLabel}>THE PULSE</Text>
               <Text style={styles.pulseText}>{pulse}</Text>
               {showPulseTip ? (
@@ -1786,7 +1823,12 @@ export default function TakeoffScreen() {
             </View>
           ) : (
             <View style={styles.briefContainer}>
-              <Text style={[styles.brief, { color: bandTheme.brief }]}>
+              <Text
+                style={[
+                  styles.brief,
+                  { color: bandTheme.brief },
+                  !signalsDiscovered && { opacity: 0.45 },
+                ]}>
                 {(segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment]).map((seg, i) => {
                   if (seg.type === 'signal') {
                     const color = (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
@@ -1799,13 +1841,17 @@ export default function TakeoffScreen() {
                     return (
                       <Text
                         key={i}
-                        onPress={() => handleSignalTap(seg.signalId)}
-                        onLongPress={() =>
+                        onPress={() => {
+                          if (!signalsDiscovered) { setIntroFeatureId('signals'); return; }
+                          handleSignalTap(seg.signalId);
+                        }}
+                        onLongPress={() => {
+                          if (!signalsDiscovered) { setIntroFeatureId('signals'); return; }
                           setQuickActionTarget({
                             signalId: seg.signalId,
                             phrase: seg.content || '',
-                          })
-                        }
+                          });
+                        }}
                         style={{
                           textDecorationLine: acted === 'done' ? 'line-through' : 'underline',
                           textDecorationColor: color,
@@ -2275,10 +2321,17 @@ export default function TakeoffScreen() {
             // signing off on the brief. ✓ is always white; ✗ defaults to
             // muted and brightens when chosen. Both dim to 0.2 when their
             // sibling is the active selection.
-            <View style={styles.feedbackSignature}>
+            <View
+              style={[
+                styles.feedbackSignature,
+                !feedbackDiscovered && { opacity: 0.45 },
+              ]}>
               <Text style={styles.feedbackSigPrompt}>Was this helpful?</Text>
               <TouchableOpacity
-                onPress={() => handleFeedback('up')}
+                onPress={() => {
+                  if (!feedbackDiscovered) { setIntroFeatureId('feedback'); return; }
+                  handleFeedback('up');
+                }}
                 activeOpacity={0.7}
                 hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
                 <Text
@@ -2290,7 +2343,10 @@ export default function TakeoffScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => handleFeedback('down')}
+                onPress={() => {
+                  if (!feedbackDiscovered) { setIntroFeatureId('feedback'); return; }
+                  handleFeedback('down');
+                }}
                 activeOpacity={0.7}
                 hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
                 <Text
@@ -2348,6 +2404,11 @@ export default function TakeoffScreen() {
           Optimistic UI: chip styling flips immediately, API call fires
           in the background, errors silently revert via the next brief
           fetch. */}
+      <FeatureIntroduction
+        visible={introFeatureId != null}
+        featureId={introFeatureId || 'pulse'}
+        onDismiss={dismissIntro}
+      />
       <Modal
         visible={quickActionTarget != null}
         animationType="fade"

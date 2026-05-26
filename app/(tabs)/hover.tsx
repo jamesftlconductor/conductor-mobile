@@ -8,6 +8,7 @@ import {
   Easing,
   FlatList,
   Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -713,6 +714,134 @@ const WHEEL_BASE: WheelItem[] = [
   { kind: 'divider' },
   ...NAV_ITEMS,
 ];
+
+// CollapsibleNavBar — replaces the legacy InfiniteLedger wheel.
+// Collapsed: a thin 36px strip at the bottom with a center grab
+// handle and an urgent-count badge when > 0. Expanded: 160px tall
+// horizontal row of 5 nav options (Horizon / Programme / Calendar /
+// Missed Cues / The Conductor). Toggle on tap of the handle area;
+// swipe up expands, swipe down collapses. Spring animation on the
+// height transition.
+type NavOption = {
+  key: string;
+  icon: string;
+  label: string;
+  route?: string;
+  action?: () => void;
+};
+
+function CollapsibleNavBar({
+  bottomInset,
+  urgentCount,
+  opacity,
+  onOpenConductor,
+}: {
+  bottomInset: number;
+  urgentCount: number;
+  opacity: Animated.AnimatedInterpolation<number> | Animated.Value;
+  onOpenConductor: () => void;
+}) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+
+  const COLLAPSED_H = 36;
+  const EXPANDED_H = 160;
+  const [expanded, setExpanded] = useState(false);
+  const heightAnim = useRef(new Animated.Value(COLLAPSED_H)).current;
+
+  useEffect(() => {
+    Animated.spring(heightAnim, {
+      toValue: expanded ? EXPANDED_H : COLLAPSED_H,
+      damping: 14,
+      stiffness: 140,
+      mass: 0.9,
+      useNativeDriver: false,
+    }).start();
+  }, [expanded, heightAnim]);
+
+  // Pan gesture — vertical swipe toggles. Threshold 30px in either
+  // direction so a small finger-jitter doesn't trigger.
+  const pan = Gesture.Pan()
+    .activeOffsetY([-8, 8])
+    .runOnJS(true)
+    .onEnd((e) => {
+      if (e.translationY < -30) setExpanded(true);
+      else if (e.translationY > 30) setExpanded(false);
+    });
+
+  const options: NavOption[] = [
+    { key: 'horizon',    icon: '📅', label: 'Horizon',    route: '/horizon' },
+    { key: 'programme',  icon: '📋', label: 'Programme',  route: '/programme' },
+    { key: 'calendar',   icon: '🗓',  label: 'Calendar',   route: '/calendar' },
+    { key: 'cues',       icon: '⚠️', label: 'Missed Cues', route: '/missed-cues' },
+    { key: 'conductor',  icon: '◉',  label: 'The Conductor', action: onOpenConductor },
+  ];
+
+  function tapOption(opt: NavOption) {
+    setExpanded(false);
+    if (opt.action) opt.action();
+    else if (opt.route) {
+      // brief delay so the collapse animation reads visually
+      // before the route push tears down the screen.
+      setTimeout(() => router.push(opt.route as never), 120);
+    }
+  }
+
+  return (
+    <GestureDetector gesture={pan}>
+      <Animated.View
+        style={[
+          styles.collapsibleBar,
+          {
+            height: heightAnim,
+            paddingBottom: bottomInset,
+            opacity,
+          },
+        ]}>
+        {/* Handle area — full bar width, taps toggle expand/collapse. */}
+        <Pressable
+          onPress={() => setExpanded((v) => !v)}
+          style={styles.collapsibleHandleArea}
+          hitSlop={{ top: 4, bottom: 0, left: 0, right: 0 }}>
+          <View style={styles.collapsibleHandle} />
+          {urgentCount > 0 && !expanded ? (
+            <View style={styles.collapsibleBadge}>
+              <Text style={styles.collapsibleBadgeText}>{urgentCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+        {/* Expanded options — fade in once the bar grows past the
+            collapsed footprint. AnimatedValue interpolation maps the
+            shared height to opacity so the labels don't show through
+            the handle when nearly closed. */}
+        <Animated.View
+          style={[
+            styles.collapsibleOptions,
+            {
+              opacity: heightAnim.interpolate({
+                inputRange: [COLLAPSED_H, EXPANDED_H],
+                outputRange: [0, 1],
+                extrapolate: 'clamp',
+              }),
+            },
+          ]}
+          pointerEvents={expanded ? 'auto' : 'none'}>
+          {options.map((opt) => (
+            <TouchableOpacity
+              key={opt.key}
+              onPress={() => tapOption(opt)}
+              activeOpacity={0.6}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              style={styles.collapsibleOption}>
+              <Text style={styles.collapsibleOptionIcon}>{opt.icon}</Text>
+              <Text style={styles.collapsibleOptionLabel}>{opt.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </Animated.View>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
 
 function InfiniteLedger({
   bottomInset,
@@ -1576,14 +1705,11 @@ export default function HoverScreen() {
           <Ripple key={r.id} cx={cx} cy={cy} color={r.color} delay={r.delay} />
         ))}
 
-        <InfiniteLedger
+        <CollapsibleNavBar
           bottomInset={insets.bottom}
-          width={width}
-          activeTypeKey={filterTypeKey}
+          urgentCount={urgentCount}
           opacity={legendOpacity}
-          onTapType={handleLegendTap}
-          onYesterday={() => setShowYesterday(true)}
-          onAddSignal={() => setShowAddSignal(true)}
+          onOpenConductor={() => openConductorSheet('hover')}
         />
 
         <AddSignalSheet
@@ -1804,6 +1930,76 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     bottom: 0,
     backgroundColor: BG,
     paddingTop: 12,
+  },
+  // Collapsible nav bar (replaces InfiniteLedger). The wrapper is
+  // height-animated; styles only set the visual chrome and let the
+  // Animated.Value control vertical size.
+  collapsibleBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: theme.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.10)',
+    overflow: 'hidden',
+  },
+  collapsibleHandleArea: {
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    position: 'relative',
+  },
+  collapsibleHandle: {
+    width: 40,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: theme.muted,
+    opacity: 0.5,
+  },
+  collapsibleBadge: {
+    position: 'absolute',
+    right: 16,
+    top: 8,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapsibleBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  collapsibleOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingHorizontal: 8,
+    flex: 1,
+  },
+  collapsibleOption: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    minWidth: 56,
+  },
+  collapsibleOptionIcon: {
+    fontSize: 22,
+    marginBottom: 6,
+  },
+  collapsibleOptionLabel: {
+    color: theme.muted,
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+    textAlign: 'center',
   },
   wheelIndicator: {
     // Short vertical tick marking the snap zone — sits across the wheel's
