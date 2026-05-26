@@ -8,11 +8,14 @@ import {
   Easing,
   FlatList,
   Image,
+  LayoutAnimation,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  UIManager,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -671,6 +674,16 @@ function SignalDot({
   );
 }
 
+// LayoutAnimation needs an explicit opt-in on Android. iOS enables
+// it by default. CollapsibleNavBar uses LayoutAnimation for its
+// expand/collapse so we don't have to share an Animated.Value
+// between native-driven (legendOpacity) and JS-driven (height)
+// paths — that combination throws "attempting to run JS driven
+// animation on animated node that has been moved to native".
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
+
 const WHEEL_ITEM = 60;
 
 const REPEAT_COUNT = 500;
@@ -747,16 +760,16 @@ function CollapsibleNavBar({
   const COLLAPSED_H = 36;
   const EXPANDED_H = 160;
   const [expanded, setExpanded] = useState(false);
-  const heightAnim = useRef(new Animated.Value(COLLAPSED_H)).current;
 
-  useEffect(() => {
-    Animated.spring(heightAnim, {
-      toValue: expanded ? EXPANDED_H : COLLAPSED_H,
-      tension: 180,
-      friction: 26,
-      useNativeDriver: false,
-    }).start();
-  }, [expanded, heightAnim]);
+  // LayoutAnimation handles the height transition without any
+  // Animated.Value. This eliminates the cross-driver conflict
+  // between the native-driven `opacity` (from legendOpacity, set
+  // by the parent screen) and any JS-driven Animated.Value on
+  // the same view subtree.
+  function toggleBar(next?: boolean) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((v) => (typeof next === 'boolean' ? next : !v));
+  }
 
   // Pan gesture — vertical swipe toggles. Threshold 30px in either
   // direction so a small finger-jitter doesn't trigger.
@@ -764,8 +777,8 @@ function CollapsibleNavBar({
     .activeOffsetY([-8, 8])
     .runOnJS(true)
     .onEnd((e) => {
-      if (e.translationY < -30) setExpanded(true);
-      else if (e.translationY > 30) setExpanded(false);
+      if (e.translationY < -30) toggleBar(true);
+      else if (e.translationY > 30) toggleBar(false);
     });
 
   const options: NavOption[] = [
@@ -777,36 +790,38 @@ function CollapsibleNavBar({
   ];
 
   function tapOption(opt: NavOption) {
-    setExpanded(false);
+    toggleBar(false);
     if (opt.action) opt.action();
     else if (opt.route) {
       // brief delay so the collapse animation reads visually
       // before the route push tears down the screen.
-      setTimeout(() => router.push(opt.route as never), 120);
+      setTimeout(() => router.push(opt.route as never), 160);
     }
   }
 
   return (
-    // Outer Animated.View — handles `opacity` only. The legendOpacity
-    // value passed in is driven natively (useNativeDriver: true) by
-    // the parent screen's expandedRing fade. Mixing it on the same
-    // Animated.View as a JS-driven `height` (useNativeDriver: false)
-    // promotes the entire node to native and then throws "attempting
-    // to run JS driven animation on animated node that has been
-    // moved to native". Splitting keeps the height value safely
-    // JS-driven on its own inner node.
+    // Outer Animated.View handles `opacity` only — that's the parent
+    // screen's native-driven legendOpacity fade. It's never paired
+    // with any JS-driven Animated.Value, so the cross-driver
+    // promotion that broke the previous build can't happen.
+    //
+    // Inner View uses LayoutAnimation for the expand/collapse. No
+    // Animated.Value, no shared nodes, no driver to argue with.
     <Animated.View
       style={[styles.collapsibleOuter, { opacity }]}
       pointerEvents="box-none">
       <GestureDetector gesture={pan}>
-        <Animated.View
+        <View
           style={[
             styles.collapsibleBar,
-            { height: heightAnim, paddingBottom: bottomInset },
+            {
+              height: expanded ? EXPANDED_H : COLLAPSED_H,
+              paddingBottom: bottomInset,
+            },
           ]}>
           {/* Handle area — full bar width, taps toggle expand/collapse. */}
           <Pressable
-            onPress={() => setExpanded((v) => !v)}
+            onPress={() => toggleBar()}
             style={styles.collapsibleHandleArea}
             hitSlop={{ top: 4, bottom: 0, left: 0, right: 0 }}>
             <Text style={styles.collapsibleHandle}>···</Text>
@@ -816,38 +831,27 @@ function CollapsibleNavBar({
               </View>
             ) : null}
           </Pressable>
-          {/* Expanded options — fade in once the bar grows past the
-              collapsed footprint. AnimatedValue interpolation maps the
-              shared height to opacity so the labels don't show through
-              the handle when nearly closed. heightAnim is JS-driven,
-              so this derived opacity inherits JS driving — consistent
-              with the parent inner node and avoids any cross-driver
-              promotion. */}
-          <Animated.View
-            style={[
-              styles.collapsibleOptions,
-              {
-                opacity: heightAnim.interpolate({
-                  inputRange: [COLLAPSED_H, EXPANDED_H],
-                  outputRange: [0, 1],
-                  extrapolate: 'clamp',
-                }),
-              },
-            ]}
-            pointerEvents={expanded ? 'auto' : 'none'}>
-            {options.map((opt) => (
-              <TouchableOpacity
-                key={opt.key}
-                onPress={() => tapOption(opt)}
-                activeOpacity={0.6}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                style={styles.collapsibleOption}>
-                <Text style={styles.collapsibleOptionIcon}>{opt.icon}</Text>
-                <Text style={styles.collapsibleOptionLabel}>{opt.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </Animated.View>
-        </Animated.View>
+          {/* Expanded options — only mounted when expanded. The
+              LayoutAnimation pass animates create/destroy via the
+              easeInEaseOut preset, so the options fade in alongside
+              the height transition without needing an Animated.Value
+              for opacity. */}
+          {expanded ? (
+            <View style={styles.collapsibleOptions}>
+              {options.map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => tapOption(opt)}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  style={styles.collapsibleOption}>
+                  <Text style={styles.collapsibleOptionIcon}>{opt.icon}</Text>
+                  <Text style={styles.collapsibleOptionLabel}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </View>
       </GestureDetector>
     </Animated.View>
   );
