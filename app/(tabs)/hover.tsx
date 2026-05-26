@@ -787,58 +787,69 @@ function CollapsibleNavBar({
   }
 
   return (
-    <GestureDetector gesture={pan}>
-      <Animated.View
-        style={[
-          styles.collapsibleBar,
-          {
-            height: heightAnim,
-            paddingBottom: bottomInset,
-            opacity,
-          },
-        ]}>
-        {/* Handle area — full bar width, taps toggle expand/collapse. */}
-        <Pressable
-          onPress={() => setExpanded((v) => !v)}
-          style={styles.collapsibleHandleArea}
-          hitSlop={{ top: 4, bottom: 0, left: 0, right: 0 }}>
-          <Text style={styles.collapsibleHandle}>···</Text>
-          {urgentCount > 0 && !expanded ? (
-            <View style={styles.collapsibleBadge}>
-              <Text style={styles.collapsibleBadgeText}>{urgentCount}</Text>
-            </View>
-          ) : null}
-        </Pressable>
-        {/* Expanded options — fade in once the bar grows past the
-            collapsed footprint. AnimatedValue interpolation maps the
-            shared height to opacity so the labels don't show through
-            the handle when nearly closed. */}
+    // Outer Animated.View — handles `opacity` only. The legendOpacity
+    // value passed in is driven natively (useNativeDriver: true) by
+    // the parent screen's expandedRing fade. Mixing it on the same
+    // Animated.View as a JS-driven `height` (useNativeDriver: false)
+    // promotes the entire node to native and then throws "attempting
+    // to run JS driven animation on animated node that has been
+    // moved to native". Splitting keeps the height value safely
+    // JS-driven on its own inner node.
+    <Animated.View
+      style={[styles.collapsibleOuter, { opacity }]}
+      pointerEvents="box-none">
+      <GestureDetector gesture={pan}>
         <Animated.View
           style={[
-            styles.collapsibleOptions,
-            {
-              opacity: heightAnim.interpolate({
-                inputRange: [COLLAPSED_H, EXPANDED_H],
-                outputRange: [0, 1],
-                extrapolate: 'clamp',
-              }),
-            },
-          ]}
-          pointerEvents={expanded ? 'auto' : 'none'}>
-          {options.map((opt) => (
-            <TouchableOpacity
-              key={opt.key}
-              onPress={() => tapOption(opt)}
-              activeOpacity={0.6}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              style={styles.collapsibleOption}>
-              <Text style={styles.collapsibleOptionIcon}>{opt.icon}</Text>
-              <Text style={styles.collapsibleOptionLabel}>{opt.label}</Text>
-            </TouchableOpacity>
-          ))}
+            styles.collapsibleBar,
+            { height: heightAnim, paddingBottom: bottomInset },
+          ]}>
+          {/* Handle area — full bar width, taps toggle expand/collapse. */}
+          <Pressable
+            onPress={() => setExpanded((v) => !v)}
+            style={styles.collapsibleHandleArea}
+            hitSlop={{ top: 4, bottom: 0, left: 0, right: 0 }}>
+            <Text style={styles.collapsibleHandle}>···</Text>
+            {urgentCount > 0 && !expanded ? (
+              <View style={styles.collapsibleBadge}>
+                <Text style={styles.collapsibleBadgeText}>{urgentCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+          {/* Expanded options — fade in once the bar grows past the
+              collapsed footprint. AnimatedValue interpolation maps the
+              shared height to opacity so the labels don't show through
+              the handle when nearly closed. heightAnim is JS-driven,
+              so this derived opacity inherits JS driving — consistent
+              with the parent inner node and avoids any cross-driver
+              promotion. */}
+          <Animated.View
+            style={[
+              styles.collapsibleOptions,
+              {
+                opacity: heightAnim.interpolate({
+                  inputRange: [COLLAPSED_H, EXPANDED_H],
+                  outputRange: [0, 1],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ]}
+            pointerEvents={expanded ? 'auto' : 'none'}>
+            {options.map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                onPress={() => tapOption(opt)}
+                activeOpacity={0.6}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={styles.collapsibleOption}>
+                <Text style={styles.collapsibleOptionIcon}>{opt.icon}</Text>
+                <Text style={styles.collapsibleOptionLabel}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </Animated.View>
         </Animated.View>
-      </Animated.View>
-    </GestureDetector>
+      </GestureDetector>
+    </Animated.View>
   );
 }
 
@@ -1930,14 +1941,20 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     backgroundColor: BG,
     paddingTop: 12,
   },
-  // Collapsible nav bar (replaces InfiniteLedger). The wrapper is
-  // height-animated; styles only set the visual chrome and let the
-  // Animated.Value control vertical size.
-  collapsibleBar: {
+  // Collapsible nav bar (replaces InfiniteLedger).
+  // Outer wrapper owns positioning + opacity (native driver via the
+  // legendOpacity prop). Inner bar owns the height Animated.Value
+  // (JS driver — height can't be native). Keeping these on separate
+  // Animated.Views prevents the cross-driver promotion that throws
+  // "attempting to run JS driven animation on animated node that has
+  // been moved to native".
+  collapsibleOuter: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
+  },
+  collapsibleBar: {
     backgroundColor: theme.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.10)',
