@@ -11,7 +11,6 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider as ConductorThemeProvider } from '@/app/theme';
 import { ConductorSheet } from '@/components/ConductorSheet';
 import { DebugBanner } from '@/components/DebugBanner';
-import { DebugStorage } from '@/components/DebugStorage';
 import { setHouseholdId, setUserId, useUserId, useUserIdLoaded } from '@/hooks/useUserId';
 import { debugLog } from '@/utils/debugLog';
 import {
@@ -496,7 +495,6 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <DeepLinkHandler />
           <BootGuard />
-          <DebugStorage />
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
