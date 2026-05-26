@@ -392,45 +392,42 @@ export function ConductorSheet() {
                 {messages.map((m, idx) => {
                   if (m.role === 'user') {
                     return (
-                      <View key={m.id} style={styles.userBubbleRow}>
-                        <View style={styles.userBubble}>
-                          <Text style={styles.userBubbleText}>{m.text}</Text>
-                        </View>
+                      <View key={m.id} style={styles.userBubble}>
+                        <Text style={styles.userBubbleText}>{m.text}</Text>
                       </View>
                     );
                   }
                   // conductor
                   const isLastConductor = idx === messages.length - 1;
                   return (
-                    <View key={m.id} style={styles.conductorBubbleRow}>
-                      <View style={{ maxWidth: '75%' }}>
-                        {m.showLabel ? (
-                          <Text style={styles.conductorLabel}>THE CONDUCTOR</Text>
-                        ) : null}
-                        <View style={styles.conductorBubble}>
-                          <Text style={styles.conductorBubbleText}>{m.text}</Text>
-                        </View>
-                        {isLastConductor && actions?.action ? (
-                          <ActionRenderer
-                            action={actions.action}
-                            styles={styles}
-                            accentColor={accentColor}
-                            theme={theme}
-                            onNavigateOffer={actNavigateOffer}
-                            onConfirmSetting={actConfirmSetting}
-                            onResolveCandidate={actResolveCandidate}
-                            onGotIt={actGotIt}
-                          />
-                        ) : null}
+                    <View key={m.id} style={styles.conductorBlock}>
+                      {m.showLabel ? (
+                        <Text style={styles.conductorLabel}>THE CONDUCTOR</Text>
+                      ) : null}
+                      <View style={styles.conductorBubble}>
+                        <Text style={styles.conductorBubbleText}>{m.text}</Text>
                       </View>
+                      {isLastConductor && actions?.action ? (
+                        <ActionRenderer
+                          action={actions.action}
+                          styles={styles}
+                          accentColor={accentColor}
+                          theme={theme}
+                          onNavigateOffer={actNavigateOffer}
+                          onConfirmSetting={actConfirmSetting}
+                          onResolveCandidate={actResolveCandidate}
+                          onGotIt={actGotIt}
+                        />
+                      ) : null}
                     </View>
                   );
                 })}
                 {/* Loading dots render below the latest user message
                     while a request is in flight — placed AFTER the
-                    last message so it always sits at the bottom. */}
+                    last message so it always sits at the bottom.
+                    alignSelf:flex-start mirrors the conductor side. */}
                 {loading ? (
-                  <View style={styles.conductorBubbleRow}>
+                  <View style={{ alignSelf: 'flex-start' }}>
                     <LoadingDots accentColor={accentColor} />
                   </View>
                 ) : null}
@@ -720,32 +717,33 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     conversation: {
       flex: 1,
     },
-    // User bubble — right-aligned, accent background, asymmetric
-    // radius (sharp corner toward sender). max width 75% of column.
-    userBubbleRow: {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      marginTop: 10,
-      marginBottom: 4,
-    },
+    // User bubble — right-aligned via alignSelf, accent background,
+    // asymmetric radius (sharp corner toward sender, bottom-right).
+    // max width 75% of column.
     userBubble: {
+      alignSelf: 'flex-end',
       maxWidth: '75%',
       backgroundColor: accentColor,
-      borderRadius: 16,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
       borderBottomRightRadius: 4,
+      borderBottomLeftRadius: 16,
       paddingVertical: 10,
       paddingHorizontal: 14,
+      marginTop: 10,
+      marginBottom: 4,
     },
     userBubbleText: {
       color: '#ffffff',
       fontSize: 14,
       lineHeight: 20,
     },
-    // Conductor bubble — left-aligned, surface background, sharp
-    // corner toward sender (bottom-left).
-    conductorBubbleRow: {
-      flexDirection: 'row',
-      justifyContent: 'flex-start',
+    // Conductor block — left-aligned wrapper holding the label, the
+    // bubble, and any action-renderer surface. alignSelf:flex-start
+    // anchors it to the left without needing a parent row.
+    conductorBlock: {
+      alignSelf: 'flex-start',
+      maxWidth: '75%',
       marginTop: 4,
       marginBottom: 12,
     },
@@ -757,9 +755,14 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       marginBottom: 4,
       marginLeft: 4,
     },
+    // Conductor bubble — surface background per spec. A hairline
+    // border keeps it readable when the surface and sheet are the
+    // same theme color.
     conductorBubble: {
-      backgroundColor: theme.background,
-      borderRadius: 16,
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      borderBottomRightRadius: 16,
       borderBottomLeftRadius: 4,
       paddingVertical: 10,
       paddingHorizontal: 14,
