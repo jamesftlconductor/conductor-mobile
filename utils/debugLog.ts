@@ -10,13 +10,13 @@
 
 import { useSyncExternalStore } from 'react';
 
-export const DEBUG_BANNER_ENABLED = true;
+export const DEBUG_BANNER_ENABLED = false;
 
 // Full-screen AsyncStorage diagnostic overlay. Set to true to surface
 // the DebugStorage modal at root on every launch — useful when
 // BootGuard isn't behaving and we need to know exactly what keys the
 // app already has. Flip off after diagnosing.
-export const DEBUG_STORAGE_ENABLED = true;
+export const DEBUG_STORAGE_ENABLED = false;
 
 type Entry = {
   id: number;

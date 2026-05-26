@@ -354,23 +354,26 @@ export function ConductorSheet() {
             enabled={backdropActive}>
             <Pressable onPress={() => {}} style={{ flex: 1 }}>
               {/* Header */}
+              {/* Header — title pinned left, Done pinned right. The
+                  context pill takes a flex-shrinkable middle slot so
+                  long context labels can never push Done offscreen. */}
               <View style={styles.headerRow}>
-                <Text style={styles.title}>The Conductor</Text>
-                <View style={styles.headerRight}>
-                  <View style={styles.contextPill}>
-                    <Text style={styles.contextPillText}>📍 {contextLabelFor(context)}</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      closeConductorSheet();
-                    }}
-                    activeOpacity={0.6}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    style={styles.closeBtn}>
-                    <Text style={styles.closeBtnText}>Done</Text>
-                  </TouchableOpacity>
+                <Text style={styles.title} numberOfLines={1}>The Conductor</Text>
+                <View style={styles.contextPill}>
+                  <Text style={styles.contextPillText} numberOfLines={1}>
+                    📍 {contextLabelFor(context)}
+                  </Text>
                 </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    closeConductorSheet();
+                  }}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={styles.closeBtn}>
+                  <Text style={styles.closeBtnText}>Done</Text>
+                </TouchableOpacity>
               </View>
               <View style={styles.divider} />
 
@@ -678,24 +681,24 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       borderTopRightRadius: 16,
       paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     },
+    // Three-slot header: title (intrinsic width) | context pill
+    // (flex-shrinkable) | Done (intrinsic width, always visible).
+    // gap spaces the slots; the middle pill shrinks first so neither
+    // the title nor the Done button ever gets clipped.
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
       paddingHorizontal: 16,
       paddingTop: 4,
       paddingBottom: 10,
+      gap: 10,
     },
     title: {
       color: accentColor,
       fontSize: 16,
       fontWeight: '700',
       letterSpacing: 0.1,
-    },
-    headerRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
+      flexShrink: 0,
     },
     contextPill: {
       paddingVertical: 4,
@@ -704,6 +707,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       backgroundColor: theme.background,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border || 'rgba(255,255,255,0.08)',
+      // Middle slot: grows to fill, shrinks under pressure, never
+      // pushes the Done button off-screen. marginLeft:'auto' so when
+      // there's slack, the pill drifts right toward Done rather than
+      // hugging the title.
+      flexShrink: 1,
+      marginLeft: 'auto',
     },
     contextPillText: {
       color: theme.muted,
@@ -713,10 +722,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     closeBtn: {
       paddingVertical: 4,
       paddingHorizontal: 6,
+      flexShrink: 0,
+      minWidth: 44,
+      alignItems: 'flex-end',
     },
     closeBtnText: {
       color: accentColor,
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '600',
       letterSpacing: 0.2,
     },
