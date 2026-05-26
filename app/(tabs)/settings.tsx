@@ -1525,6 +1525,11 @@ export default function SettingsScreen() {
   // round-trip completes in Safari.
   const [nextdoorConnected, setNextdoorConnected] = useState<boolean | null>(null);
   const [nextdoorNeighborhood, setNextdoorNeighborhood] = useState<string | null>(null);
+  // Outlook connection state — same polled-on-focus pattern as Oura
+  // and Nextdoor. Flips to ✓ as soon as the OAuth round-trip
+  // completes in Safari and the device returns to Settings.
+  const [outlookConnected, setOutlookConnected] = useState<boolean | null>(null);
+  const [outlookEmail, setOutlookEmail] = useState<string | null>(null);
   // API key modal — shows the household's API key with a copy button.
   const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
@@ -1685,6 +1690,14 @@ export default function SettingsScreen() {
           setNextdoorNeighborhood(d.neighborhood || null);
         })
         .catch(() => {});
+      fetch(`${API_BASE}/outlook/status?userId=${userId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled || !d) return;
+          setOutlookConnected(d.connected === true);
+          setOutlookEmail(d.email || null);
+        })
+        .catch(() => {});
       // Household location — first hit also runs IP-based auto-detection
       // server-side, so subsequent renders show a real city even if the
       // user has never manually set it.
@@ -1737,6 +1750,31 @@ export default function SettingsScreen() {
             } catch {
               // best-effort
             }
+          },
+        },
+      ]
+    );
+  }
+
+  function handleConnectOutlook() {
+    Linking.openURL(`${API_BASE}/outlook/auth?userId=${userId}`);
+  }
+
+  async function handleDisconnectOutlook() {
+    Alert.alert(
+      'Disconnect Outlook',
+      'Conductor will stop reading your Outlook mail and calendar. Signals already imported stay in your radar. You can reconnect anytime.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await fetch(`${API_BASE}/outlook/disconnect?userId=${userId}`, { method: 'GET' });
+              setOutlookConnected(false);
+              setOutlookEmail(null);
+            } catch { /* best-effort */ }
           },
         },
       ]
@@ -2087,6 +2125,32 @@ export default function SettingsScreen() {
             <View style={styles.ouraConnectRow}>
               <Text style={styles.ouraConnectLabel}>Oura Ring</Text>
               <Text style={styles.ouraConnectAction}>Connect Oura Ring →</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+        {/* Outlook — secondary mail/calendar driver. Same OAuth-via-
+            Safari + polled-status pattern as Oura/Nextdoor. Lives in
+            the same What Conductor Sees section so a user with both
+            Gmail and a work Outlook can layer the second inbox in
+            with one tap. */}
+        {outlookConnected === true ? (
+          <Row
+            label="📧 Outlook"
+            subtext={outlookEmail ? `Connected — ${outlookEmail}` : 'Connected'}
+            right={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Text style={styles.ouraConnectedText}>✓</Text>
+                <TouchableOpacity onPress={handleDisconnectOutlook} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.ouraDisconnectLink}>Disconnect</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        ) : (
+          <TouchableOpacity onPress={handleConnectOutlook} activeOpacity={0.6}>
+            <View style={styles.ouraConnectRow}>
+              <Text style={styles.ouraConnectLabel}>📧 Outlook</Text>
+              <Text style={styles.ouraConnectAction}>Connect Outlook →</Text>
             </View>
           </TouchableOpacity>
         )}
