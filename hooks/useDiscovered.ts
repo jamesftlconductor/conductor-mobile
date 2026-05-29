@@ -99,11 +99,28 @@ export function useDiscovered(featureId: string): [boolean, () => void] {
     return () => { cancelled = true; unsub(); };
   }, [featureId]);
 
-  const markDiscovered = () => {
+  const markDiscovered = async () => {
     cache[featureId] = true; // wins over any in-flight disk read
     setDiscovered(true);
     notify(featureId);
-    AsyncStorage.setItem(`discovered:${featureId}`, 'true').catch(() => {});
+    // Explicitly await the write and verify it landed. The previous
+    // fire-and-forget `.catch(() => {})` swallowed any failure, so a
+    // write that never persisted looked identical to a successful
+    // one — discovered:true in memory, null on disk, dim again after
+    // restart. Awaiting + reading back surfaces a real failure to the
+    // console instead of hiding it.
+    try {
+      const key = `discovered:${featureId}`;
+      await AsyncStorage.setItem(key, 'true');
+      const readback = await AsyncStorage.getItem(key);
+      if (readback !== 'true') {
+        // eslint-disable-next-line no-console
+        console.warn(`[useDiscovered] write for ${key} did not stick (readback=${readback})`);
+      }
+    } catch (e: any) {
+      // eslint-disable-next-line no-console
+      console.warn(`[useDiscovered] persist failed for discovered:${featureId}: ${e?.message || String(e)}`);
+    }
   };
 
   return [discovered, markDiscovered];

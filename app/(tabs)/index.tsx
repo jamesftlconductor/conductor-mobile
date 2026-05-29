@@ -17,7 +17,6 @@ import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { useDiscovered } from '@/hooks/useDiscovered';
 import { getUserId, useUserId } from '@/hooks/useUserId';
 import FeatureIntroduction from '@/components/FeatureIntroduction';
-import { debugLog } from '@/utils/debugLog';
 
 // Per-feature intro content. Lives next to the call site so copy
 // changes don't require touching the modal component.
@@ -948,25 +947,6 @@ export default function TakeoffScreen() {
     else if (id === 'minimap') markMinimapDiscovered();
     else if (id === 'feedback') markFeedbackDiscovered();
   }
-  // TEMP DIAGNOSTIC — dumps the raw AsyncStorage values for the four
-  // discovery keys + the hook-resolved booleans on mount, so we can
-  // see exactly what the device has stored. Surfaces via the
-  // DebugBanner (re-enabled for this build). Remove after diagnosis.
-  useEffect(() => {
-    (async () => {
-      try {
-        const pairs = await AsyncStorage.multiGet([
-          'discovered:pulse', 'discovered:signals',
-          'discovered:minimap', 'discovered:feedback',
-        ]);
-        const raw = pairs.map(([k, v]) => `${k.replace('discovered:', '')}=${v === null ? 'null' : v}`).join(' ');
-        debugLog('Discover', `AS: ${raw}`);
-        debugLog('Discover', `hook: pulse=${pulseDiscovered} signals=${signalsDiscovered} minimap=${minimapDiscovered} feedback=${feedbackDiscovered}`);
-      } catch (e: any) {
-        debugLog('Discover', `read failed: ${e?.message || String(e)}`);
-      }
-    })();
-  }, [pulseDiscovered, signalsDiscovered, minimapDiscovered, feedbackDiscovered]);
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
   const [transparency, setTransparency] = useState<string | null>(null);
