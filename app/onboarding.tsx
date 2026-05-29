@@ -35,16 +35,42 @@ import {
   View,
 } from 'react-native';
 
+import { useTheme } from '@/app/theme';
 import { useUserId } from '@/hooks/useUserId';
+import { TOKENS } from '@/utils/designTokens';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
+// Module-level palette consts — retained for the connect-gate +
+// interstitial, which were intentionally NOT migrated to theme.
+// Step screens use makeStepStyles(theme, accentColor) instead.
 const BG = '#0f0f0f';
 const OFF_WHITE = '#f0ede8';
 const MUTED = '#5a5855';
 const FAINT = '#a8a5a0';
 const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
+
+type ThemeColors = {
+  background: string;
+  surface: string;
+  text: string;
+  muted: string;
+  border: string;
+  inputBackground: string;
+};
+
+// Convert an accent hex to an rgba tint at the given opacity — used
+// for the soft active-state fills on step-screen cards/pills.
+function accentRgba(accentColor: string, opacity: number): string {
+  const hex = accentColor.replace('#', '');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
+
+type StepStyles = ReturnType<typeof makeStepStyles>;
 
 const PROGRESS_DURATION_MS = 45000;
 const STATUS_POLL_MS = 5000;
@@ -209,6 +235,8 @@ export default function OnboardingScreen() {
   // path forward — without OAuth they cannot reach the personalization
   // steps because the pipeline + status calls all require a userId.
   const userId = useUserId();
+  const { theme, accentColor } = useTheme();
+  const stepStyles = useMemo(() => makeStepStyles(theme, accentColor), [theme, accentColor]);
   // Initial phase is 'language' so the screen renders something
   // immediately. The async mount effect may switch to 'joining' if
   // it detects an invite code; until it resolves, the user sees the
@@ -545,12 +573,18 @@ export default function OnboardingScreen() {
             preview={joinPreview}
             joining={joining}
             onJoin={confirmJoin}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
           />
         ) : null}
 
         {phase === 'language' ? (
           <LanguageStep
             language={language}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
             onPick={async (lang) => {
               setLanguage(lang);
               try {
@@ -571,6 +605,9 @@ export default function OnboardingScreen() {
             housing={housing} setHousing={setHousing}
             modifiers={modifiers} setModifiers={setModifiers}
             onContinue={(w, h, mods, name) => confirmStep1(w, h, mods, name)}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
           />
         ) : null}
 
@@ -581,6 +618,8 @@ export default function OnboardingScreen() {
             humor={humor} setHumor={setHumor}
             preview={preview}
             onContinue={confirmStep2}
+            s={stepStyles}
+            accentColor={accentColor}
           />
         ) : null}
 
@@ -589,6 +628,8 @@ export default function OnboardingScreen() {
             picked={picked}
             onToggle={togglePriority}
             onContinue={confirmStep3}
+            s={stepStyles}
+            accentColor={accentColor}
           />
         ) : null}
 
@@ -598,6 +639,9 @@ export default function OnboardingScreen() {
             onToggle={toggleHobby}
             onContinue={() => confirmStep4(false)}
             onSkip={() => confirmStep4(true)}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
           />
         ) : null}
 
@@ -607,6 +651,7 @@ export default function OnboardingScreen() {
 
         {phase === 'step1' || phase === 'step2' || phase === 'step3' || phase === 'step4' ? (
           <StepDots
+            s={stepStyles}
             active={
               phase === 'step1' ? 0
               : phase === 'step2' ? 1
@@ -623,8 +668,15 @@ export default function OnboardingScreen() {
 // ---------- Joining existing household ----------
 
 function JoiningStep({
-  preview, joining, onJoin,
-}: { preview: HouseholdPreview | null; joining: boolean; onJoin: () => void }) {
+  preview, joining, onJoin, s, theme,
+}: {
+  preview: HouseholdPreview | null;
+  joining: boolean;
+  onJoin: () => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
+}) {
   // Build the finding rows we'll reveal in sequence. Always include a
   // name row (with a friendly fallback); the count rows surface only
   // when their count is non-zero so a brand-new household doesn't
@@ -670,12 +722,12 @@ function JoiningStep({
 
   return (
     <View style={{ paddingTop: 24 }}>
-      <Text style={styles.title}>You&apos;re joining {titleName}</Text>
-      <Text style={[styles.subtitle, { marginBottom: 32 }]}>
+      <Text style={s.title}>You&apos;re joining {titleName}</Text>
+      <Text style={[s.subtitle, { marginBottom: 32 }]}>
         Here&apos;s what Conductor has found
       </Text>
 
-      <View style={{ gap: 16, marginBottom: 28 }}>
+      <View style={{ gap: TOKENS.space.item, marginBottom: 28 }}>
         {findings.map((row, i) => (
           <Animated.View
             key={`${row.emoji}-${i}`}
@@ -683,30 +735,30 @@ function JoiningStep({
               {
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingVertical: 14,
-                paddingHorizontal: 16,
-                borderRadius: 12,
+                minHeight: TOKENS.listItem.minHeight,
+                padding: TOKENS.card.padding,
+                borderRadius: TOKENS.card.borderRadius,
                 borderWidth: StyleSheet.hairlineWidth,
-                borderColor: SOFT_BORDER,
-                backgroundColor: 'rgba(255,255,255,0.03)',
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
               },
               { opacity: opacities[i] || new Animated.Value(0) },
             ]}>
             <Text style={{ fontSize: 22, marginRight: 14 }}>{row.emoji}</Text>
-            <Text style={{ color: OFF_WHITE, fontSize: 14, flex: 1 }}>{row.text}</Text>
+            <Text style={{ color: theme.text, ...TOKENS.type.body, flex: 1 }}>{row.text}</Text>
           </Animated.View>
         ))}
       </View>
 
-      <Text style={[styles.subtitle, { fontStyle: 'italic', marginBottom: 24 }]}>
+      <Text style={[s.subtitle, { fontStyle: 'italic', marginBottom: 24 }]}>
         Your voice preferences are yours — customize anytime in Your House.
       </Text>
 
       <TouchableOpacity
         onPress={onJoin}
         disabled={joining}
-        style={[styles.continueBtn, joining && { opacity: 0.5 }]}>
-        <Text style={styles.continueBtnText}>
+        style={[s.continueBtn, joining && { opacity: 0.5 }]}>
+        <Text style={s.continueBtnText}>
           {joining ? 'Joining…' : `Join ${titleName} →`}
         </Text>
       </TouchableOpacity>
@@ -717,13 +769,19 @@ function JoiningStep({
 // ---------- Language picker ----------
 
 function LanguageStep({
-  language, onPick,
-}: { language: Language; onPick: (l: Language) => void }) {
+  language, onPick, s, theme, accentColor,
+}: {
+  language: Language;
+  onPick: (l: Language) => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
+}) {
   return (
     <>
-      <Text style={[styles.title, { marginTop: 20 }]}>Choose your language</Text>
-      <Text style={[styles.subtitle, { marginBottom: 24 }]}>Elige tu idioma</Text>
-      <View style={{ gap: 12 }}>
+      <Text style={[s.title, { marginTop: 20 }]}>Choose your language</Text>
+      <Text style={[s.subtitle, { marginBottom: 24 }]}>Elige tu idioma</Text>
+      <View style={{ gap: TOKENS.space.item }}>
         {[
           { id: 'en' as Language, flag: '🇺🇸', label: 'English' },
           { id: 'es' as Language, flag: '🇪🇸', label: 'Español' },
@@ -738,17 +796,18 @@ function LanguageStep({
                 {
                   flexDirection: 'row',
                   alignItems: 'center',
+                  minHeight: TOKENS.listItem.minHeight,
                   paddingVertical: 20,
                   paddingHorizontal: 18,
-                  borderRadius: 14,
+                  borderRadius: TOKENS.card.borderRadius,
                   borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: SOFT_BORDER,
-                  backgroundColor: 'rgba(255,255,255,0.03)',
+                  borderColor: theme.border,
+                  backgroundColor: theme.surface,
                 },
-                active && { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
+                active && { borderColor: accentColor, backgroundColor: accentRgba(accentColor, 0.08) },
               ]}>
               <Text style={{ fontSize: 28, marginRight: 16 }}>{o.flag}</Text>
-              <Text style={{ color: OFF_WHITE, fontSize: 18, fontWeight: '500' }}>{o.label}</Text>
+              <Text style={{ color: theme.text, ...TOKENS.type.subheader }}>{o.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -764,6 +823,7 @@ function Step1({
   housing, setHousing,
   modifiers, setModifiers,
   onContinue,
+  s, theme, accentColor,
 }: {
   who: Who | null;
   setWho: (w: Who) => void;
@@ -772,6 +832,9 @@ function Step1({
   modifiers: Set<Modifier>;
   setModifiers: (s: Set<Modifier>) => void;
   onContinue: (w: Who, h: Housing, mods: Modifier[], name: string | null) => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
 }) {
   const [showModifiers, setShowModifiers] = useState(false);
   const [householdName, setHouseholdName] = useState('');
@@ -786,12 +849,12 @@ function Step1({
 
   return (
     <>
-      <Text style={styles.preface}>
+      <Text style={s.preface}>
         While Conductor reads your household — tell us a little about yourself.
       </Text>
 
-      <Text style={styles.title}>Who lives in your household?</Text>
-      <View style={styles.grid}>
+      <Text style={s.title}>Who lives in your household?</Text>
+      <View style={s.grid}>
         {WHO_CARDS.map((c) => {
           const active = who === c.id;
           return (
@@ -799,10 +862,10 @@ function Step1({
               key={c.id}
               onPress={() => setWho(c.id)}
               activeOpacity={0.7}
-              style={[styles.card, active && styles.cardActive]}>
-              <Text style={styles.cardEmoji}>{c.emoji}</Text>
-              <Text style={[styles.cardLabel, active && { color: BRASS }]}>{c.label}</Text>
-              {c.sub ? <Text style={styles.cardDesc}>{c.sub}</Text> : null}
+              style={[s.card, active && s.cardActive]}>
+              <Text style={s.cardEmoji}>{c.emoji}</Text>
+              <Text style={[s.cardLabel, active && { color: accentColor }]}>{c.label}</Text>
+              {c.sub ? <Text style={s.cardDesc}>{c.sub}</Text> : null}
             </TouchableOpacity>
           );
         })}
@@ -810,7 +873,7 @@ function Step1({
 
       {who ? (
         <View style={{ marginTop: 28 }}>
-          <Text style={styles.smallTitle}>Do you own or rent?</Text>
+          <Text style={s.smallTitle}>Do you own or rent?</Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
             {HOUSING_CARDS.map((h) => {
               const active = housing === h.id;
@@ -819,11 +882,11 @@ function Step1({
                   key={h.id}
                   onPress={() => setHousing(h.id)}
                   activeOpacity={0.7}
-                  style={[styles.housingBtn, active && styles.housingBtnActive]}>
-                  <Text style={styles.housingEmoji}>{h.emoji}</Text>
+                  style={[s.housingBtn, active && s.housingBtnActive]}>
+                  <Text style={s.housingEmoji}>{h.emoji}</Text>
                   <Text style={[
-                    styles.housingLabel,
-                    active && { color: BRASS, fontWeight: '600' },
+                    s.housingLabel,
+                    active && { color: accentColor, fontWeight: '600' },
                   ]}>{h.label}</Text>
                 </TouchableOpacity>
               );
@@ -837,22 +900,22 @@ function Step1({
           <TouchableOpacity
             onPress={() => setShowModifiers((v) => !v)}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-            <Text style={styles.modifierToggle}>
+            <Text style={s.modifierToggle}>
               {showModifiers ? 'Anything else? −' : 'Anything else? +'}
             </Text>
           </TouchableOpacity>
           {showModifiers ? (
-            <View style={styles.modifierGrid}>
+            <View style={s.modifierGrid}>
               {MODIFIER_OPTIONS.map((m) => {
                 const active = modifiers.has(m.id);
                 return (
                   <TouchableOpacity
                     key={m.id}
                     onPress={() => toggleMod(m.id)}
-                    style={[styles.modifierPill, active && styles.modifierPillActive]}>
+                    style={[s.modifierPill, active && s.modifierPillActive]}>
                     <Text style={[
-                      styles.modifierLabel,
-                      active && { color: BRASS, fontWeight: '600' },
+                      s.modifierLabel,
+                      active && { color: accentColor, fontWeight: '600' },
                     ]}>
                       {m.label}
                     </Text>
@@ -866,24 +929,25 @@ function Step1({
 
       {who && housing ? (
         <View style={{ marginTop: 24 }}>
-          <Text style={styles.smallTitle}>What do you call your household?</Text>
-          <Text style={[styles.subtitle, { marginBottom: 8 }]}>
+          <Text style={s.smallTitle}>What do you call your household?</Text>
+          <Text style={[s.subtitle, { marginBottom: 8 }]}>
             Optional. Appears in your Week in Review and shareable cards.
           </Text>
           <TextInput
             value={householdName}
             onChangeText={setHouseholdName}
             placeholder="e.g. The Mounts House, Apt 4B"
-            placeholderTextColor={MUTED}
+            placeholderTextColor={theme.muted}
             style={{
-              color: OFF_WHITE,
-              fontSize: 14,
+              color: theme.text,
+              ...TOKENS.type.body,
+              minHeight: TOKENS.listItem.minHeight,
               paddingVertical: 12,
               paddingHorizontal: 14,
-              backgroundColor: 'rgba(255,255,255,0.04)',
+              backgroundColor: theme.inputBackground,
               borderRadius: 10,
               borderWidth: StyleSheet.hairlineWidth,
-              borderColor: SOFT_BORDER,
+              borderColor: theme.border,
             }}
           />
         </View>
@@ -897,8 +961,8 @@ function Step1({
           )
         }
         disabled={!canContinue}
-        style={[styles.continueBtn, !canContinue && { opacity: 0.4 }]}>
-        <Text style={styles.continueBtnText}>Continue →</Text>
+        style={[s.continueBtn, !canContinue && { opacity: 0.4 }]}>
+        <Text style={s.continueBtnText}>Continue →</Text>
       </TouchableOpacity>
     </>
   );
@@ -907,18 +971,20 @@ function Step1({
 // ---------- Step 2: Your Voice with live preview ----------
 
 function Step2({
-  tone, setTone, detail, setDetail, humor, setHumor, preview, onContinue,
+  tone, setTone, detail, setDetail, humor, setHumor, preview, onContinue, s, accentColor,
 }: {
   tone: Tone; setTone: (t: Tone) => void;
   detail: Detail; setDetail: (d: Detail) => void;
   humor: Humor; setHumor: (h: Humor) => void;
   preview: string;
   onContinue: () => void;
+  s: StepStyles;
+  accentColor: string;
 }) {
   return (
     <>
-      <Text style={styles.title}>How should Conductor talk to you?</Text>
-      <Text style={styles.subtitle}>You can change this anytime in Your House.</Text>
+      <Text style={s.title}>How should Conductor talk to you?</Text>
+      <Text style={s.subtitle}>You can change this anytime in Your House.</Text>
 
       <SegRow
         label="Tone"
@@ -929,6 +995,7 @@ function Step2({
         ]}
         value={tone}
         onChange={(v) => setTone(v as Tone)}
+        s={s}
       />
       <SegRow
         label="Detail"
@@ -939,6 +1006,7 @@ function Step2({
         ]}
         value={detail}
         onChange={(v) => setDetail(v as Detail)}
+        s={s}
       />
       <SegRow
         label="Humor"
@@ -949,40 +1017,42 @@ function Step2({
         ]}
         value={humor}
         onChange={(v) => setHumor(v as Humor)}
+        s={s}
       />
 
-      <View style={styles.previewCard}>
-        <Text style={styles.previewLabel}>PREVIEW</Text>
-        <Text style={styles.previewText}>{preview}</Text>
+      <View style={s.previewCard}>
+        <Text style={s.previewLabel}>PREVIEW</Text>
+        <Text style={s.previewText}>{preview}</Text>
       </View>
 
-      <TouchableOpacity onPress={onContinue} style={styles.continueBtn}>
-        <Text style={styles.continueBtnText}>Continue →</Text>
+      <TouchableOpacity onPress={onContinue} style={s.continueBtn}>
+        <Text style={s.continueBtnText}>Continue →</Text>
       </TouchableOpacity>
     </>
   );
 }
 
 function SegRow({
-  label, options, value, onChange,
+  label, options, value, onChange, s,
 }: {
   label: string;
   options: { value: string; label: string }[];
   value: string;
   onChange: (v: string) => void;
+  s: StepStyles;
 }) {
   return (
     <View style={{ marginBottom: 18 }}>
-      <Text style={styles.segLabel}>{label}</Text>
-      <View style={styles.segWrap}>
+      <Text style={s.segLabel}>{label}</Text>
+      <View style={s.segWrap}>
         {options.map((o) => {
           const active = o.value === value;
           return (
             <TouchableOpacity
               key={o.value}
               onPress={() => onChange(o.value)}
-              style={[styles.segPill, active && styles.segPillActive]}>
-              <Text style={[styles.segPillText, active && { color: '#0f0f0f', fontWeight: '600' }]}>
+              style={[s.segPill, active && s.segPillActive]}>
+              <Text style={[s.segPillText, active && { color: '#0f0f0f', fontWeight: '600' }]}>
                 {o.label}
               </Text>
             </TouchableOpacity>
@@ -996,26 +1066,28 @@ function SegRow({
 // ---------- Step 3: Priorities ----------
 
 function Step3({
-  picked, onToggle, onContinue,
+  picked, onToggle, onContinue, s, accentColor,
 }: {
   picked: Set<string>;
   onToggle: (id: string) => void;
   onContinue: () => void;
+  s: StepStyles;
+  accentColor: string;
 }) {
   return (
     <>
-      <Text style={styles.title}>What does your household care about most?</Text>
-      <Text style={styles.subtitle}>Conductor will lead with what matters to you.</Text>
+      <Text style={s.title}>What does your household care about most?</Text>
+      <Text style={s.subtitle}>Conductor will lead with what matters to you.</Text>
 
-      <View style={styles.priorityGrid}>
+      <View style={s.priorityGrid}>
         {PRIORITY_OPTIONS.map((p) => {
           const active = picked.has(p.id);
           return (
             <TouchableOpacity
               key={p.id}
               onPress={() => onToggle(p.id)}
-              style={[styles.priorityPill, active && styles.priorityPillActive]}>
-              <Text style={[styles.priorityLabel, active && { color: BRASS, fontWeight: '600' }]}>
+              style={[s.priorityPill, active && s.priorityPillActive]}>
+              <Text style={[s.priorityLabel, active && { color: accentColor, fontWeight: '600' }]}>
                 {p.label}
               </Text>
             </TouchableOpacity>
@@ -1023,8 +1095,8 @@ function Step3({
         })}
       </View>
 
-      <TouchableOpacity onPress={onContinue} style={styles.continueBtn}>
-        <Text style={styles.continueBtnText}>Continue →</Text>
+      <TouchableOpacity onPress={onContinue} style={s.continueBtn}>
+        <Text style={s.continueBtnText}>Continue →</Text>
       </TouchableOpacity>
     </>
   );
@@ -1033,29 +1105,32 @@ function Step3({
 // ---------- Step 4: Hobbies (joie-de-vivre) ----------
 
 function Step4({
-  picked, onToggle, onContinue, onSkip,
+  picked, onToggle, onContinue, onSkip, s, theme, accentColor,
 }: {
   picked: Set<string>;
   onToggle: (id: string) => void;
   onContinue: () => void;
   onSkip: () => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
 }) {
   return (
     <>
-      <Text style={styles.title}>What does your household love?</Text>
-      <Text style={styles.subtitle}>
+      <Text style={s.title}>What does your household love?</Text>
+      <Text style={s.subtitle}>
         Conductor will watch for opportunities, not just obligations.
       </Text>
 
-      <View style={styles.priorityGrid}>
+      <View style={s.priorityGrid}>
         {HOBBY_OPTIONS.map((h) => {
           const active = picked.has(h.id);
           return (
             <TouchableOpacity
               key={h.id}
               onPress={() => onToggle(h.id)}
-              style={[styles.priorityPill, active && styles.priorityPillActive]}>
-              <Text style={[styles.priorityLabel, active && { color: BRASS, fontWeight: '600' }]}>
+              style={[s.priorityPill, active && s.priorityPillActive]}>
+              <Text style={[s.priorityLabel, active && { color: accentColor, fontWeight: '600' }]}>
                 {h.label}
               </Text>
             </TouchableOpacity>
@@ -1063,8 +1138,8 @@ function Step4({
         })}
       </View>
 
-      <TouchableOpacity onPress={onContinue} style={styles.continueBtn}>
-        <Text style={styles.continueBtnText}>Continue →</Text>
+      <TouchableOpacity onPress={onContinue} style={s.continueBtn}>
+        <Text style={s.continueBtnText}>Continue →</Text>
       </TouchableOpacity>
 
       {/* Quiet "skip" affordance — same pattern as other onboarding
@@ -1073,7 +1148,7 @@ function Step4({
         onPress={onSkip}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         style={{ marginTop: 14, alignItems: 'center' }}>
-        <Text style={{ color: MUTED, fontSize: 13 }}>
+        <Text style={{ color: theme.muted, ...TOKENS.type.secondary }}>
           Just the essentials for now →
         </Text>
       </TouchableOpacity>
@@ -1226,18 +1301,18 @@ function InterstitialBlock({
 
 // ---------- Step indicator dots ----------
 
-function StepDots({ active }: { active: 0 | 1 | 2 | 3 }) {
+function StepDots({ active, s }: { active: 0 | 1 | 2 | 3; s: StepStyles }) {
   return (
-    <View style={styles.dotsRow}>
+    <View style={s.dotsRow}>
       {[0, 1, 2, 3].map((i) => {
         const state = i === active ? 'active' : i < active ? 'done' : 'upcoming';
         return (
           <View
             key={i}
             style={[
-              styles.dot,
-              state === 'active' && styles.dotActive,
-              state === 'done' && styles.dotDone,
+              s.dot,
+              state === 'active' && s.dotActive,
+              state === 'done' && s.dotDone,
             ]}
           />
         );
@@ -1313,135 +1388,6 @@ const styles = StyleSheet.create({
   },
 
   scroll: { paddingHorizontal: 22, paddingTop: 60, paddingBottom: 60 },
-  preface: { color: MUTED, fontSize: 13, fontStyle: 'italic', marginBottom: 18, lineHeight: 20 },
-  title: { color: OFF_WHITE, fontSize: 24, fontWeight: '400', lineHeight: 32, marginBottom: 12 },
-  smallTitle: { color: OFF_WHITE, fontSize: 16, fontWeight: '500', marginBottom: 6 },
-  subtitle: { color: MUTED, fontSize: 12, marginBottom: 24, lineHeight: 18 },
-
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  card: {
-    width: '48%',
-    padding: 18,
-    borderRadius: 12,
-    marginBottom: 12,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
-    minHeight: 130,
-  },
-  cardActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
-  cardEmoji: { fontSize: 28, marginBottom: 8 },
-  cardLabel: { color: OFF_WHITE, fontSize: 14, fontWeight: '600' },
-  cardDesc: { color: FAINT, fontSize: 11, marginTop: 4, lineHeight: 16 },
-
-  pill: {
-    paddingVertical: 9, paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  pillActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
-  pillLabel: { color: FAINT, fontSize: 13 },
-
-  housingBtn: {
-    flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    alignItems: 'center',
-  },
-  housingBtnActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
-  housingEmoji: { fontSize: 22, marginBottom: 6 },
-  housingLabel: { color: OFF_WHITE, fontSize: 12, textAlign: 'center', lineHeight: 16 },
-
-  modifierToggle: {
-    color: BRASS,
-    fontSize: 13,
-    fontWeight: '500',
-    paddingVertical: 4,
-  },
-  modifierGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  modifierPill: {
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  modifierPillActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
-  modifierLabel: { color: OFF_WHITE, fontSize: 12 },
-
-  segLabel: { color: MUTED, fontSize: 10, letterSpacing: 1.5, marginBottom: 8, fontWeight: '600' },
-  segWrap: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 10,
-    padding: 3,
-  },
-  segPill: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  segPillActive: { backgroundColor: BRASS },
-  segPillText: { color: MUTED, fontSize: 12 },
-
-  previewCard: {
-    marginTop: 8,
-    marginBottom: 20,
-    padding: 16,
-    paddingLeft: 18,
-    backgroundColor: 'rgba(184,150,12,0.06)',
-    borderLeftWidth: 2,
-    borderLeftColor: BRASS,
-    borderRadius: 8,
-  },
-  previewLabel: { color: MUTED, fontSize: 9, letterSpacing: 2, marginBottom: 8, fontWeight: '600' },
-  previewText: { color: OFF_WHITE, fontSize: 14, lineHeight: 22, fontStyle: 'italic' },
-
-  priorityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
-  priorityPill: {
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  priorityPillActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
-  priorityLabel: { color: OFF_WHITE, fontSize: 13 },
-
-  continueBtn: {
-    marginTop: 32,
-    backgroundColor: BRASS,
-    paddingVertical: 14,
-    borderRadius: 26,
-    alignItems: 'center',
-  },
-  continueBtnText: { color: '#0f0f0f', fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
-
-  dotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 28,
-  },
-  dot: {
-    width: 8, height: 8, borderRadius: 4,
-    borderWidth: 1.5, borderColor: MUTED, backgroundColor: 'transparent',
-  },
-  dotActive: { backgroundColor: BRASS, borderColor: BRASS, width: 22 },
-  dotDone: { borderColor: BRASS, backgroundColor: 'transparent' },
 
   interstitialWrap: {
     paddingVertical: 60,
@@ -1508,3 +1454,167 @@ const styles = StyleSheet.create({
     backgroundColor: BRASS,
   },
 });
+
+// Step-screen styles — theme-aware + token-driven. The connect-gate
+// and interstitial deliberately stay on the module-level `styles`
+// above (hardcoded dark palette); only the personalization steps flow
+// through here so they flip correctly in light mode and reach the
+// shared design standard.
+function makeStepStyles(theme: ThemeColors, accentColor: string) {
+  const activeTint = accentRgba(accentColor, 0.08);
+  return StyleSheet.create({
+    preface: {
+      color: theme.muted,
+      ...TOKENS.type.secondary,
+      fontStyle: 'italic',
+      marginBottom: 18,
+    },
+    title: {
+      color: theme.text,
+      ...TOKENS.type.header,
+      marginBottom: 12,
+    },
+    smallTitle: {
+      color: theme.text,
+      ...TOKENS.type.subheader,
+      marginBottom: 6,
+    },
+    subtitle: {
+      color: theme.muted,
+      ...TOKENS.type.secondary,
+      marginBottom: 24,
+    },
+
+    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+    card: {
+      width: '48%',
+      padding: TOKENS.card.padding,
+      borderRadius: TOKENS.card.borderRadius,
+      marginBottom: TOKENS.space.item,
+      backgroundColor: theme.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border,
+      minHeight: 130,
+    },
+    cardActive: { borderColor: accentColor, backgroundColor: activeTint },
+    cardEmoji: { fontSize: 28, marginBottom: 8 },
+    cardLabel: { color: theme.text, ...TOKENS.type.body, fontWeight: '600' },
+    cardDesc: { color: theme.muted, ...TOKENS.type.secondary, marginTop: 4 },
+
+    housingBtn: {
+      flex: 1,
+      paddingVertical: 16,
+      paddingHorizontal: 10,
+      borderRadius: TOKENS.card.borderRadius,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+      alignItems: 'center',
+      minHeight: TOKENS.listItem.minHeight,
+    },
+    housingBtnActive: { borderColor: accentColor, backgroundColor: activeTint },
+    housingEmoji: { fontSize: 22, marginBottom: 6 },
+    housingLabel: { color: theme.text, ...TOKENS.type.secondary, textAlign: 'center' },
+
+    modifierToggle: {
+      color: accentColor,
+      ...TOKENS.type.secondary,
+      fontWeight: '500',
+      paddingVertical: 4,
+    },
+    modifierGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 12,
+    },
+    modifierPill: {
+      paddingVertical: 9,
+      paddingHorizontal: 14,
+      borderRadius: 20,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+    },
+    modifierPillActive: { borderColor: accentColor, backgroundColor: activeTint },
+    modifierLabel: { color: theme.text, ...TOKENS.type.secondary },
+
+    segLabel: {
+      color: theme.muted,
+      ...TOKENS.type.label,
+      letterSpacing: 1.5,
+      marginBottom: 8,
+    },
+    segWrap: {
+      flexDirection: 'row',
+      backgroundColor: theme.inputBackground,
+      borderRadius: 10,
+      padding: 3,
+    },
+    segPill: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    segPillActive: { backgroundColor: accentColor },
+    segPillText: { color: theme.muted, ...TOKENS.type.secondary },
+
+    previewCard: {
+      marginTop: 8,
+      marginBottom: 20,
+      padding: TOKENS.card.padding,
+      paddingLeft: 18,
+      backgroundColor: accentRgba(accentColor, 0.06),
+      borderLeftWidth: 2,
+      borderLeftColor: accentColor,
+      borderRadius: TOKENS.card.borderRadius,
+    },
+    previewLabel: {
+      color: theme.muted,
+      ...TOKENS.type.label,
+      marginBottom: 8,
+    },
+    previewText: { color: theme.text, ...TOKENS.type.body, lineHeight: 22, fontStyle: 'italic' },
+
+    priorityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+    priorityPill: {
+      paddingVertical: 11,
+      paddingHorizontal: 14,
+      borderRadius: 22,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+    },
+    priorityPillActive: { borderColor: accentColor, backgroundColor: activeTint },
+    priorityLabel: { color: theme.text, ...TOKENS.type.secondary },
+
+    continueBtn: {
+      marginTop: 32,
+      backgroundColor: accentColor,
+      paddingVertical: 14,
+      borderRadius: 26,
+      alignItems: 'center',
+      minHeight: TOKENS.listItem.minHeight,
+      justifyContent: 'center',
+    },
+    // Dark text on the bright accent fill — an on-accent contrast
+    // color, intentionally not theme-flipped (matches the channel +
+    // connect-gate CTA treatment).
+    continueBtnText: { color: '#0f0f0f', ...TOKENS.type.body, fontWeight: '600', letterSpacing: 0.5 },
+
+    dotsRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 28,
+    },
+    dot: {
+      width: 8, height: 8, borderRadius: 4,
+      borderWidth: 1.5, borderColor: theme.muted, backgroundColor: 'transparent',
+    },
+    dotActive: { backgroundColor: accentColor, borderColor: accentColor, width: 22 },
+    dotDone: { borderColor: accentColor, backgroundColor: 'transparent' },
+  });
+}

@@ -14,9 +14,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useUserId } from '@/hooks/useUserId';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { SectionLabel } from '@/components/SectionLabel';
+import { EmptyState } from '@/components/EmptyState';
+import { SkeletonStack } from '@/components/SkeletonRow';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useTheme } from '@/app/theme';
+import { TOKENS } from '@/utils/designTokens';
 import {
   ActivityIndicator,
   Alert,
@@ -34,8 +38,9 @@ import { conductorHaptics } from './haptics';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
+// Semantic success color — chore completion. Carries meaning
+// independent of palette, so it does NOT flip with the theme.
 const GREEN = '#86efac';
-const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type Chore = {
   name: string;
@@ -84,9 +89,7 @@ function todayKey(): string {
 export default function JuniorScreen() {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const BRASS = accentColor;
   const MUTED = theme.muted;
-  const OFF_WHITE = theme.text;
   const [userId, setUserId] = useState<string>('');
   const [data, setData] = useState<JuniorData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -198,8 +201,9 @@ export default function JuniorScreen() {
 
   if (loading && !data) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color={BRASS} />
+      <View style={styles.container}>
+        <ScreenHeader title="Conductor Junior" subtitle="Loading…" />
+        <SkeletonStack rows={5} />
       </View>
     );
   }
@@ -208,23 +212,22 @@ export default function JuniorScreen() {
     return (
       <View style={styles.container}>
         <ScreenHeader title="Conductor Junior" subtitle="Not set up for this account yet." />
-        <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.emptyHint}>
-          A parent can enable Junior from a child's Crew card and assign
-          chores, allowance, and a savings goal.
-        </Text>
-        </ScrollView>
+        <EmptyState
+          message="A parent can enable Junior from a child's Crew card and assign chores, allowance, and a savings goal."
+        />
       </View>
     );
   }
 
   if (!data) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <Text style={styles.errorText}>{error || 'Could not load.'}</Text>
-        <TouchableOpacity onPress={load} style={styles.retryBtn}>
-          <Text style={styles.retryText}>Try again</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <ScreenHeader title="Conductor Junior" subtitle="Couldn't load." />
+        <EmptyState
+          message={error || "We couldn't reach Conductor just now. Give it another try."}
+          actionLabel="Try again"
+          onAction={load}
+        />
       </View>
     );
   }
@@ -259,7 +262,7 @@ export default function JuniorScreen() {
 
       {data.chores && data.chores.length > 0 ? (
         <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>My Chores</Text>
+          <SectionLabel title="My Chores" />
           {data.chores.map((c) => {
             const done = (c.completedDates || []).includes(today);
             return (
@@ -286,7 +289,7 @@ export default function JuniorScreen() {
       ) : null}
 
       <View style={styles.sectionBlock}>
-        <Text style={styles.sectionTitle}>Tell Mom & Dad</Text>
+        <SectionLabel title="Tell Mom & Dad" />
         <View style={styles.categoryGrid}>
           <CategoryBtn label="📚 Need something for school" onPress={() => openVoice('supply_needed')} />
           <CategoryBtn label="📅 Schedule changed" onPress={() => openVoice('schedule_change')} />
@@ -297,7 +300,7 @@ export default function JuniorScreen() {
 
       {data.savingsGoal ? (
         <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>My Savings</Text>
+          <SectionLabel title="My Savings" />
           <View style={styles.savingsCard}>
             <View style={styles.savingsBar}>
               <View
@@ -325,7 +328,7 @@ export default function JuniorScreen() {
       ) : null}
 
       <View style={styles.sectionBlock}>
-        <Text style={styles.sectionTitle}>My Badges</Text>
+        <SectionLabel title="My Badges" />
         <View style={styles.badgeGrid}>
           {(data.badgesAvailable || []).map((b) => {
             const earned = earnedIds.has(b.id);
@@ -424,7 +427,15 @@ function badgeEmoji(id: string): string {
   }
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string };
+type ThemeColors = {
+  background: string;
+  surface: string;
+  card: string;
+  text: string;
+  muted: string;
+  border: string;
+  inputBackground: string;
+};
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
   const BG = theme.background;
@@ -432,28 +443,32 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   const MUTED = theme.muted;
   const FAINT = theme.muted;
   const BRASS = accentColor;
+  // Accent-tinted hero surfaces (streak + badges). The accent is hex,
+  // so blend it onto the theme surface rather than hardcoding a brass
+  // rgba — keeps the warm emphasis while flipping with the palette.
+  const accentTint = (alpha: number) => accentColor + Math.round(alpha * 255).toString(16).padStart(2, '0');
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
+  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 60 },
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
+  topBackText: { color: MUTED, ...TOKENS.type.secondary, letterSpacing: 0.3 },
 
-  title: { color: OFF_WHITE, fontSize: 28, fontWeight: '500', marginTop: 14, letterSpacing: 0.2 },
-  subtitle: { color: MUTED, fontSize: 13, marginTop: 6 },
+  title: { color: OFF_WHITE, ...TOKENS.type.header, fontSize: 28, lineHeight: 34, fontWeight: '500', marginTop: 14 },
+  subtitle: { color: MUTED, ...TOKENS.type.secondary, marginTop: 6 },
 
   streakCard: {
-    marginTop: 24,
+    marginTop: TOKENS.space.section,
     padding: 22,
-    borderRadius: 14,
-    backgroundColor: 'rgba(184,150,12,0.10)',
+    borderRadius: TOKENS.card.borderRadius,
+    backgroundColor: accentTint(0.10),
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(184,150,12,0.4)',
+    borderColor: accentTint(0.4),
     alignItems: 'center',
   },
   streakNumber: { color: BRASS, fontSize: 48, fontWeight: '700', lineHeight: 54 },
-  streakUnit: { color: OFF_WHITE, fontSize: 13, marginTop: 4, letterSpacing: 0.4 },
-  streakMsg: { color: FAINT, fontSize: 12, marginTop: 10 },
+  streakUnit: { color: OFF_WHITE, ...TOKENS.type.secondary, marginTop: 4, letterSpacing: 0.4 },
+  streakMsg: { color: FAINT, ...TOKENS.type.secondary, fontSize: 12, marginTop: 10 },
 
   voiceWrap: { alignItems: 'center', marginTop: 32, marginBottom: 16 },
   voiceCircle: {
@@ -470,26 +485,23 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     elevation: 6,
   },
   voiceIcon: { fontSize: 32 },
-  voiceLabel: { color: OFF_WHITE, fontSize: 13, marginTop: 12, fontWeight: '500' },
-  voiceHint: { color: MUTED, fontSize: 11, marginTop: 4 },
+  voiceLabel: { color: OFF_WHITE, ...TOKENS.type.secondary, marginTop: 12, fontWeight: '500' },
+  voiceHint: { color: MUTED, ...TOKENS.type.secondary, fontSize: 11, marginTop: 4 },
 
-  sectionBlock: { marginTop: 32 },
-  sectionTitle: {
-    color: MUTED, fontSize: 10, letterSpacing: 1.5, marginBottom: 12,
-    textTransform: 'uppercase', fontWeight: '600',
-  },
+  sectionBlock: { marginTop: 8 },
 
   choreCard: {
     flexDirection: 'row', alignItems: 'center',
-    padding: 16, borderRadius: 12, marginBottom: 10,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
+    minHeight: 44,
+    padding: TOKENS.card.padding, borderRadius: TOKENS.card.borderRadius, marginBottom: 10,
+    backgroundColor: theme.surface,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
   },
   choreCardDone: { backgroundColor: 'rgba(134,239,172,0.08)', borderColor: 'rgba(134,239,172,0.3)' },
   choreBody: { flex: 1 },
-  choreName: { color: OFF_WHITE, fontSize: 16, fontWeight: '500' },
+  choreName: { color: OFF_WHITE, ...TOKENS.type.subheader, fontWeight: '500' },
   choreNameDone: { color: FAINT, textDecorationLine: 'line-through' },
-  choreFreq: { color: MUTED, fontSize: 11, marginTop: 4 },
+  choreFreq: { color: MUTED, ...TOKENS.type.secondary, fontSize: 11, marginTop: 4 },
   choreCheck: {
     width: 32, height: 32, borderRadius: 16,
     borderWidth: 1.5, borderColor: MUTED,
@@ -500,79 +512,75 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
 
   categoryGrid: { gap: 10 },
   categoryBtn: {
-    padding: 16, borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
+    minHeight: 44, justifyContent: 'center',
+    padding: TOKENS.card.padding, borderRadius: TOKENS.card.borderRadius,
+    backgroundColor: theme.surface,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
   },
-  categoryBtnText: { color: OFF_WHITE, fontSize: 14 },
+  categoryBtnText: { color: OFF_WHITE, ...TOKENS.type.body },
 
   savingsCard: {
-    padding: 16, borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
+    padding: TOKENS.card.padding, borderRadius: TOKENS.card.borderRadius,
+    backgroundColor: theme.surface,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
   },
-  savingsBar: { height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  savingsBar: { height: 10, borderRadius: 5, backgroundColor: theme.inputBackground, overflow: 'hidden' },
   savingsFill: { height: '100%', backgroundColor: BRASS },
-  savingsText: { color: OFF_WHITE, fontSize: 13, marginTop: 12, fontWeight: '500' },
-  savingsGoal: { color: MUTED, fontSize: 12, marginTop: 4 },
-  savingsAllowance: { color: FAINT, fontSize: 11, marginTop: 8 },
+  savingsText: { color: OFF_WHITE, ...TOKENS.type.secondary, marginTop: 12, fontWeight: '500' },
+  savingsGoal: { color: MUTED, ...TOKENS.type.secondary, fontSize: 12, marginTop: 4 },
+  savingsAllowance: { color: FAINT, ...TOKENS.type.secondary, fontSize: 11, marginTop: 8 },
 
   badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   badgeCard: {
     width: '30%',
     aspectRatio: 1,
-    borderRadius: 12,
+    borderRadius: TOKENS.card.borderRadius,
     alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(184,150,12,0.08)',
-    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(184,150,12,0.3)',
+    backgroundColor: accentTint(0.08),
+    borderWidth: StyleSheet.hairlineWidth, borderColor: accentTint(0.3),
   },
   badgeCardLocked: {
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    borderColor: SOFT_BORDER,
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
   },
   badgeEmoji: { fontSize: 28, marginBottom: 6 },
-  badgeName: { color: OFF_WHITE, fontSize: 10, fontWeight: '500', textAlign: 'center' },
-
-  emptyHint: { color: FAINT, fontSize: 13, lineHeight: 20, marginTop: 12 },
-  errorText: { color: MUTED, fontSize: 13, marginBottom: 14 },
-  retryBtn: { paddingVertical: 10, paddingHorizontal: 20 },
-  retryText: { color: BRASS, fontSize: 13 },
+  badgeName: { color: OFF_WHITE, ...TOKENS.type.label, fontWeight: '500', letterSpacing: 0, textTransform: 'none', textAlign: 'center' },
 
   modalBackdrop: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'flex-end',
   },
   voiceModal: {
-    backgroundColor: BG,
+    backgroundColor: theme.surface,
     borderTopLeftRadius: 18, borderTopRightRadius: 18,
     padding: 24, paddingBottom: 36,
   },
-  modalTitle: { color: OFF_WHITE, fontSize: 18, fontWeight: '500' },
-  modalHint: { color: MUTED, fontSize: 11, marginTop: 6, marginBottom: 18 },
+  modalTitle: { color: OFF_WHITE, ...TOKENS.type.subheader, fontSize: 18, fontWeight: '500' },
+  modalHint: { color: MUTED, ...TOKENS.type.secondary, fontSize: 11, marginTop: 6, marginBottom: 18 },
   modalInput: {
-    color: OFF_WHITE, fontSize: 15, lineHeight: 22,
+    color: OFF_WHITE, ...TOKENS.type.body, lineHeight: 22,
     paddingVertical: 14, paddingHorizontal: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: theme.inputBackground,
     borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
     minHeight: 100, textAlignVertical: 'top',
   },
   modalBtnRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
   modalPrimaryBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 24,
-    backgroundColor: BRASS, alignItems: 'center',
+    flex: 1, minHeight: 44, paddingVertical: 14, borderRadius: 24,
+    backgroundColor: BRASS, alignItems: 'center', justifyContent: 'center',
   },
-  modalPrimaryText: { color: '#0f0f0f', fontSize: 14, fontWeight: '600' },
+  modalPrimaryText: { color: '#0f0f0f', ...TOKENS.type.body, fontWeight: '600' },
   modalSecondaryBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
-    alignItems: 'center',
+    flex: 1, minHeight: 44, paddingVertical: 14, borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
+    alignItems: 'center', justifyContent: 'center',
   },
-  modalSecondaryText: { color: MUTED, fontSize: 14 },
+  modalSecondaryText: { color: MUTED, ...TOKENS.type.body },
 
   sentBlock: { paddingVertical: 30, alignItems: 'center' },
   sentTitle: { color: BRASS, fontSize: 24, fontWeight: '500' },
-  sentBody: { color: OFF_WHITE, fontSize: 13, marginTop: 14, textAlign: 'center', fontStyle: 'italic' },
-  sentMeta: { color: MUTED, fontSize: 11, marginTop: 12 },
+  sentBody: { color: OFF_WHITE, ...TOKENS.type.secondary, marginTop: 14, textAlign: 'center', fontStyle: 'italic' },
+  sentMeta: { color: MUTED, ...TOKENS.type.secondary, fontSize: 11, marginTop: 12 },
   });
 }

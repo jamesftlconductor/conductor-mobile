@@ -15,6 +15,8 @@ import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 're
 
 import { useTheme } from '@/app/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { SectionLabel } from '@/components/SectionLabel';
+import { TOKENS } from '@/utils/designTokens';
 import {
   acceptIconChange,
   getAutoUpdateEnabled,
@@ -96,12 +98,13 @@ export default function IconSelectorScreen() {
               setAutoUpdate(v);
               await setAutoUpdateEnabled(v);
             }}
-            trackColor={{ false: '#2a2a2a', true: accentColor }}
+            trackColor={{ false: theme.inputBackground, true: accentColor }}
             thumbColor={'#f5f0eb'}
-            ios_backgroundColor="#2a2a2a"
+            ios_backgroundColor={theme.inputBackground}
           />
         </View>
 
+        <SectionLabel title="Monthly icons" />
         <View style={styles.grid}>
           {allIcons.map((key, idx) => {
             const active = key === currentIcon;
@@ -161,27 +164,27 @@ type ThemeColors = {
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     scroll: {
-      paddingHorizontal: 22,
+      paddingHorizontal: 20,
       paddingTop: 6,
       paddingBottom: 40,
     },
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 14,
+      minHeight: TOKENS.listItem.minHeight,
+      paddingVertical: TOKENS.listItem.paddingVertical,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.border || 'rgba(255,255,255,0.08)',
-      marginBottom: 14,
     },
     toggleLabel: {
       color: theme.text,
-      fontSize: 14,
+      ...TOKENS.type.body,
       fontWeight: '500',
       marginBottom: 2,
     },
     toggleSub: {
       color: theme.muted,
-      fontSize: 12,
+      ...TOKENS.type.secondary,
     },
     grid: {
       flexDirection: 'row',
@@ -202,13 +205,14 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     },
     cellLabel: {
       color: theme.text,
-      fontSize: 12,
+      ...TOKENS.type.secondary,
       fontWeight: '500',
       marginBottom: 2,
     },
     cellSub: {
       color: theme.muted,
       fontSize: 10,
+      lineHeight: 14,
       textAlign: 'center',
     },
     foundingLabel: {
@@ -219,7 +223,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     },
     footer: {
       color: theme.muted,
-      fontSize: 12,
+      ...TOKENS.type.secondary,
       textAlign: 'center',
       marginTop: 24,
     },

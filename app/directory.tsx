@@ -25,8 +25,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-
-const SOFT_BORDER = 'rgba(255,255,255,0.06)';
+import { TOKENS } from '@/utils/designTokens';
 
 type DirectoryCard = {
   id: string;
@@ -453,7 +452,22 @@ export default function DirectoryScreen() {
   );
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string };
+type ThemeColors = {
+  background: string;
+  surface: string;
+  text: string;
+  muted: string;
+  border: string;
+  inputBackground: string;
+};
+
+function accentRgba(accentColor: string, opacity: number): string {
+  const hex = accentColor.replace('#', '');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
   const BG = theme.background;
@@ -467,29 +481,27 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 22,
+    paddingHorizontal: 20,
   },
   topBack: { paddingVertical: 6, paddingHorizontal: 4 },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  counter: { color: MUTED, fontSize: 10, letterSpacing: 1 },
+  topBackText: { color: MUTED, ...TOKENS.type.secondary },
+  counter: { color: MUTED, ...TOKENS.type.label, letterSpacing: 1 },
 
   title: {
     color: OFF_WHITE,
-    fontSize: 28,
-    fontWeight: '300',
-    letterSpacing: 0.2,
-    paddingHorizontal: 22,
+    ...TOKENS.type.header,
+    paddingHorizontal: 20,
     marginTop: 8,
   },
   subtitle: {
     color: MUTED,
-    fontSize: 13,
+    ...TOKENS.type.secondary,
     marginTop: 4,
-    paddingHorizontal: 22,
+    paddingHorizontal: 20,
   },
 
   pillRow: {
-    paddingHorizontal: 22,
+    paddingHorizontal: 20,
     paddingVertical: 18,
     gap: 8,
   },
@@ -497,34 +509,36 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 7,
     paddingHorizontal: 14,
     borderRadius: 18,
+    minHeight: 44,
+    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
   },
   pillActive: {
     borderColor: BRASS,
-    backgroundColor: 'rgba(184,150,12,0.10)',
+    backgroundColor: accentRgba(accentColor, 0.10),
   },
-  pillText: { color: FAINT, fontSize: 12, letterSpacing: 0.3 },
+  pillText: { color: FAINT, ...TOKENS.type.secondary },
   pillTextActive: { color: BRASS, fontWeight: '600' },
 
   cardOuter: { paddingHorizontal: 8 },
   card: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: theme.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
-    borderRadius: 16,
+    borderColor: theme.border,
+    borderRadius: TOKENS.card.borderRadius,
     padding: 24,
     minHeight: 360,
   },
   cardSection: {
     color: MUTED,
-    fontSize: 9,
-    letterSpacing: 2,
+    ...TOKENS.type.label,
   },
   cardCatchphrase: {
     color: BRASS,
+    ...TOKENS.type.secondary,
     fontSize: 11,
     fontStyle: 'italic',
     letterSpacing: 0.5,
@@ -538,26 +552,26 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   brassDivider: {
     height: 1,
-    backgroundColor: 'rgba(184,150,12,0.45)',
+    backgroundColor: accentRgba(accentColor, 0.45),
     marginVertical: 12,
   },
   cardBody: {
     color: OFF_WHITE,
-    fontSize: 14,
+    ...TOKENS.type.body,
     lineHeight: 22,
   },
   cardExample: {
     color: MUTED,
+    ...TOKENS.type.secondary,
     fontStyle: 'italic',
-    fontSize: 13,
     marginTop: 12,
     paddingLeft: 12,
     borderLeftWidth: 2,
     borderLeftColor: BRASS,
     lineHeight: 20,
   },
-  openLinkRow: { marginTop: 18 },
-  openLink: { color: BRASS, fontSize: 12, letterSpacing: 0.4, fontWeight: '500' },
+  openLinkRow: { marginTop: 18, minHeight: 44, justifyContent: 'center' },
+  openLink: { color: BRASS, ...TOKENS.type.secondary, letterSpacing: 0.4, fontWeight: '500' },
 
   dotsRow: {
     flexDirection: 'row',
@@ -570,7 +584,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: theme.border,
   },
   dotActive: {
     backgroundColor: BRASS,

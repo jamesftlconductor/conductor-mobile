@@ -30,8 +30,10 @@ import {
 } from 'react-native';
 
 import { useTheme } from '@/app/theme';
+import { EmptyState } from '@/components/EmptyState';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useUserId } from '@/hooks/useUserId';
+import { TOKENS } from '@/utils/designTokens';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const POLL_MS = 10_000;
@@ -197,10 +199,7 @@ export default function ChannelScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}>
         {messages.length === 0 ? (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>Your crew channel is quiet.</Text>
-            <Text style={styles.emptySub}>
-              Messages, signal updates, and Conductor notes all appear here.
-            </Text>
+            <EmptyState message="Your crew channel is quiet. Messages, signal updates, and Conductor notes all appear here. Say hello to your household." />
           </View>
         ) : (
           <FlatList
@@ -257,6 +256,7 @@ type ThemeColors = {
   text: string;
   muted: string;
   border?: string;
+  inputBackground: string;
 };
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
@@ -267,7 +267,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     },
     senderName: {
       color: theme.muted,
-      fontSize: 10,
+      ...TOKENS.type.label,
       letterSpacing: 0.5,
       marginBottom: 2,
       marginLeft: 4,
@@ -288,8 +288,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     },
     bubbleText: {
       color: theme.text,
-      fontSize: 14,
-      lineHeight: 19,
+      ...TOKENS.type.body,
     },
     conductorRow: {
       flexDirection: 'row',
@@ -305,7 +304,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     },
     conductorText: {
       color: theme.muted,
-      fontSize: 13,
+      ...TOKENS.type.secondary,
       fontStyle: 'italic',
       flexShrink: 1,
       textAlign: 'center',
@@ -319,33 +318,20 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     signalCard: {
       marginTop: 6,
       backgroundColor: theme.surface,
-      borderRadius: 8,
-      paddingVertical: 8,
+      borderRadius: TOKENS.card.borderRadius,
+      paddingVertical: 10,
       paddingHorizontal: 12,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border || 'rgba(255,255,255,0.08)',
     },
     signalCardText: {
       color: theme.muted,
-      fontSize: 12,
+      ...TOKENS.type.secondary,
     },
     emptyWrap: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 40,
-    },
-    emptyTitle: {
-      color: theme.text,
-      fontSize: 16,
-      fontWeight: '600',
-      marginBottom: 8,
-    },
-    emptySub: {
-      color: theme.muted,
-      fontSize: 13,
-      textAlign: 'center',
-      lineHeight: 19,
     },
     inputBar: {
       flexDirection: 'row',
@@ -367,11 +353,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     input: {
       flex: 1,
       color: theme.text,
-      fontSize: 14,
-      minHeight: 36,
+      ...TOKENS.type.body,
+      minHeight: 44,
       maxHeight: 100,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      backgroundColor: theme.inputBackground,
+      borderRadius: 20,
     },
     sendBtn: {
       width: 32,

@@ -10,7 +10,7 @@
 // blocked on the reveal payload.
 
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -20,13 +20,10 @@ import {
   View,
 } from 'react-native';
 import { useUserId } from '@/hooks/useUserId';
+import { useTheme } from '@/app/theme';
+import { TOKENS } from '@/utils/designTokens';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
-
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const BRASS = '#b8960c';
 
 const POLL_INTERVAL_MS = 1500;
 const POLL_MAX_MS = 12000;
@@ -59,6 +56,8 @@ function formatEta(eta: string): string {
 
 export default function OnboardRevealScreen() {
   const userId = useUserId();
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   if (!userId) return null;
   const [reveal, setReveal] = useState<Reveal | null>(null);
   const [error, setError] = useState(false);
@@ -192,6 +191,8 @@ export default function OnboardRevealScreen() {
 }
 
 function FadeInCard({ title, body }: { title: string; body: string }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
   useEffect(() => {
@@ -219,6 +220,8 @@ function FadeInCard({ title, body }: { title: string; body: string }) {
 }
 
 function FadeInCta({ onPress }: { onPress: () => void }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(opacity, {
@@ -238,16 +241,31 @@ function FadeInCta({ onPress }: { onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+type ThemeColors = {
+  background: string;
+  surface: string;
+  card: string;
+  text: string;
+  muted: string;
+  border: string;
+  inputBackground: string;
+};
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: theme.background,
+    // Hero layout: deliberate generous top padding for the
+    // moment-of-recognition reveal. Preserved intentionally.
     paddingHorizontal: 28,
     paddingTop: 100,
     paddingBottom: 60,
   },
   header: {
-    color: OFF_WHITE,
+    // Intentionally light/large hero type — not the standard
+    // TOKENS.type.header weight. Only the color is normalized.
+    color: theme.text,
     fontSize: 22,
     fontWeight: '300',
     letterSpacing: 0.3,
@@ -256,22 +274,24 @@ const styles = StyleSheet.create({
   cardStack: { gap: 14 },
   card: {
     padding: 18,
-    borderRadius: 12,
+    borderRadius: TOKENS.card.borderRadius,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
   },
-  cardTitle: { color: OFF_WHITE, fontSize: 15, fontWeight: '500', marginBottom: 4 },
-  cardBody: { color: MUTED, fontSize: 13, lineHeight: 19 },
+  cardTitle: { color: theme.text, ...TOKENS.type.body, fontWeight: '500', marginBottom: 4 },
+  cardBody: { color: theme.muted, ...TOKENS.type.secondary, lineHeight: 19 },
   workingText: {
-    color: MUTED,
+    // Hero waiting state — large light type, centered. Preserved.
+    color: theme.muted,
     fontSize: 16,
     fontWeight: '300',
     textAlign: 'center',
     marginTop: 200,
   },
   readyText: {
-    color: OFF_WHITE,
+    // Hero fallback state — large light type. Preserved.
+    color: theme.text,
     fontSize: 22,
     fontWeight: '300',
     textAlign: 'center',
@@ -281,8 +301,10 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 28,
     paddingVertical: 14,
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: 24,
-    backgroundColor: BRASS,
+    backgroundColor: accentColor,
   },
   transitionLink: {
     marginTop: 20,
@@ -290,10 +312,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   transitionLinkText: {
-    color: MUTED,
+    color: theme.muted,
     fontSize: 12,
     fontStyle: 'italic',
     letterSpacing: 0.2,
   },
-  ctaText: { color: '#0f0f0f', fontSize: 15, fontWeight: '600', letterSpacing: 0.5 },
-});
+  ctaText: { color: '#0f0f0f', ...TOKENS.type.body, fontWeight: '600', letterSpacing: 0.5 },
+  });
+}

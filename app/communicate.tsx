@@ -32,10 +32,9 @@ import {
   View,
 } from 'react-native';
 import { useUserId } from '@/hooks/useUserId';
+import { TOKENS } from '@/utils/designTokens';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
-
-const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type CommType = 'contractor_request' | 'network_update' | 'family_summary' | 'general';
 
@@ -246,7 +245,7 @@ export default function CommunicateScreen() {
                       }}
                       style={({ pressed }) => [
                         styles.matchRow,
-                        pressed && { backgroundColor: 'rgba(255,255,255,0.04)' },
+                        pressed && { backgroundColor: theme.inputBackground },
                       ]}>
                       <Text style={styles.matchName}>{m.name || '(no name)'}</Text>
                       {m.email ? <Text style={styles.matchMeta}>{m.email}</Text> : null}
@@ -412,7 +411,22 @@ function ViaCard({
   );
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string };
+type ThemeColors = {
+  background: string;
+  surface: string;
+  text: string;
+  muted: string;
+  border: string;
+  inputBackground: string;
+};
+
+function accentRgba(accentColor: string, opacity: number): string {
+  const hex = accentColor.replace('#', '');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
   const BG = theme.background;
@@ -423,74 +437,73 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 80 },
+  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 80 },
 
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
+  topBackText: { color: MUTED, ...TOKENS.type.secondary },
 
   title: {
     color: OFF_WHITE,
-    fontSize: 28,
-    fontWeight: '300',
+    ...TOKENS.type.header,
     marginTop: 14,
-    letterSpacing: 0.2,
   },
-  subtitle: { color: MUTED, fontSize: 12, marginTop: 4, marginBottom: 22 },
+  subtitle: { color: MUTED, ...TOKENS.type.secondary, marginTop: 4, marginBottom: 22 },
 
   field: { marginBottom: 18 },
   fieldLabel: {
     color: MUTED,
-    fontSize: 10,
-    letterSpacing: 1.2,
+    ...TOKENS.type.label,
     marginBottom: 8,
-    textTransform: 'uppercase',
   },
   input: {
     color: OFF_WHITE,
-    fontSize: 14,
+    ...TOKENS.type.body,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: theme.inputBackground,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
+    borderColor: theme.border,
   },
   contextInput: { minHeight: 110, textAlignVertical: 'top' },
   bodyInput: { minHeight: 220, textAlignVertical: 'top', lineHeight: 20 },
 
   matchList: {
     marginTop: 8,
-    borderRadius: 8,
+    borderRadius: TOKENS.card.borderRadius,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
     overflow: 'hidden',
   },
   matchRow: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: TOKENS.listItem.paddingVertical,
+    paddingHorizontal: TOKENS.listItem.paddingHorizontal,
+    minHeight: TOKENS.listItem.minHeight,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: SOFT_BORDER,
+    borderBottomColor: theme.border,
   },
-  matchName: { color: OFF_WHITE, fontSize: 13 },
-  matchMeta: { color: FAINT, fontSize: 11, marginTop: 2 },
+  matchName: { color: OFF_WHITE, ...TOKENS.type.secondary },
+  matchMeta: { color: FAINT, ...TOKENS.type.secondary, fontSize: 11, marginTop: 2 },
 
   typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   typePill: {
     paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    minHeight: 44,
+    justifyContent: 'center',
+    backgroundColor: theme.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
+    borderColor: theme.border,
   },
   typePillActive: {
     borderColor: BRASS,
-    backgroundColor: 'rgba(184,150,12,0.08)',
+    backgroundColor: accentRgba(accentColor, 0.08),
   },
-  typePillLabel: { color: OFF_WHITE, fontSize: 13, fontWeight: '500' },
+  typePillLabel: { color: OFF_WHITE, ...TOKENS.type.secondary, fontWeight: '500' },
   typePillLabelActive: { color: BRASS },
-  typePillHint: { color: MUTED, fontSize: 10, marginTop: 2 },
+  typePillHint: { color: MUTED, ...TOKENS.type.label, letterSpacing: 0.3, marginTop: 2 },
 
   primaryBtn: {
     backgroundColor: BRASS,
@@ -501,7 +514,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   primaryBtnText: {
     color: '#0f0f0f',
-    fontSize: 14,
+    ...TOKENS.type.body,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
@@ -509,17 +522,17 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   viaRow: { flexDirection: 'row', gap: 10 },
   viaCard: {
     flex: 1,
-    padding: 14,
-    borderRadius: 10,
+    padding: TOKENS.card.padding,
+    borderRadius: TOKENS.card.borderRadius,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
   },
-  viaCardActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
-  viaTitle: { color: OFF_WHITE, fontSize: 13, fontWeight: '600', marginBottom: 4 },
-  viaSub: { color: MUTED, fontSize: 11, lineHeight: 16 },
+  viaCardActive: { borderColor: BRASS, backgroundColor: accentRgba(accentColor, 0.08) },
+  viaTitle: { color: OFF_WHITE, ...TOKENS.type.secondary, fontWeight: '600', marginBottom: 4 },
+  viaSub: { color: MUTED, ...TOKENS.type.secondary, fontSize: 11, lineHeight: 16 },
 
-  sentTitle: { color: BRASS, fontSize: 22, fontWeight: '600', letterSpacing: 0.5 },
-  sentSub: { color: MUTED, fontSize: 12, marginTop: 12 },
+  sentTitle: { color: BRASS, ...TOKENS.type.header, fontWeight: '600', letterSpacing: 0.5 },
+  sentSub: { color: MUTED, ...TOKENS.type.secondary, marginTop: 12 },
   });
 }

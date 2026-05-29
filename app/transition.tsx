@@ -14,6 +14,7 @@ import { useMemo, useState } from 'react';
 import { ScreenHeader } from '@/components/ScreenHeader';
 
 import { useTheme } from '@/app/theme';
+import { TOKENS } from '@/utils/designTokens';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -29,8 +30,6 @@ import {
 import { useUserId } from '@/hooks/useUserId';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
-
-const BORDER = 'rgba(255,255,255,0.06)';
 
 type TransitionType =
   | 'new_baby'
@@ -360,7 +359,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string };
+type ThemeColors = {
+  background: string;
+  surface: string;
+  card: string;
+  text: string;
+  muted: string;
+  border: string;
+  inputBackground: string;
+};
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
   const BG = theme.background;
@@ -369,21 +376,19 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   const BRASS = accentColor;
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  pickScroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
-  formScroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 80 },
+  pickScroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 60 },
+  formScroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 80 },
   center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
+  topBackText: { color: MUTED, ...TOKENS.type.secondary, letterSpacing: 0.3 },
   title: {
     color: OFF_WHITE,
-    fontSize: 28,
-    fontWeight: '700',
+    ...TOKENS.type.header,
     marginTop: 18,
-    letterSpacing: 0.2,
   },
   subtitle: {
     color: MUTED,
-    fontSize: 13,
+    ...TOKENS.type.secondary,
     marginTop: 8,
     marginBottom: 28,
     lineHeight: 19,
@@ -395,35 +400,40 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   card: {
     width: '48%',
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: theme.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-    borderRadius: 14,
-    padding: 16,
+    borderColor: theme.border,
+    borderRadius: TOKENS.card.borderRadius,
+    padding: TOKENS.card.padding,
     marginBottom: 14,
   },
   cardEmoji: { fontSize: 28, marginBottom: 8 },
   cardLabel: {
     color: OFF_WHITE,
+    ...TOKENS.type.subheader,
     fontSize: 15,
-    fontWeight: '600',
+    lineHeight: 20,
     marginBottom: 6,
   },
   cardBlurb: {
     color: MUTED,
+    ...TOKENS.type.label,
     fontSize: 11,
+    fontWeight: '400',
+    letterSpacing: 0.1,
     lineHeight: 16,
   },
   formEmoji: { fontSize: 40, marginTop: 16 },
   formTitle: {
     color: OFF_WHITE,
+    ...TOKENS.type.header,
     fontSize: 24,
-    fontWeight: '700',
+    lineHeight: 30,
     marginTop: 8,
   },
   formBlurb: {
     color: MUTED,
-    fontSize: 13,
+    ...TOKENS.type.secondary,
     marginTop: 4,
     marginBottom: 24,
     lineHeight: 19,
@@ -431,6 +441,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   field: { marginBottom: 16 },
   fieldLabel: {
     color: MUTED,
+    ...TOKENS.type.label,
     fontSize: 11,
     letterSpacing: 1,
     marginBottom: 6,
@@ -438,39 +449,41 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   input: {
     color: OFF_WHITE,
-    fontSize: 15,
-    paddingVertical: 10,
+    ...TOKENS.type.body,
+    paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    minHeight: 44,
+    backgroundColor: theme.inputBackground,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
+    borderColor: theme.border,
   },
   primaryBtn: {
     backgroundColor: BRASS,
     paddingVertical: 14,
     paddingHorizontal: 32,
+    minHeight: 44,
     borderRadius: 24,
     alignSelf: 'center',
+    justifyContent: 'center',
     marginTop: 24,
   },
   primaryBtnText: {
     color: BG,
-    fontSize: 14,
+    ...TOKENS.type.body,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
-  linkBtn: { marginTop: 18, padding: 8 },
-  linkText: { color: MUTED, fontSize: 13 },
+  linkBtn: { marginTop: 18, padding: 8, minHeight: 44, justifyContent: 'center' },
+  linkText: { color: MUTED, ...TOKENS.type.secondary },
   doneHeader: {
     color: OFF_WHITE,
-    fontSize: 22,
-    fontWeight: '600',
+    ...TOKENS.type.header,
     textAlign: 'center',
   },
   doneSub: {
     color: MUTED,
-    fontSize: 14,
+    ...TOKENS.type.body,
     textAlign: 'center',
     marginTop: 12,
     marginBottom: 32,

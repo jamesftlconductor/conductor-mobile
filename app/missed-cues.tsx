@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useTheme } from '@/app/theme';
 import {
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,12 +12,14 @@ import {
 } from 'react-native';
 
 import { metaFor, Signal } from '@/components/signalTypes';
+import { EmptyState } from '@/components/EmptyState';
+import { SkeletonStack } from '@/components/SkeletonRow';
+import { TOKENS } from '@/utils/designTokens';
 import { useUserId } from '@/hooks/useUserId';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 const AMBER = '#f59e0b';
-const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -111,16 +112,10 @@ export default function MissedCuesScreen() {
       <Text style={styles.title}>Missed Cues</Text>
       <Text style={styles.subtitle}>Signals that went unresolved</Text>
 
-      {loading && (
-        <View style={styles.empty}>
-          <ActivityIndicator color={MUTED} />
-        </View>
-      )}
+      {loading && <SkeletonStack rows={4} />}
 
       {!loading && signals.length === 0 && (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>Nothing missed. You&apos;re clear.</Text>
-        </View>
+        <EmptyState message="Nothing slipped through. Every signal this week landed where it should — you're clear." />
       )}
 
       {!loading &&
@@ -145,13 +140,15 @@ export default function MissedCuesScreen() {
                 <TouchableOpacity
                   style={[styles.btn, styles.restBtn]}
                   onPress={() => patchSignal(s.id, 'resolved')}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}>
                   <Text style={styles.restBtnText}>Rest</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.holdBtn]}
                   onPress={() => patchSignal(s.id, 'active')}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}>
                   <Text style={styles.holdBtnText}>Hold</Text>
                 </TouchableOpacity>
               </View>
@@ -169,7 +166,7 @@ export default function MissedCuesScreen() {
   );
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string };
+type ThemeColors = { background: string; surface: string; text: string; muted: string; border: string; inputBackground: string };
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
   const BG = theme.background;
@@ -178,36 +175,24 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   const BRASS = accentColor;
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 60 },
+  scroll: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 60 },
   title: {
     color: OFF_WHITE,
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+    ...TOKENS.type.header,
     marginBottom: 6,
   },
   subtitle: {
     color: MUTED,
-    fontSize: 13,
-    paddingBottom: 24,
-    letterSpacing: 0.2,
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-  },
-  emptyText: {
-    color: MUTED,
-    fontSize: 14,
-    letterSpacing: 0.3,
+    ...TOKENS.type.secondary,
+    paddingBottom: TOKENS.space.section,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: SOFT_BORDER,
+    paddingVertical: TOKENS.listItem.paddingVertical,
+    minHeight: TOKENS.listItem.minHeight,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
     gap: 12,
   },
   emoji: {
@@ -220,18 +205,15 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   description: {
     color: OFF_WHITE,
-    fontSize: 15,
-    lineHeight: 20,
+    ...TOKENS.type.body,
   },
   sender: {
     color: MUTED,
-    fontSize: 12,
-    letterSpacing: 0.2,
+    ...TOKENS.type.secondary,
   },
   age: {
-    fontSize: 12,
+    ...TOKENS.type.secondary,
     marginTop: 2,
-    letterSpacing: 0.3,
   },
   actions: {
     flexDirection: 'column',
@@ -242,27 +224,27 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 14,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
     minWidth: 56,
+    minHeight: 32,
   },
   restBtn: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: theme.inputBackground,
   },
   restBtnText: {
     color: OFF_WHITE,
-    fontSize: 12,
+    ...TOKENS.type.secondary,
     fontWeight: '600',
-    letterSpacing: 0.3,
   },
   holdBtn: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.border,
   },
   holdBtnText: {
     color: MUTED,
-    fontSize: 12,
+    ...TOKENS.type.secondary,
     fontWeight: '600',
-    letterSpacing: 0.3,
   },
   backLink: {
     paddingTop: 32,
@@ -270,9 +252,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   backLinkText: {
     color: MUTED,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    ...TOKENS.type.label,
   },
   });
 }

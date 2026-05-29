@@ -18,6 +18,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { SectionLabel } from '@/components/SectionLabel';
+import { EmptyState } from '@/components/EmptyState';
+import { SkeletonStack } from '@/components/SkeletonRow';
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +33,7 @@ import {
 } from 'react-native';
 
 import { useTheme } from '@/app/theme';
+import { TOKENS } from '@/utils/designTokens';
 import { useUserId } from '@/hooks/useUserId';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -38,7 +42,6 @@ const API_BASE = 'https://conductor-ivory.vercel.app/api';
 // meaning (urgency, warning) independent of palette mode.
 const RED = '#d97757';
 const AMBER = '#f59e0b';
-const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type Priority = 'urgent' | 'recommended' | 'optional';
 
@@ -192,8 +195,9 @@ export default function MaintenanceScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color={BRASS} />
+      <View style={styles.container}>
+        <ScreenHeader title={titleText} subtitle="Loading your plan…" />
+        <SkeletonStack rows={5} />
       </View>
     );
   }
@@ -214,17 +218,11 @@ export default function MaintenanceScreen() {
     return (
       <View style={styles.container}>
         <ScreenHeader title={titleText} subtitle="No plan yet." />
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyHint}>
-              Conductor can build a 12-month maintenance plan from your home inventory
-              and your location's seasonal patterns.
-            </Text>
-            <TouchableOpacity onPress={generate} style={styles.primaryBtn} activeOpacity={0.7}>
-              <Text style={styles.primaryBtnText}>Build plan</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+        <EmptyState
+          message="Conductor can build a 12-month maintenance plan from your home inventory and your location's seasonal patterns."
+          actionLabel="Build plan"
+          onAction={generate}
+        />
       </View>
     );
   }
@@ -267,7 +265,7 @@ export default function MaintenanceScreen() {
 
       {plan.months.map((m) => (
         <View key={m.month} style={styles.monthBlock}>
-          <Text style={styles.monthHeader}>{m.month.toUpperCase()}</Text>
+          <SectionLabel title={m.month.toUpperCase()} />
           {m.items.length === 0 ? (
             <Text style={styles.monthQuiet}>Quiet month — nothing scheduled.</Text>
           ) : (
@@ -321,7 +319,15 @@ export default function MaintenanceScreen() {
   );
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string };
+type ThemeColors = {
+  background: string;
+  surface: string;
+  card: string;
+  text: string;
+  muted: string;
+  border: string;
+  inputBackground: string;
+};
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
   const BG = theme.background;
@@ -332,40 +338,29 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 80 },
-  topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  title: { color: OFF_WHITE, fontSize: 28, fontWeight: '300', marginTop: 14, letterSpacing: 0.2 },
-  subtitle: { color: MUTED, fontSize: 12, marginTop: 4, marginBottom: 22 },
+  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 80 },
   budgetCard: {
-    padding: 18,
-    borderRadius: 14,
+    padding: TOKENS.card.padding,
+    borderRadius: TOKENS.card.borderRadius,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(184, 150, 12, 0.35)',
-    backgroundColor: 'rgba(184, 150, 12, 0.03)',
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
     marginBottom: 18,
   },
-  budgetHeadline: { color: BRASS, fontSize: 24, fontWeight: '700', letterSpacing: -0.3, lineHeight: 28 },
+  budgetHeadline: { color: BRASS, ...TOKENS.type.header, fontSize: 24, lineHeight: 28 },
   budgetUnit: { color: MUTED, fontSize: 14, fontWeight: '400' },
-  budgetAnnual: { color: FAINT, fontSize: 13, marginTop: 6 },
-  budgetPeak: { color: MUTED, fontSize: 11, marginTop: 8, letterSpacing: 0.3 },
+  budgetAnnual: { color: FAINT, ...TOKENS.type.secondary, marginTop: 6 },
+  budgetPeak: { color: MUTED, ...TOKENS.type.label, fontWeight: '400', letterSpacing: 0.3, lineHeight: 16, marginTop: 8 },
   notesBlock: { marginBottom: 24, gap: 8 },
-  noteLine: { color: FAINT, fontSize: 12, fontStyle: 'italic', lineHeight: 19 },
+  noteLine: { color: FAINT, ...TOKENS.type.secondary, fontStyle: 'italic', lineHeight: 19 },
   monthBlock: { marginBottom: 22 },
-  monthHeader: {
-    color: BRASS,
-    fontSize: 10,
-    letterSpacing: 2,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  monthQuiet: { color: MUTED, fontSize: 12, fontStyle: 'italic', paddingVertical: 6 },
+  monthQuiet: { color: MUTED, ...TOKENS.type.secondary, fontStyle: 'italic', paddingVertical: 6 },
   itemCard: {
-    padding: 14,
-    borderRadius: 12,
+    padding: TOKENS.card.padding,
+    borderRadius: TOKENS.card.borderRadius,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
     marginBottom: 10,
   },
   itemHeaderRow: {
@@ -375,34 +370,25 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 6,
   },
   itemEmoji: { fontSize: 18 },
-  itemTask: { color: OFF_WHITE, fontSize: 14, fontWeight: '600', flex: 1 },
+  itemTask: { color: OFF_WHITE, ...TOKENS.type.subheader, flex: 1 },
   priorityBadge: {
-    fontSize: 10,
-    fontWeight: '600',
+    ...TOKENS.type.label,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
-  itemReason: { color: FAINT, fontSize: 12, fontStyle: 'italic', lineHeight: 17, marginBottom: 6 },
-  itemCost: { color: MUTED, fontSize: 11, marginBottom: 6 },
-  itemProvider: { color: BRASS, fontSize: 12, marginBottom: 6 },
+  itemReason: { color: FAINT, ...TOKENS.type.secondary, fontStyle: 'italic', lineHeight: 17, marginBottom: 6 },
+  itemCost: { color: MUTED, ...TOKENS.type.secondary, marginBottom: 6 },
+  itemProvider: { color: BRASS, ...TOKENS.type.secondary, marginBottom: 6 },
   itemFooterRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: 44,
     marginTop: 6,
   },
-  diyBadge: { color: MUTED, fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' },
-  addRadarLink: { color: BRASS, fontSize: 12, letterSpacing: 0.3 },
-  emptyWrap: { paddingVertical: 40, alignItems: 'center', gap: 24 },
-  emptyHint: { color: MUTED, fontSize: 13, lineHeight: 19, textAlign: 'center' },
-  primaryBtn: {
-    backgroundColor: BRASS,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 24,
-  },
-  primaryBtnText: { color: BG, fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
-  workingText: { color: OFF_WHITE, fontSize: 14, marginTop: 16, fontWeight: '500' },
-  workingSub: { color: MUTED, fontSize: 12, marginTop: 6, paddingHorizontal: 40, textAlign: 'center' },
+  diyBadge: { color: MUTED, ...TOKENS.type.label, fontSize: 9, lineHeight: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
+  addRadarLink: { color: BRASS, ...TOKENS.type.secondary, letterSpacing: 0.3 },
+  workingText: { color: OFF_WHITE, ...TOKENS.type.body, marginTop: 16, fontWeight: '500' },
+  workingSub: { color: MUTED, ...TOKENS.type.secondary, marginTop: 6, paddingHorizontal: 40, textAlign: 'center' },
   });
 }

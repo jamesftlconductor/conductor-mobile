@@ -5,8 +5,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useUserId } from '@/hooks/useUserId';
+import { SectionLabel } from '@/components/SectionLabel';
 import {
   Alert,
   ScrollView,
@@ -16,14 +17,10 @@ import {
   View,
 } from 'react-native';
 
-const API_BASE = 'https://conductor-ivory.vercel.app/api';
+import { useTheme } from '@/app/theme';
+import { TOKENS } from '@/utils/designTokens';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const FAINT = '#a8a5a0';
-const BRASS = '#b8960c';
-const SOFT_BORDER = 'rgba(255,255,255,0.06)';
+const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 type HouseholdType =
   | 'single'
@@ -45,6 +42,9 @@ const TYPE_CARDS: { id: HouseholdType; emoji: string; label: string; desc: strin
 ];
 
 export default function ProfileSetupScreen() {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const BRASS = accentColor;
   const params = useLocalSearchParams<{ next?: string }>();
   const [userId, setUserId] = useState<string>('');
   const [pickedType, setPickedType] = useState<HouseholdType | null>(null);
@@ -124,7 +124,7 @@ export default function ProfileSetupScreen() {
 
       {pickedType ? (
         <View style={styles.ownRentBlock}>
-          <Text style={styles.ownRentTitle}>Do you own or rent your home?</Text>
+          <SectionLabel title="Do you own or rent?" />
           <View style={styles.ownRentRow}>
             {(['own', 'rent', 'split'] as OwnRent[]).map((o) => (
               <TouchableOpacity
@@ -156,63 +156,83 @@ export default function ProfileSetupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 22, paddingTop: 80, paddingBottom: 60 },
+type ThemeColors = {
+  background: string;
+  surface: string;
+  card: string;
+  text: string;
+  muted: string;
+  border: string;
+  inputBackground: string;
+};
+
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  const OFF_WHITE = theme.text;
+  const MUTED = theme.muted;
+  const FAINT = theme.muted;
+  const BRASS = accentColor;
+  // Accent-tinted selection state, blended onto theme so it flips
+  // with the palette rather than hardcoding a brass rgba.
+  const accentTint = (alpha: number) => accentColor + Math.round(alpha * 255).toString(16).padStart(2, '0');
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  scroll: { paddingHorizontal: 20, paddingTop: 80, paddingBottom: 60 },
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  title: { color: OFF_WHITE, fontSize: 24, fontWeight: '400', marginTop: 14, lineHeight: 32 },
-  subtitle: { color: MUTED, fontSize: 13, marginTop: 6, marginBottom: 28 },
+  topBackText: { color: MUTED, ...TOKENS.type.secondary, letterSpacing: 0.3 },
+  title: { color: OFF_WHITE, ...TOKENS.type.header, fontSize: 24, lineHeight: 32, fontWeight: '400', marginTop: 14 },
+  subtitle: { color: MUTED, ...TOKENS.type.secondary, marginTop: 6, marginBottom: 28 },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   card: {
     width: '48%',
-    padding: 18,
-    borderRadius: 12,
+    padding: TOKENS.card.padding,
+    borderRadius: TOKENS.card.borderRadius,
     marginBottom: 12,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: theme.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
+    borderColor: theme.border,
     minHeight: 130,
   },
   cardActive: {
     borderColor: BRASS,
-    backgroundColor: 'rgba(184,150,12,0.08)',
+    backgroundColor: accentTint(0.08),
   },
   cardEmoji: { fontSize: 28, marginBottom: 8 },
-  cardLabel: { color: OFF_WHITE, fontSize: 14, fontWeight: '600' },
-  cardDesc: { color: FAINT, fontSize: 11, marginTop: 4, lineHeight: 16 },
+  cardLabel: { color: OFF_WHITE, ...TOKENS.type.body, fontWeight: '600' },
+  cardDesc: { color: FAINT, ...TOKENS.type.label, fontSize: 11, fontWeight: '400', letterSpacing: 0.1, textTransform: 'none', lineHeight: 16, marginTop: 4 },
 
-  ownRentBlock: { marginTop: 28 },
-  ownRentTitle: {
-    color: OFF_WHITE, fontSize: 14, fontWeight: '500', marginBottom: 12,
-  },
-  ownRentRow: { flexDirection: 'row', gap: 8 },
+  ownRentBlock: { marginTop: 8 },
+  ownRentRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   ownRentPill: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
   },
   ownRentPillActive: {
     borderColor: BRASS,
-    backgroundColor: 'rgba(184,150,12,0.08)',
+    backgroundColor: accentTint(0.08),
   },
-  ownRentLabel: { color: FAINT, fontSize: 13 },
+  ownRentLabel: { color: FAINT, ...TOKENS.type.secondary },
 
   continueBtn: {
     marginTop: 36,
+    minHeight: 44,
     backgroundColor: BRASS,
     paddingVertical: 16,
     borderRadius: 26,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   continueBtnText: {
     color: '#0f0f0f',
-    fontSize: 14,
+    ...TOKENS.type.body,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
-});
+  });
+}

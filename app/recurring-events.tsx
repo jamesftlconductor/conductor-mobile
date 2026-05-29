@@ -8,9 +8,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useUserId } from '@/hooks/useUserId';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { SectionLabel } from '@/components/SectionLabel';
+import { EmptyState } from '@/components/EmptyState';
+import { SkeletonStack } from '@/components/SkeletonRow';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -24,10 +26,9 @@ import {
 } from 'react-native';
 
 import { useTheme } from '@/app/theme';
+import { TOKENS } from '@/utils/designTokens';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
-
-const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 type Recurrence = 'annual' | 'quarterly' | 'monthly';
 type Category = 'financial' | 'health' | 'family' | 'home' | 'work' | 'other';
@@ -70,8 +71,6 @@ function formatTiming(ev: RecurringEvent): string {
 export default function RecurringEventsScreen() {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const BRASS = accentColor;
-  const MUTED = theme.muted;
   const [userId, setUserId] = useState<string>('');
   const [events, setEvents] = useState<RecurringEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,20 +150,20 @@ export default function RecurringEventsScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
 
         {loading ? (
-          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-            <ActivityIndicator color={BRASS} />
-          </View>
+          <SkeletonStack rows={5} />
         ) : events.length === 0 ? (
-          <Text style={styles.emptyText}>
-            No recurring events yet. Conductor will suggest some based on your household.
-          </Text>
+          <EmptyState
+            message="No recurring events yet. Add the dates that come around every year — renewals, checkups, anniversaries — and Conductor will surface them in time."
+            actionLabel="Add custom event"
+            onAction={() => setAddOpen(true)}
+          />
         ) : (
           CATEGORY_ORDER.map((cat) => {
             const list = grouped[cat.id];
             if (list.length === 0) return null;
             return (
               <View key={cat.id} style={styles.sectionBlock}>
-                <Text style={styles.sectionLabel}>{cat.emoji}  {cat.label}</Text>
+                <SectionLabel title={`${cat.emoji}  ${cat.label}`} />
                 {list.map((ev) => (
                   <EventRow
                     key={ev.id}
@@ -216,8 +215,8 @@ function EventRow({
         <Switch
           value={ev.active}
           onValueChange={onToggle}
-          trackColor={{ false: '#2a2a2a', true: BRASS }}
-          thumbColor={ev.active ? '#0f0f0f' : '#f4f3f4'}
+          trackColor={{ false: theme.border, true: BRASS }}
+          thumbColor={ev.active ? theme.background : theme.muted}
         />
         <TouchableOpacity onPress={onDelete} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
           <Text style={styles.eventDeleteLink}>Remove</Text>
@@ -375,7 +374,15 @@ function AddEventSheet({
   );
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string };
+type ThemeColors = {
+  background: string;
+  surface: string;
+  card: string;
+  text: string;
+  muted: string;
+  border: string;
+  inputBackground: string;
+};
 
 function makeStyles(theme: ThemeColors, accentColor: string) {
   const BG = theme.background;
@@ -385,72 +392,72 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   const BRASS = accentColor;
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 60 },
+  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 60 },
   topBack: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  topBackText: { color: MUTED, fontSize: 13, letterSpacing: 0.3 },
-  title: { color: OFF_WHITE, fontSize: 28, fontWeight: '300', marginTop: 14, letterSpacing: 0.2 },
-  subtitle: { color: MUTED, fontSize: 13, marginTop: 4, marginBottom: 28 },
-
-  emptyText: { color: FAINT, fontSize: 13, lineHeight: 20, marginTop: 20 },
+  topBackText: { color: MUTED, ...TOKENS.type.secondary, letterSpacing: 0.3 },
+  title: { color: OFF_WHITE, ...TOKENS.type.header, fontWeight: '300', marginTop: 14 },
+  subtitle: { color: MUTED, ...TOKENS.type.secondary, marginTop: 4, marginBottom: 28 },
 
   sectionBlock: { marginBottom: 28 },
-  sectionLabel: { color: BRASS, fontSize: 9, letterSpacing: 2, fontWeight: '600', marginBottom: 12 },
 
   eventRow: {
     flexDirection: 'row',
-    padding: 14,
-    borderRadius: 10,
+    padding: TOKENS.card.padding,
+    borderRadius: TOKENS.card.borderRadius,
+    minHeight: 44,
     marginBottom: 10,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: theme.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SOFT_BORDER,
+    borderColor: theme.border,
   },
-  eventName: { color: OFF_WHITE, fontSize: 14, fontWeight: '600' },
-  eventTiming: { color: MUTED, fontSize: 12, marginTop: 4 },
-  eventDesc: { color: FAINT, fontSize: 11, marginTop: 6, lineHeight: 16 },
-  eventDeleteLink: { color: MUTED, fontSize: 11 },
+  eventName: { color: OFF_WHITE, ...TOKENS.type.subheader },
+  eventTiming: { color: MUTED, ...TOKENS.type.secondary, marginTop: 4 },
+  eventDesc: { color: FAINT, ...TOKENS.type.secondary, fontSize: 12, marginTop: 6, lineHeight: 16 },
+  eventDeleteLink: { color: MUTED, ...TOKENS.type.secondary, fontSize: 12 },
 
   addBtn: {
     marginTop: 12,
     backgroundColor: BRASS,
     paddingVertical: 14,
+    minHeight: 44,
     borderRadius: 26,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  addBtnText: { color: '#0f0f0f', fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
+  addBtnText: { color: theme.background, ...TOKENS.type.body, fontWeight: '600', letterSpacing: 0.5 },
 
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: BG, borderTopLeftRadius: 18, borderTopRightRadius: 18,
+    backgroundColor: theme.surface, borderTopLeftRadius: 18, borderTopRightRadius: 18,
     padding: 22, paddingBottom: 36,
   },
-  sheetTitle: { color: OFF_WHITE, fontSize: 18, fontWeight: '500', marginBottom: 18 },
-  sheetLabel: { color: MUTED, fontSize: 10, letterSpacing: 1.5, fontWeight: '600', marginTop: 16, marginBottom: 8 },
+  sheetTitle: { color: OFF_WHITE, ...TOKENS.type.subheader, fontSize: 18, lineHeight: 24, marginBottom: 18 },
+  sheetLabel: { color: MUTED, ...TOKENS.type.label, letterSpacing: 1.5, marginTop: 16, marginBottom: 8 },
   input: {
-    color: OFF_WHITE, fontSize: 14,
+    color: OFF_WHITE, ...TOKENS.type.body,
     paddingVertical: 12, paddingHorizontal: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: theme.inputBackground,
     borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
   },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   pill: {
     paddingVertical: 7, paddingHorizontal: 12, borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
+    backgroundColor: theme.surface,
   },
-  pillActive: { borderColor: BRASS, backgroundColor: 'rgba(184,150,12,0.08)' },
-  pillText: { color: FAINT, fontSize: 11 },
+  pillActive: { borderColor: BRASS, backgroundColor: theme.inputBackground },
+  pillText: { color: FAINT, ...TOKENS.type.secondary, fontSize: 12 },
 
   cancelBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: 22, alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth, borderColor: SOFT_BORDER,
+    flex: 1, paddingVertical: 12, minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
   },
-  cancelText: { color: MUTED, fontSize: 13 },
+  cancelText: { color: MUTED, ...TOKENS.type.secondary },
   saveBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: 22, alignItems: 'center',
+    flex: 1, paddingVertical: 12, minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
     backgroundColor: BRASS,
   },
-  saveBtnText: { color: '#0f0f0f', fontSize: 13, fontWeight: '600' },
+  saveBtnText: { color: theme.background, ...TOKENS.type.secondary, fontWeight: '600' },
   });
 }
