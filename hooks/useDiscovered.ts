@@ -4,95 +4,75 @@
 // brief mode (Takeoff / Clearance / Overwatch) and across restarts.
 //
 // Backed by AsyncStorage keys `discovered:{featureId}`, fronted by a
-// module-level cache shared by every hook instance for the same
-// featureId.
+// module-level Map cache shared by every hook instance for the same
+// featureId. Listeners receive the new boolean so every live instance
+// rerenders in lockstep when one marks discovered.
 //
-// Two correctness rules learned the hard way (features kept reverting
-// to dim in Clearance after a cold restart):
-//
-//   1. EAGER PRELOAD. We multiGet every known discovery key once at
-//      module load so the cache is populated before the first render
-//      in the common case. No per-instance lazy read racing the user.
-//
-//   2. THE READ NEVER DOWNGRADES. A disk read may resolve AFTER the
-//      user has already tapped (markDiscovered sets the cache to true
-//      and queues the write). If the read then wrote its stale `false`
-//      back, the surface would flip from bright to dim. So the read
-//      only ever FILLS an undefined cache slot, and never replaces a
-//      `true` with `false`. markDiscovered (true) always wins.
+// Persistence rule: markDiscovered writes to disk FIRST, then updates
+// the cache + notifies. If the write throws it's logged, not
+// swallowed, and the cache is left untouched — so a failed write can
+// never masquerade as a success (discovered in memory, null on disk).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 
-// featureId → discovered. undefined = not yet resolved from disk.
-const cache: Record<string, boolean | undefined> = {};
-const listeners: Record<string, Set<() => void>> = {};
+// featureId → discovered. Absent key = not yet resolved from disk.
+const cache = new Map<string, boolean>();
+const listeners = new Map<string, Set<(v: boolean) => void>>();
 
-// Every featureId the app dims. Listed so the eager preload can
-// multiGet them in one round trip at startup. A featureId not in this
-// list still works (falls back to the per-instance lazy read) — the
-// list is purely a preload optimization.
 const KNOWN_FEATURE_IDS = ['pulse', 'signals', 'minimap', 'feedback'];
 
-function notify(featureId: string) {
-  const set = listeners[featureId];
-  if (set) for (const l of set) { try { l(); } catch { /* ignore */ } }
+function subscribe(featureId: string, cb: (v: boolean) => void) {
+  let set = listeners.get(featureId);
+  if (!set) { set = new Set(); listeners.set(featureId, set); }
+  set.add(cb);
+  return () => { listeners.get(featureId)?.delete(cb); };
 }
 
-function subscribe(featureId: string, cb: () => void) {
-  (listeners[featureId] ||= new Set()).add(cb);
-  return () => { listeners[featureId]?.delete(cb); };
+function emit(featureId: string, v: boolean) {
+  const set = listeners.get(featureId);
+  if (set) for (const fn of set) { try { fn(v); } catch { /* ignore */ } }
 }
 
-// Fill an undefined cache slot from a raw stored value. Never
-// downgrades: once a slot is `true` (either from disk or from a
-// mark), a later `false` read can't revert it.
+// Fill an unresolved cache slot from a raw stored value. Never
+// downgrades: once a slot is `true` (disk OR mark), a later `false`
+// read can't revert it.
 function fillFromDisk(featureId: string, raw: string | null) {
-  if (cache[featureId] === true) return; // mark already won — never downgrade
-  cache[featureId] = raw === 'true';
-  notify(featureId);
+  if (cache.get(featureId) === true) return; // mark already won
+  const v = raw === 'true';
+  cache.set(featureId, v);
+  emit(featureId, v);
 }
 
-// Eager preload — one multiGet at module load. Populates the cache
-// before any component reads it in the common case, closing the
-// lazy-read race window.
+// Eager preload — one multiGet at module load so the cache is
+// populated before first render in the common case.
 (async function preload() {
   try {
     const keys = KNOWN_FEATURE_IDS.map((id) => `discovered:${id}`);
     const pairs = await AsyncStorage.multiGet(keys);
-    for (const [k, v] of pairs) {
-      const id = k.slice('discovered:'.length);
-      fillFromDisk(id, v);
-    }
+    for (const [k, v] of pairs) fillFromDisk(k.slice('discovered:'.length), v);
   } catch { /* hooks fall back to per-instance lazy read */ }
 })();
 
 export function useDiscovered(featureId: string): [boolean, () => void] {
   // Seed from the cache when resolved; otherwise default to `true`
-  // (no-dim) for the one render before the disk read lands, so an
+  // (no-dim) for the one render before the disk read lands so an
   // already-discovered feature never flashes dim.
   const [discovered, setDiscovered] = useState<boolean>(
-    cache[featureId] !== undefined ? (cache[featureId] as boolean) : true
+    cache.has(featureId) ? (cache.get(featureId) as boolean) : true
   );
 
   useEffect(() => {
     let cancelled = false;
-    const unsub = subscribe(featureId, () => {
-      if (!cancelled && cache[featureId] !== undefined) {
-        setDiscovered(cache[featureId] as boolean);
-      }
-    });
+    const unsub = subscribe(featureId, (v) => { if (!cancelled) setDiscovered(v); });
 
-    if (cache[featureId] !== undefined) {
-      // Resolved already (preload or a prior instance / mark).
-      setDiscovered(cache[featureId] as boolean);
+    if (cache.has(featureId)) {
+      setDiscovered(cache.get(featureId) as boolean);
     } else {
       AsyncStorage.getItem(`discovered:${featureId}`).then((val) => {
         if (cancelled) return;
         fillFromDisk(featureId, val); // never downgrades a mark
-        if (cache[featureId] !== undefined) {
-          setDiscovered(cache[featureId] as boolean);
-        }
+        if (cache.has(featureId)) setDiscovered(cache.get(featureId) as boolean);
       }).catch(() => { /* keep optimistic true on read failure */ });
     }
 
@@ -100,26 +80,13 @@ export function useDiscovered(featureId: string): [boolean, () => void] {
   }, [featureId]);
 
   const markDiscovered = async () => {
-    cache[featureId] = true; // wins over any in-flight disk read
-    setDiscovered(true);
-    notify(featureId);
-    // Explicitly await the write and verify it landed. The previous
-    // fire-and-forget `.catch(() => {})` swallowed any failure, so a
-    // write that never persisted looked identical to a successful
-    // one — discovered:true in memory, null on disk, dim again after
-    // restart. Awaiting + reading back surfaces a real failure to the
-    // console instead of hiding it.
     try {
-      const key = `discovered:${featureId}`;
-      await AsyncStorage.setItem(key, 'true');
-      const readback = await AsyncStorage.getItem(key);
-      if (readback !== 'true') {
-        // eslint-disable-next-line no-console
-        console.warn(`[useDiscovered] write for ${key} did not stick (readback=${readback})`);
-      }
-    } catch (e: any) {
+      await AsyncStorage.setItem(`discovered:${featureId}`, 'true');
+      cache.set(featureId, true);
+      emit(featureId, true); // updates this instance + every other live one
+    } catch (e) {
       // eslint-disable-next-line no-console
-      console.warn(`[useDiscovered] persist failed for discovered:${featureId}: ${e?.message || String(e)}`);
+      console.warn('[useDiscovered] write failed', featureId, e);
     }
   };
 
