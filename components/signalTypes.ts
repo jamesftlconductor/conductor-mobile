@@ -20,6 +20,10 @@ export type Signal = {
   // signals so the user can correct the auto-classification.
   emotionalValence?: 'joyful' | 'neutral' | 'stressful' | 'grief';
   emotionalIntensity?: 'high' | 'medium' | 'low';
+  // Set by the backend thread detector (api/import.js) and trip-thread
+  // synthesis (api/trip-threads.js). Signals sharing a threadId belong to
+  // one trip/thread and are collapsed into a single cluster dot on Hover.
+  threadId?: string;
 };
 
 export type TypeMeta = { emoji: string; color: string; label: string };

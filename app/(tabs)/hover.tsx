@@ -81,6 +81,22 @@ function parseEta(eta?: string | null) {
   return Date.parse(eta);
 }
 
+// A cluster dot stands in for 2+ signals sharing a threadId (e.g. all
+// legs of one trip). It's Signal-shaped so it flows through ring
+// assignment / positioning / SignalDot unchanged; the extra fields let
+// the render path draw a count badge and the tap handler open the
+// expansion sheet instead of a single FinaleSheet.
+type ClusterSignal = Signal & {
+  __cluster: true;
+  clusterSignals: Signal[];
+  clusterCount: number;
+  threadId: string;
+};
+
+function isClusterSignal(s: Signal): s is ClusterSignal {
+  return (s as ClusterSignal).__cluster === true;
+}
+
 function ringForSignal(s: Signal): RingKey {
   // TODAY (today/overdue) → inner. THIS WEEK (next 7 days, after today) → middle.
   // AHEAD (>7 days, or no ETA non-delayed) → outer. Delayed-no-ETA → inner.
@@ -547,6 +563,7 @@ function RotatingRing({
             onPress={() => onSignalPress(s)}
             crewOverride={crewOverride}
             isAttributed={!!crewMemberId}
+            clusterCount={isClusterSignal(s) ? s.clusterCount : undefined}
           />
         );
       })}
@@ -567,6 +584,7 @@ function SignalDot({
   onPress,
   crewOverride,
   isAttributed,
+  clusterCount,
 }: {
   meta: TypeMeta;
   x: number;
@@ -580,6 +598,7 @@ function SignalDot({
   onPress: () => void;
   crewOverride?: string;
   isAttributed?: boolean;
+  clusterCount?: number;
 }) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
@@ -669,6 +688,13 @@ function SignalDot({
           />
         ) : null}
         <Text style={styles.signalEmoji}>{meta.emoji}</Text>
+        {typeof clusterCount === 'number' && clusterCount > 1 ? (
+          <View
+            pointerEvents="none"
+            style={[styles.clusterBadge, { borderColor: dotColor }]}>
+            <Text style={styles.clusterBadgeText}>{clusterCount}</Text>
+          </View>
+        ) : null}
       </Animated.View>
     </TouchableOpacity>
   );
@@ -1427,6 +1453,46 @@ export default function HoverScreen() {
   }, []);
   const [selected, setSelected] = useState<Signal | null>(null);
   const [resolving, setResolving] = useState(false);
+  // Trip-cluster expansion sheet. clusterSel holds the tapped cluster dot;
+  // clusterTitle is the trip theme, fetched lazily from the thread record.
+  const [clusterSel, setClusterSel] = useState<ClusterSignal | null>(null);
+  const [clusterTitle, setClusterTitle] = useState<string | null>(null);
+
+  // Route a dot tap: cluster dots open the expansion sheet, everything
+  // else opens the single FinaleSheet as before.
+  const handleDotPress = (s: Signal) => {
+    if (isClusterSignal(s)) {
+      setClusterTitle(null);
+      setClusterSel(s);
+    } else {
+      setSelected(s);
+    }
+  };
+
+  // Lazily resolve the trip theme ("Paris trip — June 12-23") for the
+  // expanded cluster header. The member list renders instantly from the
+  // local cluster; this just upgrades the title when the thread record
+  // comes back. Best-effort — falls back to the leg count.
+  useEffect(() => {
+    if (!clusterSel || !userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/signals?type=thread&threadId=${encodeURIComponent(clusterSel.threadId)}&userId=${userId}`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const theme = data?.thread?.theme || data?.thread?.summary;
+        if (!cancelled && theme) setClusterTitle(theme);
+      } catch {
+        // ignore — fall back to the default title
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clusterSel, userId]);
   const [resolveAnims, setResolveAnims] = useState<ResolveAnim[]>([]);
   const [ripples, setRipples] = useState<{ id: number; color: string; delay: number }[]>([]);
   const rippleSeq = useRef(0);
@@ -1571,7 +1637,10 @@ export default function HoverScreen() {
 
   const grouped = useMemo(() => {
     const animatingIds = new Set(resolveAnims.map((a) => String(a.signal.id)));
-    const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
+
+    // Pass 1 — apply the same crew/view filters as before, collecting the
+    // signals that survive into a flat visible list.
+    const visible: Signal[] = [];
     for (const s of signals) {
       if (animatingIds.has(String(s.id))) continue;
       // Crew member filter (personal view only) — when a crew name
@@ -1586,10 +1655,53 @@ export default function HoverScreen() {
         // Unowned (userId null) signals appear in both modes.
         continue;
       }
-      out[ringForSignal(s)].push(s);
+      visible.push(s);
     }
+
+    // Pass 2 — collapse signals that share a threadId into one cluster
+    // dot. 2+ members → a single ClusterSignal placed on the ring of its
+    // soonest leg; 0-1 members render as ordinary dots.
+    const byThread = new Map<string, Signal[]>();
+    const dots: Signal[] = [];
+    for (const s of visible) {
+      const tid = s.threadId;
+      if (tid) {
+        const arr = byThread.get(tid);
+        if (arr) arr.push(s);
+        else byThread.set(tid, [s]);
+      } else {
+        dots.push(s);
+      }
+    }
+    for (const [tid, members] of byThread) {
+      if (members.length < 2) {
+        dots.push(...members);
+        continue;
+      }
+      // Soonest leg drives the cluster's ring + angle so it lands where
+      // the nearest trip event would.
+      let earliestMs = Infinity;
+      for (const m of members) {
+        const ms = parseEta(m.eta);
+        if (!isNaN(ms) && ms < earliestMs) earliestMs = ms;
+      }
+      const cluster: ClusterSignal = {
+        id: `cluster:${tid}`,
+        type: 'travel',
+        eta: isFinite(earliestMs) ? new Date(earliestMs).toISOString() : members[0].eta,
+        description: `${members.length} linked signals`,
+        __cluster: true,
+        clusterSignals: members,
+        clusterCount: members.length,
+        threadId: tid,
+      };
+      dots.push(cluster);
+    }
+
+    const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
+    for (const s of dots) out[ringForSignal(s)].push(s);
     return out;
-  }, [signals, resolveAnims, viewMode, crewFilter]);
+  }, [signals, resolveAnims, viewMode, crewFilter, userId]);
 
   function startRest(signal: Signal) {
     const ring = ringForSignal(signal);
@@ -1906,7 +2018,7 @@ export default function HoverScreen() {
           highlightedTypeKey={filterTypeKey}
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
-          onSignalPress={setSelected}
+          onSignalPress={handleDotPress}
           crewColorMap={crewColorMap}
         />
         <RotatingRing
@@ -1919,7 +2031,7 @@ export default function HoverScreen() {
           highlightedTypeKey={filterTypeKey}
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
-          onSignalPress={setSelected}
+          onSignalPress={handleDotPress}
           crewColorMap={crewColorMap}
         />
         <RotatingRing
@@ -1932,7 +2044,7 @@ export default function HoverScreen() {
           highlightedTypeKey={filterTypeKey}
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
-          onSignalPress={setSelected}
+          onSignalPress={handleDotPress}
           crewColorMap={crewColorMap}
         />
 
@@ -2012,7 +2124,7 @@ export default function HoverScreen() {
           opacity={legendOpacity}
           onOpenConductor={() => openConductorSheet('hover')}
           signals={signals}
-          onSignalPress={setSelected}
+          onSignalPress={handleDotPress}
         />
 
         <AddSignalSheet
@@ -2064,6 +2176,25 @@ export default function HoverScreen() {
             onClose={() => setFilterTypeKey(null)}
             onRest={(s) => {
               setFilterTypeKey(null);
+              setTimeout(() => startRest(s), 50);
+            }}
+          />
+        )}
+
+        {clusterSel && (
+          <FinaleSheet
+            mode="category"
+            visible={!!clusterSel}
+            title={clusterTitle || `${clusterSel.clusterCount} linked signals`}
+            signals={clusterSel.clusterSignals}
+            bottomInset={insets.bottom}
+            onClose={() => setClusterSel(null)}
+            onSelect={(s) => {
+              setClusterSel(null);
+              setTimeout(() => setSelected(s), 50);
+            }}
+            onRest={(s) => {
+              setClusterSel(null);
               setTimeout(() => startRest(s), 50);
             }}
           />
@@ -2220,6 +2351,27 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   signalEmoji: {
     fontSize: 16,
     lineHeight: 20,
+  },
+  // Count badge on a trip-cluster dot — small chip pinned to the
+  // upper-right of the circle showing how many signals it stands in for.
+  clusterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 3,
+    backgroundColor: '#1a1916',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clusterBadgeText: {
+    color: '#f0ede8',
+    fontSize: 9,
+    fontWeight: '700',
+    lineHeight: 12,
   },
   travelDot: {
     position: 'absolute',

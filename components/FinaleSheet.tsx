@@ -52,11 +52,19 @@ type SingleProps = {
 type CategoryProps = {
   mode: 'category';
   visible: boolean;
-  categoryTypeKey: string;
+  // Drives the header emoji/label via TYPE_META. Optional — a trip
+  // cluster passes `title` instead of a type key.
+  categoryTypeKey?: string;
+  // Overrides the header when set (used by Hover trip-cluster expansion,
+  // e.g. "Paris trip — June 12-23"). Takes precedence over categoryTypeKey.
+  title?: string;
   signals: Signal[];
   bottomInset?: number;
   onClose: () => void;
   onRest: (s: Signal) => void;
+  // When provided, tapping a row body opens that signal (used by the
+  // trip cluster to drill into an individual leg). The Rest button stays.
+  onSelect?: (s: Signal) => void;
 };
 
 type FinaleSheetProps = SingleProps | CategoryProps;
@@ -74,8 +82,8 @@ export function FinaleSheet(props: FinaleSheetProps) {
 function CategorySheet(props: CategoryProps) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const { visible, categoryTypeKey, signals, bottomInset = 0, onClose, onRest } = props;
-  const categoryMeta = TYPE_META[categoryTypeKey];
+  const { visible, categoryTypeKey, title, signals, bottomInset = 0, onClose, onRest, onSelect } = props;
+  const categoryMeta = categoryTypeKey ? TYPE_META[categoryTypeKey] : undefined;
 
   return (
     <Modal
@@ -89,14 +97,21 @@ function CategorySheet(props: CategoryProps) {
         <Pressable style={styles.filterSheet} onPress={() => {}}>
           <View style={styles.filterHeader}>
             <View style={styles.filterTitleRow}>
-              {categoryMeta && (
+              {title ? (
+                <>
+                  <Text style={styles.filterTitleEmoji}>✈️</Text>
+                  <Text style={[styles.filterTitle, { color: accentColor }]}>
+                    {title}
+                  </Text>
+                </>
+              ) : categoryMeta ? (
                 <>
                   <Text style={styles.filterTitleEmoji}>{categoryMeta.emoji}</Text>
                   <Text style={[styles.filterTitle, { color: categoryMeta.color }]}>
                     {categoryMeta.label}
                   </Text>
                 </>
-              )}
+              ) : null}
             </View>
             <TouchableOpacity
               onPress={onClose}
@@ -112,21 +127,33 @@ function CategorySheet(props: CategoryProps) {
             ) : (
               signals.map((s) => {
                 const meta = metaFor(s);
+                const bodyContent = (
+                  <>
+                    <Text style={styles.filterItemDescription} numberOfLines={2}>
+                      {s.description || 'Unknown signal'}
+                    </Text>
+                    {!!s.sender && (
+                      <Text style={styles.filterItemMeta}>From {s.sender}</Text>
+                    )}
+                    {!!s.status && (
+                      <Text style={styles.filterItemMeta}>Status {s.status}</Text>
+                    )}
+                    <Text style={styles.filterItemMeta}>ETA {s.eta || 'Unknown'}</Text>
+                  </>
+                );
                 return (
                   <View key={String(s.id)} style={styles.filterItem}>
                     <Text style={styles.filterItemEmoji}>{meta.emoji}</Text>
-                    <View style={styles.filterItemBody}>
-                      <Text style={styles.filterItemDescription} numberOfLines={2}>
-                        {s.description || 'Unknown signal'}
-                      </Text>
-                      {!!s.sender && (
-                        <Text style={styles.filterItemMeta}>From {s.sender}</Text>
-                      )}
-                      {!!s.status && (
-                        <Text style={styles.filterItemMeta}>Status {s.status}</Text>
-                      )}
-                      <Text style={styles.filterItemMeta}>ETA {s.eta || 'Unknown'}</Text>
-                    </View>
+                    {onSelect ? (
+                      <TouchableOpacity
+                        style={styles.filterItemBody}
+                        activeOpacity={0.7}
+                        onPress={() => onSelect(s)}>
+                        {bodyContent}
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.filterItemBody}>{bodyContent}</View>
+                    )}
                     <TouchableOpacity
                       style={styles.filterRestBtn}
                       onPress={() => onRest(s)}>
