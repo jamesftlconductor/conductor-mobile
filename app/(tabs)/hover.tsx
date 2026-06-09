@@ -60,9 +60,9 @@ type RingDef = {
 };
 
 const RINGS: Record<RingKey, RingDef> = {
-  outer:  { key: 'outer',  radius: 165, rotationMs: 60000, strokeOpacity: 0.4, label: 'ON THE HORIZON',    pulseMs: 2500 },
-  middle: { key: 'middle', radius: 115, rotationMs: 30000, strokeOpacity: 0.7, label: 'APPROACHING FAST',  pulseMs: 1500 },
-  inner:  { key: 'inner',  radius: 65,  rotationMs: 15000, strokeOpacity: 1.0, label: 'ACT NOW',           pulseMs: 600  },
+  outer:  { key: 'outer',  radius: 165, rotationMs: 60000, strokeOpacity: 0.15, label: 'ON THE HORIZON',    pulseMs: 2500 },
+  middle: { key: 'middle', radius: 115, rotationMs: 30000, strokeOpacity: 0.25, label: 'APPROACHING FAST',  pulseMs: 1500 },
+  inner:  { key: 'inner',  radius: 65,  rotationMs: 15000, strokeOpacity: 0.4,  label: 'ACT NOW',           pulseMs: 600  },
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -245,7 +245,13 @@ type ResolveAnim = {
 };
 
 function DashedRing({ radius, opacity }: { radius: number; opacity: number }) {
-  const { accentColor } = useTheme();
+  // Rings read as a quiet, theme-aware scaffold rather than a bright brass
+  // accent. theme.text is used as the base hue (it flips with the theme so
+  // the rings stay visible in light mode) and the graduated per-ring
+  // strokeOpacity (outer 0.15 → inner 0.4) supplies the subtlety — basing
+  // off theme.border instead would compound its built-in ~0.08 alpha to
+  // near-invisible. 0.5px stroke keeps them thin and refined.
+  const { theme } = useTheme();
   const size = radius * 2 + 4;
   const c = size / 2;
   const circumference = 2 * Math.PI * radius;
@@ -257,9 +263,9 @@ function DashedRing({ radius, opacity }: { radius: number; opacity: number }) {
         cx={c}
         cy={c}
         r={radius}
-        stroke={accentColor}
+        stroke={theme.text}
         strokeOpacity={opacity}
-        strokeWidth={1}
+        strokeWidth={0.5}
         fill="none"
         strokeDasharray={`${dashLen},${dashLen}`}
       />

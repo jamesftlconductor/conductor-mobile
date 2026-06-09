@@ -95,9 +95,11 @@ const CENTER = SIZE / 2;
 function MinimapRing({
   ring,
   signals,
+  arcColor,
 }: {
   ring: RingDef;
   signals: Signal[];
+  arcColor: string;
 }) {
   const rotation = useRef(new Animated.Value(0)).current;
 
@@ -147,7 +149,7 @@ function MinimapRing({
           cx={CENTER}
           cy={CENTER}
           r={ring.radius}
-          stroke={OFF_WHITE}
+          stroke={arcColor}
           strokeOpacity={ring.strokeOpacity}
           strokeWidth={0.6}
           fill="none"
@@ -245,7 +247,13 @@ const DISCOVERY_AUTOHIDE_MS = 4000;
 export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp }: MinimapProps = {}) {
   const userId = useUserId();
   if (!userId) return null;
-  const { theme, accentColor } = useTheme();
+  const { theme, accentColor, isDark } = useTheme();
+  // Arc color flips with the theme so the rings read in light mode (where
+  // the old hardcoded off-white was invisible). The radar disc keeps its
+  // dark navy in dark mode but lightens to the theme surface in light mode
+  // so the dark arcs contrast against it.
+  const arcColor = isDark ? OFF_WHITE : theme.text;
+  const discBg = isDark ? NAVY : theme.surface;
   // Weather-vane state drives the border color + pulse cadence. The
   // urgentCount that came in via prop (legacy callers) is overridden
   // by the hook's count so every minimap reads from the same source.
@@ -473,6 +481,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
       <Animated.View
         style={[
           styles.circle,
+          { backgroundColor: discBg },
           // Weather-vane border — borderColor flips based on the
           // household state. red_alert → red, grief → violet, joy →
           // gold, etc. Default state (clear/busy) is brass so a
@@ -489,12 +498,12 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
           // the first-render discovery bounce don't fight each other.
           { transform: [{ scale: Animated.multiply(tapScale, discoveryScale) }] },
         ]}>
-        <MinimapRing ring={RINGS.outer} signals={grouped.outer} />
-        <MinimapRing ring={RINGS.middle} signals={grouped.middle} />
+        <MinimapRing ring={RINGS.outer} signals={grouped.outer} arcColor={arcColor} />
+        <MinimapRing ring={RINGS.middle} signals={grouped.middle} arcColor={arcColor} />
         <Animated.View
           pointerEvents="none"
           style={[styles.ringLayer, urgentCount > 0 && { opacity: pulseAnim }]}>
-          <MinimapRing ring={RINGS.inner} signals={grouped.inner} />
+          <MinimapRing ring={RINGS.inner} signals={grouped.inner} arcColor={arcColor} />
         </Animated.View>
       </Animated.View>
       {urgentCount > 0 ? (

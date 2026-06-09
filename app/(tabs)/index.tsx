@@ -1645,24 +1645,6 @@ export default function TakeoffScreen() {
         <ScrollView
           style={styles.scrollFlex}
           contentContainerStyle={styles.content}>
-          {/* Minimap with discovery dimming. When undiscovered, an
-              outer Pressable catches the tap and shows the intro
-              modal; the Minimap inside is pointerEvents:none so its
-              own onPress doesn't fire. */}
-          {minimapDiscovered ? (
-            <Minimap
-              urgentCount={urgentCount}
-              onPress={() => openConductorSheet('ground')}
-            />
-          ) : (
-            <Pressable
-              onPress={() => setIntroFeatureId('minimap')}
-              style={{ opacity: 0.45 }}>
-              <View pointerEvents="none">
-                <Minimap urgentCount={urgentCount} onPress={() => {}} />
-              </View>
-            </Pressable>
-          )}
           <View style={styles.header}>
             <Text style={[styles.greeting, { color: bandTheme.greeting }]}>
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
@@ -2403,6 +2385,28 @@ export default function TakeoffScreen() {
         </ScrollView>
       </GestureDetector>
 
+      {/* Floating Minimap — rendered as a root sibling (NOT inside the
+          ScrollView) so it paints above the brief content and reliably
+          receives taps. As a scroll child its absolute box was overlapped
+          by later content Views which swallowed the tap. Discovery dimming:
+          when undiscovered, an outer Pressable catches the tap and opens
+          the intro; the Minimap inside is pointerEvents:none so its own
+          onPress doesn't fire. */}
+      {minimapDiscovered ? (
+        <Minimap
+          urgentCount={urgentCount}
+          onPress={() => openConductorSheet('ground')}
+        />
+      ) : (
+        <Pressable
+          onPress={() => setIntroFeatureId('minimap')}
+          style={styles.minimapDiscoveryWrap}>
+          <View pointerEvents="none">
+            <Minimap urgentCount={urgentCount} floating={false} onPress={() => {}} />
+          </View>
+        </Pressable>
+      )}
+
       <YesterdayModal
         visible={showYesterday}
         userId={userId}
@@ -2558,6 +2562,16 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   scrollFlex: {
     flex: 1,
+  },
+  // Floating-minimap discovery wrapper — pins the undiscovered (dimmed)
+  // minimap at the same top-right spot the floating Minimap uses, so the
+  // intro-opening Pressable sits exactly over the widget.
+  minimapDiscoveryWrap: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    opacity: 0.45,
   },
   // Resolution-moment toast — absolutely-positioned brass pill near
   // the top of the screen. Renders for 2s on Done tap, fades out
