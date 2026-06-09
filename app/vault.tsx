@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
   Platform,
@@ -893,6 +894,9 @@ function AddVaultModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+      <KeyboardAvoidingView
+        style={styles.kavFill}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Pressable style={styles.modalBackdrop} onPress={close}>
         <SwipeDismissSheet style={styles.addSheet} onClose={close}>
           <Pressable onPress={() => {}}>
@@ -1253,6 +1257,7 @@ function AddVaultModal({
           </Pressable>
         </SwipeDismissSheet>
       </Pressable>
+      </KeyboardAvoidingView>
 
       <CameraScanner
         visible={showScanner}
@@ -1463,6 +1468,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   emptyCardBody: { flex: 1, gap: 2 },
   emptyCardTitle: { color: theme.text, fontSize: 14, fontWeight: '600' },
   emptyCardSubtext: { color: theme.muted, fontSize: 12 },
+  kavFill: { flex: 1 },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',

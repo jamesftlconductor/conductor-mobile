@@ -3,8 +3,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -252,6 +254,9 @@ function AddProviderModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+      <KeyboardAvoidingView
+        style={styles.kavFill}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Pressable style={styles.modalBackdrop} onPress={close}>
         <SwipeDismissSheet style={styles.sheet} onClose={close}>
           <Pressable onPress={() => {}}>
@@ -295,6 +300,7 @@ function AddProviderModal({
           </Pressable>
         </SwipeDismissSheet>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -302,6 +308,7 @@ function AddProviderModal({
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
+    kavFill: { flex: 1 },
     scroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 60 },
     topBack: {
       alignSelf: 'flex-start',

@@ -25,6 +25,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  KeyboardAvoidingView,
   Linking,
   Platform,
   ScrollView,
@@ -561,7 +562,9 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.progressTrack}>
         <Animated.View style={[styles.progressFill, { width: widthInterpolated }]} />
       </View>
@@ -661,7 +664,7 @@ export default function OnboardingScreen() {
           />
         ) : null}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

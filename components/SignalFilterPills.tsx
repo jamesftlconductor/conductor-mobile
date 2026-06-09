@@ -30,6 +30,7 @@ export function SignalFilterPills({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={styles.scroll}
       contentContainerStyle={styles.row}>
       {PILLS.map((p) => {
         const active = p.id === value;
@@ -63,8 +64,18 @@ export function SignalFilterPills({
 }
 
 const styles = StyleSheet.create({
+  // Lock the row's height: as a plain flex child in a column the
+  // horizontal ScrollView's default flexShrink:1 let the parent
+  // compress it vertically, clipping the pills to half-height. flexGrow/
+  // flexShrink:0 pins it to its content height so the pills always show
+  // in full (and still scroll horizontally if more pills are added).
+  scroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   row: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
