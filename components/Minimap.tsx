@@ -56,6 +56,9 @@ type Signal = {
   type?: string;
   state?: string;
   userId?: string | null;
+  // Signals sharing a threadId belong to one trip/thread and collapse
+  // into a single dot here, matching the Hover radar's clustering.
+  threadId?: string;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -290,13 +293,48 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
   }, []);
 
   const grouped = useMemo(() => {
-    const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
+    // Apply the personal-view filter, then collapse signals that share a
+    // threadId into a single dot (placed on the ring of its soonest leg)
+    // so a multi-leg trip reads as one dot here just like on Hover. No
+    // count badge — dots are 3px, too small to label legibly.
+    const visible: Signal[] = [];
     for (const s of signals) {
       if (viewMode === 'personal' && s.userId && s.userId !== userId) continue;
-      out[ringForSignal(s)].push(s);
+      visible.push(s);
     }
+
+    const byThread = new Map<string, Signal[]>();
+    const dots: Signal[] = [];
+    for (const s of visible) {
+      if (s.threadId) {
+        const arr = byThread.get(s.threadId);
+        if (arr) arr.push(s);
+        else byThread.set(s.threadId, [s]);
+      } else {
+        dots.push(s);
+      }
+    }
+    for (const [tid, members] of byThread) {
+      if (members.length < 2) {
+        dots.push(...members);
+        continue;
+      }
+      let earliestMs = Infinity;
+      for (const m of members) {
+        const ms = parseEta(m.eta);
+        if (!isNaN(ms) && ms < earliestMs) earliestMs = ms;
+      }
+      dots.push({
+        id: `cluster:${tid}`,
+        type: 'travel',
+        eta: isFinite(earliestMs) ? new Date(earliestMs).toISOString() : members[0].eta,
+      });
+    }
+
+    const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
+    for (const s of dots) out[ringForSignal(s)].push(s);
     return out;
-  }, [signals, viewMode]);
+  }, [signals, viewMode, userId]);
 
   const innerSignals = grouped.inner;
   const glowColor = innerSignals.length > 0 ? colorFor(innerSignals[0]) : null;
