@@ -197,6 +197,15 @@ export function ConductorSheet() {
     }
   }, [visible, context]);
 
+  // Auto-focus the input when the sheet opens — the type bar is now the
+  // dominant, primary element, so the keyboard should be ready to go. The
+  // delay clears the slide-in animation before focusing.
+  useEffect(() => {
+    if (!visible) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 350);
+    return () => clearTimeout(t);
+  }, [visible]);
+
   // Mount-once log so we can confirm the sheet IS mounted at root.
   useEffect(() => {
     debugLog('Sheet', 'ConductorSheet mounted at root');
@@ -377,7 +386,48 @@ export function ConductorSheet() {
               </View>
               <View style={styles.divider} />
 
-              {/* Suggestion chips */}
+              {/* Input bar — the dominant, primary element, pinned at the
+                  top and auto-focused on open. Chips sit below as secondary
+                  options. */}
+              <View style={styles.inputBar}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    inputRef.current?.focus();
+                  }}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.micBtn}>
+                  <Text style={styles.micGlyph}>🎙</Text>
+                </TouchableOpacity>
+                <TextInput
+                  ref={inputRef}
+                  value={input}
+                  onChangeText={setInput}
+                  onSubmitEditing={() => submit(input)}
+                  placeholder="Ask The Conductor anything..."
+                  placeholderTextColor={theme.muted}
+                  returnKeyType="send"
+                  blurOnSubmit={false}
+                  style={styles.input}
+                  autoCorrect
+                  autoComplete="off"
+                  textContentType="none"
+                />
+                <TouchableOpacity
+                  onPress={() => submit(input)}
+                  disabled={!input.trim() || loading}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={[
+                    styles.sendBtn,
+                    { backgroundColor: input.trim() && !loading ? accentColor : theme.muted },
+                  ]}>
+                  <Text style={styles.sendGlyph}>↑</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Suggestion chips — secondary options below the input */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -447,45 +497,6 @@ export function ConductorSheet() {
                   </View>
                 ) : null}
               </ScrollView>
-
-              {/* Input bar */}
-              <View style={styles.inputBar}>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    inputRef.current?.focus();
-                  }}
-                  activeOpacity={0.6}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={styles.micBtn}>
-                  <Text style={styles.micGlyph}>🎙</Text>
-                </TouchableOpacity>
-                <TextInput
-                  ref={inputRef}
-                  value={input}
-                  onChangeText={setInput}
-                  onSubmitEditing={() => submit(input)}
-                  placeholder="Ask The Conductor anything..."
-                  placeholderTextColor={theme.muted}
-                  returnKeyType="send"
-                  blurOnSubmit={false}
-                  style={styles.input}
-                  autoCorrect
-                  autoComplete="off"
-                  textContentType="none"
-                />
-                <TouchableOpacity
-                  onPress={() => submit(input)}
-                  disabled={!input.trim() || loading}
-                  activeOpacity={0.6}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={[
-                    styles.sendBtn,
-                    { backgroundColor: input.trim() && !loading ? accentColor : theme.muted },
-                  ]}>
-                  <Text style={styles.sendGlyph}>↑</Text>
-                </TouchableOpacity>
-              </View>
             </Pressable>
           </SwipeDismissSheet>
         </Pressable>
@@ -877,16 +888,19 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     inputBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 12,
-      paddingTop: 10,
-      paddingBottom: 6,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: theme.border || 'rgba(255,255,255,0.08)',
-      backgroundColor: theme.surface,
-      gap: 8,
+      marginHorizontal: 16,
+      marginTop: 12,
+      marginBottom: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderWidth: 1.5,
+      borderColor: accentColor,
+      borderRadius: 24,
+      backgroundColor: theme.background,
+      gap: 6,
     },
     micBtn: {
-      padding: 4,
+      padding: 6,
     },
     micGlyph: {
       fontSize: 18,
@@ -894,10 +908,10 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     input: {
       flex: 1,
       color: theme.text,
-      fontSize: 14,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      minHeight: 36,
+      fontSize: 16,
+      paddingHorizontal: 8,
+      paddingVertical: 10,
+      minHeight: 44,
     },
     sendBtn: {
       width: 36,

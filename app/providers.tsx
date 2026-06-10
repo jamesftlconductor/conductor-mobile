@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
@@ -211,6 +211,60 @@ function AddProviderModal({
   const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  // Autofill: provider names already seen in household signals. On name
+  // focus we surface matching senders from service-type signals; tapping
+  // one fills the name, service type (keyword-guessed), and phone.
+  const [signalSuggestions, setSignalSuggestions] = useState<
+    { name: string; serviceType: string; phone: string | null }[]
+  >([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?userId=${userId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const sigs: any[] = Array.isArray(data?.signals) ? data.signals : [];
+        const seen = new Set<string>();
+        const out: { name: string; serviceType: string; phone: string | null }[] = [];
+        for (const s of sigs) {
+          const nm = String(s?.sender || '').trim();
+          if (!nm) continue;
+          const t = String(s?.type || '').toLowerCase();
+          if (t !== 'service' && t !== 'appointment' && t !== 'reservation') continue;
+          const key = nm.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const hay = `${nm} ${s?.description || ''}`.toLowerCase();
+          const match = SERVICE_TYPES.find(
+            (st) => hay.includes(st.key) || hay.includes(st.label.toLowerCase())
+          );
+          const rawPhone = s?.location?.phone ?? s?.phone ?? null;
+          out.push({
+            name: nm,
+            serviceType: match?.key || 'other',
+            phone: typeof rawPhone === 'string' ? rawPhone : null,
+          });
+        }
+        if (!cancelled) setSignalSuggestions(out);
+      } catch { /* best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [visible]);
+
+  const filteredSuggestions = name.trim().length === 0
+    ? signalSuggestions
+    : signalSuggestions.filter((c) => c.name.toLowerCase().includes(name.trim().toLowerCase()));
+
+  function applySuggestion(c: { name: string; serviceType: string; phone: string | null }) {
+    setName(c.name);
+    setServiceType(c.serviceType);
+    if (c.phone) setPhone(c.phone);
+    setShowNameSuggestions(false);
+  }
 
   function reset() {
     setServiceType('hvac');
@@ -219,6 +273,7 @@ function AddProviderModal({
     setEmail('');
     setNotes('');
     setSaving(false);
+    setShowNameSuggestions(false);
   }
 
   function close() {
@@ -274,10 +329,30 @@ function AddProviderModal({
               </TouchableOpacity>
             ))}
           </View>
-          <TextInput value={name} onChangeText={setName} placeholder="Name"
+          <TextInput value={name}
+            onChangeText={(v) => { setName(v); setShowNameSuggestions(true); }}
+            onFocus={() => setShowNameSuggestions(true)}
+            placeholder="Name"
             placeholderTextColor={MUTED} style={styles.input}
             autoCapitalize="words" autoCorrect={false}
             autoComplete="name" textContentType="organizationName" />
+          {showNameSuggestions && filteredSuggestions.length > 0 ? (
+            <View style={styles.suggestionBox}>
+              {filteredSuggestions.slice(0, 5).map((c) => (
+                <TouchableOpacity
+                  key={c.name}
+                  onPress={() => applySuggestion(c)}
+                  activeOpacity={0.6}
+                  style={styles.suggestionRow}>
+                  <Text style={styles.suggestionName} numberOfLines={1}>{c.name}</Text>
+                  <Text style={styles.suggestionMeta} numberOfLines={1}>
+                    {TYPE_BY_KEY[c.serviceType]?.label || 'Other'}
+                    {c.phone ? ` · ${c.phone}` : ''} · seen in your signals
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
           <TextInput value={phone} onChangeText={setPhone} placeholder="Phone (optional)"
             placeholderTextColor={MUTED} style={styles.input} keyboardType="phone-pad"
             autoComplete="tel" textContentType="telephoneNumber" />
@@ -382,6 +457,21 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       backgroundColor: 'rgba(255,255,255,0.04)',
       borderRadius: 8,
     },
+    suggestionBox: {
+      borderWidth: 1,
+      borderColor: accentColor,
+      borderRadius: 8,
+      overflow: 'hidden',
+      marginTop: -4,
+    },
+    suggestionRow: {
+      paddingVertical: 9,
+      paddingHorizontal: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: SOFT_BORDER,
+    },
+    suggestionName: { color: theme.text, fontSize: 14, fontWeight: '600' },
+    suggestionMeta: { color: theme.muted, fontSize: 11, marginTop: 2 },
     sheetActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginTop: 8 },
     cancelBtn: { padding: 8 },
     cancelBtnText: { color: theme.muted, fontSize: 13 },
