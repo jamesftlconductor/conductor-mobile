@@ -2773,10 +2773,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     minHeight: '100%',
   },
   // Brand wordmark banner — sits at the very top of Ground, above the
-  // greeting. 140px wide, proportional (square source) height, centered.
+  // greeting. 140px wide; height is the wordmark's true proportion
+  // (cropped source is 554×202 → 140×51). Centered.
   wordmark: {
     width: 140,
-    height: 140,
+    height: 51,
     alignSelf: 'center',
     marginBottom: 8,
   },

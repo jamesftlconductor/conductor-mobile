@@ -2338,16 +2338,17 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     flex: 1,
     backgroundColor: BG,
   },
-  // Brand wordmark banner — centered at the top of Hover. 140px wide,
-  // proportional (square source) height. `top` is applied inline from
-  // the safe-area inset. zIndex 4 keeps it just under the topHeader
-  // text (zIndex 5) and well below the Minimap/help controls (zIndex 50).
+  // Brand wordmark banner — centered at the top of Hover. 140px wide;
+  // height is the wordmark's true proportion (cropped source is
+  // 554×202 → 140×51). `top` is applied inline from the safe-area
+  // inset. zIndex 4 keeps it just under the topHeader text (zIndex 5)
+  // and well below the Minimap/help controls (zIndex 50).
   wordmark: {
     position: 'absolute',
     left: '50%',
     marginLeft: -70,
     width: 140,
-    height: 140,
+    height: 51,
     zIndex: 4,
   },
   topHeader: {
