@@ -16,10 +16,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { PulsingCMark } from '@/components/PulsingCMark';
 
 import { useTheme } from '@/app/theme';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -312,7 +312,7 @@ export default function CommunicateScreen() {
                 (!canDraft || drafting) && { opacity: 0.5 },
               ]}>
               {drafting ? (
-                <ActivityIndicator color="#0f0f0f" />
+                <PulsingCMark size={18} />
               ) : (
                 <Text style={styles.primaryBtnText}>Draft email</Text>
               )}
@@ -371,7 +371,7 @@ export default function CommunicateScreen() {
               disabled={sending}
               style={[styles.primaryBtn, sending && { opacity: 0.5 }]}>
               {sending ? (
-                <ActivityIndicator color="#0f0f0f" />
+                <PulsingCMark size={18} />
               ) : (
                 <Text style={styles.primaryBtnText}>
                   Send {via === 'gmail' ? 'from my email' : 'as Conductor'}

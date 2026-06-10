@@ -5,12 +5,13 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
+import { Animated, Image, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
@@ -1657,6 +1658,12 @@ export default function TakeoffScreen() {
         <ScrollView
           style={styles.scrollFlex}
           contentContainerStyle={styles.content}>
+          <Image
+            source={require('@/assets/wordmark.png')}
+            resizeMode="contain"
+            style={styles.wordmark}
+          />
+
           <View style={styles.header}>
             <Text style={[styles.greeting, { color: bandTheme.greeting }]}>
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
@@ -1850,7 +1857,7 @@ export default function TakeoffScreen() {
 
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator color={bandTheme.brief} />
+              <PulsingCMark size={32} />
               <Text style={styles.loadingText}>Generating your brief...</Text>
             </View>
           ) : (
@@ -2764,6 +2771,14 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     padding: 32,
     paddingTop: 80,
     minHeight: '100%',
+  },
+  // Brand wordmark banner — sits at the very top of Ground, above the
+  // greeting. 140px wide, proportional (square source) height, centered.
+  wordmark: {
+    width: 140,
+    height: 140,
+    alignSelf: 'center',
+    marginBottom: 8,
   },
   header: {
     marginBottom: 32,

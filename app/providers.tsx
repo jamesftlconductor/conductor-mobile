@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -17,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from './theme';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { useUserId } from '@/hooks/useUserId';
@@ -144,7 +144,7 @@ export default function ProvidersScreen() {
 
         {loading ? (
           <View style={styles.empty}>
-            <ActivityIndicator color={MUTED} />
+            <PulsingCMark size={30} />
           </View>
         ) : grouped.length === 0 ? (
           <View style={styles.empty}>

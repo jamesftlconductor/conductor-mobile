@@ -25,6 +25,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -882,6 +883,13 @@ function Step1({
 
   return (
     <>
+      {/* Brand C mark crowning the first onboarding screen, above the
+          headline. 72px, centered. */}
+      <Image
+        source={require('@/assets/icon.png')}
+        resizeMode="contain"
+        style={{ width: 72, height: 72, alignSelf: 'center', marginBottom: 20 }}
+      />
       <Text style={s.preface}>
         While Conductor reads your household — tell us a little about yourself.
       </Text>

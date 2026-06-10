@@ -11,12 +11,12 @@
 
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { ScreenHeader } from '@/components/ScreenHeader';
 
 import { useTheme } from '@/app/theme';
 import { TOKENS } from '@/utils/designTokens';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -312,7 +312,7 @@ export default function TransitionScreen() {
             style={[styles.primaryBtn, submitting && { opacity: 0.5 }]}
             activeOpacity={0.7}>
             {submitting ? (
-              <ActivityIndicator color={theme.background} />
+              <PulsingCMark size={18} />
             ) : (
               <Text style={styles.primaryBtnText}>Let Conductor help</Text>
             )}

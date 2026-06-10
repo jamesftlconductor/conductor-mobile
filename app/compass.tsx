@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 
 import { HelpButton } from '@/components/HelpButton';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TYPE_META } from '@/components/signalTypes';
 import { useUserId } from '@/hooks/useUserId';
@@ -200,7 +200,7 @@ function SpendCard() {
     return (
       <View style={styles.card}>
         <Text style={styles.cardLabel}>The Spend</Text>
-        <ActivityIndicator color={MUTED} style={{ marginTop: 8 }} />
+        <PulsingCMark size={30} />
       </View>
     );
   }
@@ -303,7 +303,7 @@ export default function CompassScreen() {
 
       {loading && (
         <View style={styles.loading}>
-          <ActivityIndicator color={MUTED} />
+          <PulsingCMark size={30} />
         </View>
       )}
 

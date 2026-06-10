@@ -9,9 +9,9 @@ import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
 import { useUserId } from '@/hooks/useUserId';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -160,7 +160,7 @@ export default function PrivacyDashboardScreen() {
         <Text style={styles.sectionLabel}>YOUR DATA</Text>
         <View style={styles.block}>
           {loading || !data ? (
-            <ActivityIndicator color={theme.muted} />
+            <PulsingCMark size={30} />
           ) : (
             <>
               <View style={styles.statRow}>
@@ -260,7 +260,7 @@ export default function PrivacyDashboardScreen() {
                   disabled={deleting}
                   style={[styles.deleteConfirmBtn, deleting && { opacity: 0.5 }]}>
                   {deleting ? (
-                    <ActivityIndicator color="#fff" />
+                    <PulsingCMark size={18} />
                   ) : (
                     <Text style={styles.deleteConfirmText}>Delete permanently</Text>
                   )}

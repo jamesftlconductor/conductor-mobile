@@ -12,7 +12,6 @@
 
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -25,6 +24,7 @@ import {
   View,
 } from 'react-native';
 
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -183,7 +183,7 @@ export function SMSComposerSheet({
                     </View>
                     {drafting ? (
                       <View style={styles.draftingBlock}>
-                        <ActivityIndicator color={BRASS} />
+                        <PulsingCMark size={30} />
                         <Text style={styles.draftingText}>Conductor is drafting…</Text>
                       </View>
                     ) : (

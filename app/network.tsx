@@ -1,13 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { useTheme } from '@/app/theme';
 import { useUserId } from '@/hooks/useUserId';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -211,7 +211,7 @@ export default function NetworkScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator color={BRASS} />
+        <PulsingCMark size={30} />
       </View>
     );
   }

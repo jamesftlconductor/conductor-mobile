@@ -14,12 +14,12 @@
 
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import {
   authenticateAsync,
   getSettings,
@@ -108,7 +108,7 @@ export function SecureScreen({ children, screenName, requireAuth = true }: Props
       {!unlocked || checking ? (
         <View style={styles.overlay} pointerEvents="auto">
           {checking ? (
-            <ActivityIndicator color={BRASS} />
+            <PulsingCMark size={30} />
           ) : (
             <>
               <Text style={styles.icon}>🔒</Text>

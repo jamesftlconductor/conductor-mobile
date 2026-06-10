@@ -3,7 +3,6 @@ import { SecureScreen } from '@/components/SecureScreen';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,6 +15,7 @@ import {
 import { useTheme } from './theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useUserId } from '@/hooks/useUserId';
+import { PulsingCMark } from '@/components/PulsingCMark';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
@@ -194,7 +194,7 @@ function InventoryScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
         {loading ? (
-          <View style={styles.empty}><ActivityIndicator color={MUTED} /></View>
+          <View style={styles.empty}><PulsingCMark size={30} /></View>
         ) : (
           <>
             {suggestions.length > 0 && (

@@ -17,12 +17,12 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { SectionLabel } from '@/components/SectionLabel';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonStack } from '@/components/SkeletonRow';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useTheme } from '@/app/theme';
 import { TOKENS } from '@/utils/designTokens';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -390,7 +390,7 @@ export default function JuniorScreen() {
                       (sending || !voiceText.trim()) && { opacity: 0.5 },
                     ]}>
                     {sending ? (
-                      <ActivityIndicator color="#0f0f0f" />
+                      <PulsingCMark size={18} />
                     ) : (
                       <Text style={styles.modalPrimaryText}>Send</Text>
                     )}

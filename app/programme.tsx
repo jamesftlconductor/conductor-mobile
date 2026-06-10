@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { SignalFilterPills } from '@/components/SignalFilterPills';
 import { applyFilter as applyMeCrewHouse, useSignalFilter } from '@/hooks/useSignalFilter';
 import { metaFor, type Signal } from '@/components/signalTypes';
@@ -395,7 +395,7 @@ export default function ProgrammeScreen() {
 
       {loading && (
         <View style={styles.empty}>
-          <ActivityIndicator color={MUTED} />
+          <PulsingCMark size={30} />
         </View>
       )}
 

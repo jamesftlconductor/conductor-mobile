@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   View,
 } from 'react-native';
 
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { useTheme } from '@/app/theme';
 import { useUserId } from '@/hooks/useUserId';
 
@@ -86,7 +86,7 @@ export default function SignalFiltersScreen() {
 
       {loading ? (
         <View style={styles.empty}>
-          <ActivityIndicator color={theme.muted} />
+          <PulsingCMark size={30} />
         </View>
       ) : rules.length === 0 ? (
         <View style={styles.empty}>

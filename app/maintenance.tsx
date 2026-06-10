@@ -21,8 +21,8 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { SectionLabel } from '@/components/SectionLabel';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonStack } from '@/components/SkeletonRow';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import {
-  ActivityIndicator,
   Alert,
   Linking,
   ScrollView,
@@ -205,7 +205,7 @@ export default function MaintenanceScreen() {
   if (generating || (!plan && shouldGenerate)) {
     return (
       <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color={BRASS} />
+        <PulsingCMark size={30} />
         <Text style={styles.workingText}>Building your plan…</Text>
         <Text style={styles.workingSub}>
           Conductor is sketching out your year of maintenance.

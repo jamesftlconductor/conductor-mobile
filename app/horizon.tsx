@@ -4,10 +4,10 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { SignalFilterPills } from '@/components/SignalFilterPills';
 import { useSignalFilter, applyFilter as applyMeCrewHouse } from '@/hooks/useSignalFilter';
 import { SwipeableRow } from '@/components/SwipeableRow';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  ActivityIndicator,
   Alert,
   LayoutAnimation,
   Platform,
@@ -529,7 +529,7 @@ export default function HorizonScreen() {
 
       {loading ? (
         <View style={styles.empty}>
-          <ActivityIndicator color={MUTED} />
+          <PulsingCMark size={30} />
         </View>
       ) : !anyItems ? (
         <View style={styles.empty}>

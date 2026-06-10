@@ -1990,6 +1990,17 @@ export default function HoverScreen() {
   return (
     <GestureDetector gesture={composedGesture}>
       <View style={styles.container}>
+        {/* Brand wordmark banner — centered at the very top, above the
+            radar. 140px wide, proportional (square source) height. Sits
+            behind the interactive Minimap/help affordances (zIndex 50)
+            and ignores touches so the radar gestures pass through. */}
+        <View pointerEvents="none" style={[styles.wordmark, { top: insets.top + 8 }]}>
+          <Image
+            source={require('@/assets/wordmark.png')}
+            resizeMode="contain"
+            style={{ width: '100%', height: '100%' }}
+          />
+        </View>
         {/* Minimap at top-left — the big radar IS the same picture
             at a larger scale, but the tap surface for ConductorSheet
             still lives here so the affordance is universal. Keeps
@@ -2326,6 +2337,18 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   container: {
     flex: 1,
     backgroundColor: BG,
+  },
+  // Brand wordmark banner — centered at the top of Hover. 140px wide,
+  // proportional (square source) height. `top` is applied inline from
+  // the safe-area inset. zIndex 4 keeps it just under the topHeader
+  // text (zIndex 5) and well below the Minimap/help controls (zIndex 50).
+  wordmark: {
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -70,
+    width: 140,
+    height: 140,
+    zIndex: 4,
   },
   topHeader: {
     position: 'absolute',

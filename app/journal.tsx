@@ -9,7 +9,6 @@ import { SecureScreen } from '@/components/SecureScreen';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +19,7 @@ import {
 import { HelpButton } from '@/components/HelpButton';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TYPE_META } from '@/components/signalTypes';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
 
@@ -159,7 +159,7 @@ function JournalScreen() {
 
       {loading && (
         <View style={styles.loading}>
-          <ActivityIndicator color={MUTED} />
+          <PulsingCMark size={30} />
         </View>
       )}
 
@@ -223,7 +223,7 @@ function JournalScreen() {
           <View style={styles.selectedYearDivider} />
           <Text style={styles.selectedYearLabel}>{selectedYear}</Text>
           {yearLoading ? (
-            <ActivityIndicator color={MUTED} style={{ marginTop: 18 }} />
+            <PulsingCMark size={30} />
           ) : yearText ? (
             <Text style={styles.selectedYearText}>{yearText}</Text>
           ) : (

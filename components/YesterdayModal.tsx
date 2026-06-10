@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { useTheme } from '@/app/theme';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -75,7 +75,7 @@ export default function YesterdayModal({
 
           {loading && (
             <View style={styles.loading}>
-              <ActivityIndicator color={theme.muted} />
+              <PulsingCMark size={30} />
             </View>
           )}
 

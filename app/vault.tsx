@@ -2,12 +2,12 @@ import { router } from 'expo-router';
 import { SecureScreen } from '@/components/SecureScreen';
 import { CameraScanner, type ScanResult } from '@/components/CameraScanner';
 import { HelpButton } from '@/components/HelpButton';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -342,7 +342,7 @@ function VaultScreen() {
 
         {loading ? (
           <View style={styles.empty}>
-            <ActivityIndicator color={MUTED} />
+            <PulsingCMark size={30} />
           </View>
         ) : grouped.length === 0 ? (
           <VaultEmptyState onAddManually={() => setAddModalVisible(true)} />

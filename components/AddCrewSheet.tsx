@@ -9,7 +9,6 @@
 
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -23,6 +22,7 @@ import {
   View,
 } from 'react-native';
 
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -209,7 +209,7 @@ export function AddCrewSheet({ visible, userId, onClose, onAdded }: Props) {
                       ]}
                       activeOpacity={0.7}>
                       {submitting ? (
-                        <ActivityIndicator color="#0f0f0f" />
+                        <PulsingCMark size={18} />
                       ) : (
                         <Text style={styles.primaryBtnText}>Add to Crew</Text>
                       )}

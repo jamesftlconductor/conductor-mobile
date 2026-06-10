@@ -12,13 +12,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Share,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { useUserId } from '@/hooks/useUserId';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -108,7 +108,7 @@ export default function SummaryCardScreen() {
   if (loading || !summary) {
     return (
       <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color={BRASS} />
+        <PulsingCMark size={30} />
       </View>
     );
   }

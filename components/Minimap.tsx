@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { useTheme } from '@/app/theme';
@@ -478,6 +478,16 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
       onPress={handlePress}
       style={ringStyle}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+      {/* Brand C mark crowning the radar — 16px, centered just above the
+          three arcs. Kept outside the overflow-hidden disc so it isn't
+          clipped, and ignores touches so the whole widget taps through. */}
+      <View pointerEvents="none" style={styles.cMark}>
+        <Image
+          source={require('@/assets/icon.png')}
+          resizeMode="contain"
+          style={{ width: '100%', height: '100%' }}
+        />
+      </View>
       <Animated.View
         style={[
           styles.circle,
@@ -558,6 +568,17 @@ const styles = StyleSheet.create({
     borderRadius: SIZE / 2,
     backgroundColor: NAVY,
     overflow: 'hidden',
+  },
+  // Brand C mark, centered horizontally over the SIZE-wide disc and
+  // floated just above it so it crowns the three arcs without covering
+  // the inner-ring signal dots.
+  cMark: {
+    position: 'absolute',
+    top: -19,
+    left: (SIZE - 16) / 2,
+    width: 16,
+    height: 16,
+    zIndex: 20,
   },
   ringLayer: {
     position: 'absolute',

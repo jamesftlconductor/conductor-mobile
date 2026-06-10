@@ -8,7 +8,6 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -20,6 +19,7 @@ import {
 } from 'react-native';
 
 import { AddSignalSheet } from '@/components/AddSignalSheet';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { metaForRing, type Signal, TYPE_META } from '@/components/signalTypes';
@@ -246,7 +246,7 @@ export default function CalendarScreen() {
 
       {loading && !data ? (
         <View style={styles.loading}>
-          <ActivityIndicator color={theme.muted} />
+          <PulsingCMark size={30} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.gridScroll}>

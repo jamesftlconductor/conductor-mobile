@@ -7,7 +7,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -17,6 +16,7 @@ import {
   View,
 } from 'react-native';
 
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
@@ -146,7 +146,7 @@ export function CameraScanner({
           <Pressable onPress={() => {}}>
             {working ? (
               <View style={styles.workingBlock}>
-                <ActivityIndicator color={BRASS} />
+                <PulsingCMark size={30} />
                 <Text style={styles.workingText}>Conductor is reading…</Text>
               </View>
             ) : (
