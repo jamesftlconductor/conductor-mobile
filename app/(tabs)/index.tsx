@@ -11,6 +11,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
+import { NavSearch } from '@/components/NavSearch';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
@@ -1636,6 +1637,11 @@ export default function TakeoffScreen() {
           Minimap's left edge is 60px from screen right; HelpButton's right
           edge sits at 68px to give an 8px gap. */}
       <HelpButton cardId="brief" right={68} />
+      {/* App-navigation search — small icon top-left; expands to a search
+          bar with predictive results matching screens/features. */}
+      <View style={{ position: 'absolute', top: 60, left: 16, zIndex: 50 }}>
+        <NavSearch />
+      </View>
       {restedToast ? (
         <View pointerEvents="none" style={styles.restedToast}>
           <Text style={styles.restedToastText}>Rested ✓</Text>
