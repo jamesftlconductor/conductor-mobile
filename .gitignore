@@ -43,3 +43,13 @@ app-example
 /android
 
 .vercel
+
+# build/test artifacts (do not commit)
+*.backup
+build-info.json
+buildlist.json
+builds-latest.json
+cal.json
+status*.json
+sug*.json
+brief-*.json
