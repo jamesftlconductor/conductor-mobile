@@ -435,10 +435,22 @@ function RotatingRing({
   // properties are native-supported.
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
+  // Ring-zoom alignment — refs let the rotation loop ease itself to the
+  // absolute frame on expand WITHOUT a second effect racing the loop.
+  const currentAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const aligningRef = useRef(false);
+  const isExpandedRef = useRef(isExpanded);
 
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  // On expand, interrupt the in-flight spin so the loop re-evaluates and
+  // (seeing paused+expanded) eases rotation to its nearest absolute frame.
+  useEffect(() => {
+    isExpandedRef.current = isExpanded;
+    if (isExpanded) currentAnimRef.current?.stop();
+  }, [isExpanded]);
 
   useEffect(() => {
     const targetScale = isExpanded
@@ -468,26 +480,56 @@ function RotatingRing({
 
   useEffect(() => {
     let stopped = false;
-    let currentAnim: Animated.CompositeAnimation | null = null;
 
     function tick() {
       if (stopped) return;
       if (pausedRef.current) {
+        // Ring-zoom: when paused because this ring is EXPANDED, ease the
+        // rotation to its nearest absolute frame (spin → 0deg) over ~2.2s
+        // so signals settle at true time positions — today at the top of
+        // the inner ring, chronological on middle/outer. Selection-pause
+        // (a Finale-selected dot) leaves rotation alone so the chosen dot
+        // doesn't drift.
+        if (isExpandedRef.current && !aligningRef.current) {
+          const v = (rotation as any)._value ?? 0;
+          const nearest = Math.round(v);
+          if (Math.abs(v - nearest) > 0.001) {
+            aligningRef.current = true;
+            const align = Animated.timing(rotation, {
+              toValue: nearest,
+              duration: 2200,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            });
+            currentAnimRef.current = align;
+            align.start(({ finished }) => {
+              aligningRef.current = false;
+              // Normalize 1 → 0 (visually identical, 360deg ≡ 0deg) so the
+              // loop always resumes spinning from 0 without extrapolation.
+              if (finished && nearest !== 0) rotation.setValue(0);
+            });
+          }
+        }
         setTimeout(tick, 80);
         return;
       }
+      aligningRef.current = false;
       const startVal = (rotation as any)._value ?? 0;
       const remainingFrac = 1 - (startVal % 1);
       const duration = ring.rotationMs * remainingFrac;
-      currentAnim = Animated.timing(rotation, {
+      const anim = Animated.timing(rotation, {
         toValue: Math.floor(startVal) + 1,
         duration,
         easing: Easing.linear,
         useNativeDriver: true,
       });
-      currentAnim.start(({ finished }) => {
-        if (!finished) return;
-        rotation.setValue(0);
+      currentAnimRef.current = anim;
+      // Always re-tick — on natural finish AND on external interrupt (the
+      // expand effect stops this anim). The `stopped` guard above handles
+      // unmount, so re-ticking after a stop just lets the loop re-evaluate
+      // pause/expand state rather than dying.
+      anim.start(({ finished }) => {
+        if (finished) rotation.setValue(0);
         tick();
       });
     }
@@ -495,7 +537,7 @@ function RotatingRing({
     tick();
     return () => {
       stopped = true;
-      currentAnim?.stop();
+      currentAnimRef.current?.stop();
     };
   }, [ring.rotationMs, rotation]);
 
