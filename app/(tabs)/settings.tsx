@@ -1973,7 +1973,6 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
-        <HouseholdNameRow />
 
         <CollapsibleSection title="Your Brief" defaultOpen>
         <ChevronRow
@@ -2007,6 +2006,7 @@ export default function SettingsScreen() {
         </CollapsibleSection>
 
         <CollapsibleSection title="Your Household">
+        <HouseholdNameRow />
         <Row label="RangerOaks925" subtext="Your household" />
         <ChevronRow label="Invite a member" onPress={() => handleInviteMember(userId)} />
         <Row
