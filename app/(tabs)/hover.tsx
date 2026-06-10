@@ -14,6 +14,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   UIManager,
   View,
@@ -577,6 +578,8 @@ function RotatingRing({
   );
 }
 
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
 function SignalDot({
   meta,
   x,
@@ -617,6 +620,19 @@ function SignalDot({
   void isAttributed;
   const dotColor = crewOverride || accentColor;
   const scale = useRef(new Animated.Value(1)).current;
+  // Ring-zoom: the dot's position springs to its target (x, y) so signals
+  // glide to their time-slot positions when a ring expands (and back on
+  // collapse), settling smoothly within ~2s (well under the 2.5s cap).
+  // useNativeDriver:false because left/top are layout props — fine, since
+  // it's a different view subtree from the native-driven scale below.
+  const posX = useRef(new Animated.Value(x)).current;
+  const posY = useRef(new Animated.Value(y)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(posX, { toValue: x, useNativeDriver: false, tension: 14, friction: 9 }),
+      Animated.spring(posY, { toValue: y, useNativeDriver: false, tension: 14, friction: 9 }),
+    ]).start();
+  }, [x, y, posX, posY]);
   const pausedRef = useRef(paused);
   const highlightRef = useRef(highlight);
   const isFirstPulseRef = useRef(!!freshlyAdded);
@@ -670,10 +686,13 @@ function SignalDot({
     : scale;
 
   return (
-    <TouchableOpacity
+    <AnimatedTouchable
       onPress={onPress}
       activeOpacity={0.7}
-      style={[styles.signalHit, { left: x - 18, top: y - 18, opacity: baseOpacity }]}
+      style={[
+        styles.signalHit,
+        { left: Animated.subtract(posX, 18), top: Animated.subtract(posY, 18), opacity: baseOpacity },
+      ]}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
       <Animated.View
         style={[
@@ -702,7 +721,7 @@ function SignalDot({
           </View>
         ) : null}
       </Animated.View>
-    </TouchableOpacity>
+    </AnimatedTouchable>
   );
 }
 
@@ -875,8 +894,10 @@ function CollapsibleNavBar({
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
 
   const COLLAPSED_H = 36;
-  const EXPANDED_H = 296;
+  const EXPANDED_H = 344;
   const [expanded, setExpanded] = useState(false);
+  // Central Command search — matches nav destinations + live signals.
+  const [searchQ, setSearchQ] = useState('');
   // Edit mode toggles via long-press. ✕ overlay on each icon to
   // remove; tile labelled + at the end opens the add picker.
   const [editMode, setEditMode] = useState(false);
@@ -927,6 +948,7 @@ function CollapsibleNavBar({
       setEditMode(false);
       setShowAddPicker(false);
       setSelectedPillId('all');
+      setSearchQ('');
     }
   }
 
@@ -979,6 +1001,21 @@ function CollapsibleNavBar({
     [navKeys]
   );
 
+  // Central Command search results — nav destinations (navigate) + live
+  // signals (open Finale). Mirrors the ConductorSheet search hub.
+  const searchResults = useMemo(() => {
+    const q = searchQ.trim().toLowerCase();
+    if (!q) return { navs: [] as string[], sigs: [] as Signal[] };
+    const navs = Object.keys(NAV_CATALOG).filter((k) => {
+      const e = NAV_CATALOG[k];
+      return k.toLowerCase().includes(q) || (e?.label || '').toLowerCase().includes(q);
+    });
+    const sigs = (signals || [])
+      .filter((s) => (s.description || '').toLowerCase().includes(q))
+      .slice(0, 5);
+    return { navs, sigs };
+  }, [searchQ, signals]);
+
   return (
     // Outer Animated.View handles `opacity` only — that's the parent
     // screen's native-driven legendOpacity fade. Inner View uses
@@ -1018,6 +1055,71 @@ function CollapsibleNavBar({
           </Pressable>
           {expanded ? (
             <>
+              {/* Central Command search — top of the bar. Matches nav
+                  destinations + live signals; results replace the pills/
+                  signals list while typing. */}
+              <View style={styles.cmdSearchWrap}>
+                <Text style={styles.cmdSearchGlyph}>🔍</Text>
+                <TextInput
+                  value={searchQ}
+                  onChangeText={setSearchQ}
+                  placeholder="Search or ask anything..."
+                  placeholderTextColor={theme.muted}
+                  style={styles.cmdSearchInput}
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  onSubmitEditing={() => {
+                    if (searchResults.navs.length > 0) tapNav(searchResults.navs[0]);
+                    else if (searchResults.sigs.length > 0) tapSignal(searchResults.sigs[0]);
+                  }}
+                />
+                {searchQ.length > 0 ? (
+                  <TouchableOpacity onPress={() => setSearchQ('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.cmdSearchClear}>✕</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {searchQ.trim().length > 0 ? (
+                <View style={styles.collapsibleSignalsWrap}>
+                  {searchResults.navs.length === 0 && searchResults.sigs.length === 0 ? (
+                    <Text style={styles.collapsibleEmpty}>No matches.</Text>
+                  ) : (
+                    <ScrollView keyboardShouldPersistTaps="handled">
+                      {searchResults.navs.map((k) => (
+                        <TouchableOpacity
+                          key={`nav-${k}`}
+                          onPress={() => tapNav(k)}
+                          activeOpacity={0.6}
+                          style={styles.collapsibleSignalRow}>
+                          <Text style={styles.collapsibleSignalEmoji}>{NAV_CATALOG[k]?.icon || '→'}</Text>
+                          <Text numberOfLines={1} style={styles.collapsibleSignalDesc}>
+                            {NAV_CATALOG[k]?.label || k}
+                          </Text>
+                          <Text style={styles.cmdResultKind}>screen</Text>
+                        </TouchableOpacity>
+                      ))}
+                      {searchResults.sigs.map((s) => {
+                        const meta = TYPE_META[s.type || 'unknown'] || TYPE_META.unknown;
+                        return (
+                          <TouchableOpacity
+                            key={`sig-${s.id}`}
+                            onPress={() => tapSignal(s)}
+                            activeOpacity={0.6}
+                            style={styles.collapsibleSignalRow}>
+                            <Text style={styles.collapsibleSignalEmoji}>{meta.emoji}</Text>
+                            <Text numberOfLines={1} style={styles.collapsibleSignalDesc}>
+                              {(s.description || 'Signal').slice(0, 45)}
+                            </Text>
+                            <Text style={styles.cmdResultKind}>signal</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  )}
+                </View>
+              ) : (
+              <>
               {/* Category pills — horizontal scroll above the
                   signals list. Tap to filter; selection resets
                   to 'all' on bar collapse. */}
@@ -1096,6 +1198,8 @@ function CollapsibleNavBar({
                   />
                 )}
               </View>
+              </>
+              )}
 
               <View style={styles.collapsibleDivider} />
 
@@ -2506,6 +2610,33 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     maxHeight: 120,
     paddingHorizontal: 12,
     paddingVertical: 4,
+  },
+  cmdSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: accentColor,
+    gap: 8,
+  },
+  cmdSearchGlyph: { fontSize: 13 },
+  cmdSearchInput: {
+    flex: 1,
+    color: theme.text,
+    fontSize: 14,
+    paddingVertical: 8,
+  },
+  cmdSearchClear: { color: theme.muted, fontSize: 13, paddingHorizontal: 2 },
+  cmdResultKind: {
+    color: theme.muted,
+    fontSize: 9,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   collapsibleEmpty: {
     color: theme.muted,
