@@ -1975,11 +1975,69 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Your House</Text>
         <HouseholdNameRow />
 
-        <SecuritySection />
+        <CollapsibleSection title="Your Brief" defaultOpen>
+        <ChevronRow
+          label="Takeoff"
+          rightText={format12Hour(settings.takeoffTime)}
+          onPress={() => openTimeEditor('takeoffTime', 'Takeoff')}
+        />
+        <ToggleRow
+          label="Weekend Takeoff"
+          subtext="Deliver 1 hour later on weekends"
+          value={settings.weekendTakeoffDelay}
+          onChange={(v) => update({ ...settings, weekendTakeoffDelay: v })}
+        />
+        <ChevronRow
+          label="Clearance"
+          rightText={format12Hour(settings.clearanceTime)}
+          onPress={() => openTimeEditor('clearanceTime', 'Clearance')}
+        />
+        <OverwatchPickerRow
+          value={settings.overwatchHour}
+          onChange={(h) => update({ ...settings, overwatchHour: h })}
+        />
+        <ToggleRow
+          label="Midday Check-in"
+          subtext="A brief update at 1pm"
+          value={settings.middayEnabled}
+          onChange={setMidday}
+        />
+        <SectionHeader title="Your Voice" subtext="How Conductor talks to you" />
+        <VoiceStyleBlock />
+        </CollapsibleSection>
 
         <CollapsibleSection title="Your Household">
         <Row label="RangerOaks925" subtext="Your household" />
         <ChevronRow label="Invite a member" onPress={() => handleInviteMember(userId)} />
+        <Row
+          label="Location"
+          subtext={
+            location?.city
+              ? `${location.city}, ${location.state || ''}${location.source === 'manual' ? '' : ' · auto-detected'}`
+              : 'Detecting…'
+          }
+          onPress={openLocationEditor}
+          right={<ChevronRight size={18} color={MUTED} />}
+        />
+        <ChevronRow
+          label="Household profile"
+          onPress={() => router.push('/profile-setup' as never)}
+        />
+        <ChevronRow
+          label="Send a message"
+          subtext="Message your household through Conductor"
+          onPress={() => router.push('/communicate' as never)}
+        />
+        <SectionHeader title="Priorities" subtext="Flag categories to prioritize in your brief" />
+        {CATEGORIES.map((c) => (
+          <ToggleRow
+            key={c.key}
+            label={c.label}
+            value={settings.categoryEnabled[c.key]}
+            onChange={(v) => setCategory(c.key, v)}
+          />
+        ))}
+        <SectionHeader title="Household Tools" />
         <Row
           label="Missed Cues"
           onPress={() => router.push('/missed-cues')}
@@ -2008,22 +2066,6 @@ export default function SettingsScreen() {
             </View>
           }
         />
-        <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
-        <ChevronRow
-          label="Send a message"
-          subtext="Message your household through Conductor"
-          onPress={() => router.push('/communicate' as never)}
-        />
-        <Row
-          label="Location"
-          subtext={
-            location?.city
-              ? `${location.city}, ${location.state || ''}${location.source === 'manual' ? '' : ' · auto-detected'}`
-              : 'Detecting…'
-          }
-          onPress={openLocationEditor}
-          right={<ChevronRight size={18} color={MUTED} />}
-        />
         <ChevronRow
           label="Service Providers"
           onPress={() => router.push('/providers' as never)}
@@ -2038,10 +2080,6 @@ export default function SettingsScreen() {
         />
         <ChevronRow
           label="The Programme"
-          // Cast: expo-router's typed-routes generator hasn't regenerated
-          // since app/programme.tsx was added. The push resolves correctly
-          // at runtime via the file-system route; the typed lookup will
-          // pick it up on the next `expo start`/build.
           onPress={() => router.push('/programme' as never)}
         />
         <ChevronRow
@@ -2056,6 +2094,13 @@ export default function SettingsScreen() {
           label="Life Transitions"
           onPress={() => router.push('/transition' as never)}
         />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Your Crew">
+        <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="What Conductor Sees">
         <Row
           label="Connected accounts"
           right={
@@ -2065,93 +2110,6 @@ export default function SettingsScreen() {
             </View>
           }
         />
-
-        </CollapsibleSection>
-
-        <CollapsibleSection title="What You Love">
-        <WhatYouLoveBlock />
-
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Financial Intelligence">
-        <FinancialAwarenessBlock
-          value={settings.financialAwareness}
-          onChange={(v) => update({ ...settings, financialAwareness: v })}
-        />
-
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Extend with Shortcuts">
-        <ShortcutsLibraryBlock />
-
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Your Brief" defaultOpen>
-        <ChevronRow
-          label="Takeoff"
-          rightText={format12Hour(settings.takeoffTime)}
-          onPress={() => openTimeEditor('takeoffTime', 'Takeoff')}
-        />
-        <ToggleRow
-          label="Weekend Takeoff"
-          subtext="Deliver 1 hour later on weekends"
-          value={settings.weekendTakeoffDelay}
-          onChange={(v) => update({ ...settings, weekendTakeoffDelay: v })}
-        />
-        <ChevronRow
-          label="Clearance"
-          rightText={format12Hour(settings.clearanceTime)}
-          onPress={() => openTimeEditor('clearanceTime', 'Clearance')}
-        />
-        <OverwatchPickerRow
-          value={settings.overwatchHour}
-          onChange={(h) => update({ ...settings, overwatchHour: h })}
-        />
-        <ToggleRow
-          label="Midday Check-in"
-          subtext="A brief update at 1pm"
-          value={settings.middayEnabled}
-          onChange={setMidday}
-        />
-
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Notifications">
-        <ToggleRow label="Health context" value={settings.healthEnabled} onChange={setHealth} />
-        <ToggleRow label="Childcare" value={settings.childcareEnabled} onChange={setChildcare} />
-        <Row
-          label="In-person requirements"
-          right={<Lock size={16} color={MUTED} />}
-        />
-
-        </CollapsibleSection>
-
-        <CollapsibleSection title="What Matters Most">
-        {CATEGORIES.map((c) => (
-          <ToggleRow
-            key={c.key}
-            label={c.label}
-            value={settings.categoryEnabled[c.key]}
-            onChange={(v) => setCategory(c.key, v)}
-          />
-        ))}
-
-        </CollapsibleSection>
-
-        <CollapsibleSection title="On the Horizon">
-        <ToggleRow label="Watching" value={settings.horizonEnabled} onChange={setHorizon} />
-        <ChevronRow
-          label="Frequency"
-          rightText={settings.horizonFrequency}
-          onPress={cycleFrequency}
-        />
-        {settings.horizonEnabled && (
-          <ChevronRow label="View The Horizon" onPress={() => router.push('/horizon' as never)} />
-        )}
-
-        </CollapsibleSection>
-
-        <CollapsibleSection title="What Conductor Sees">
         <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
         <ChevronRow
           label="Signal Filters"
@@ -2291,31 +2249,57 @@ export default function SettingsScreen() {
 
         </CollapsibleSection>
 
-        <CollapsibleSection title="Language">
-        <LanguageRow />
-
+        <CollapsibleSection title="Financial Intelligence">
+        <FinancialAwarenessBlock
+          value={settings.financialAwareness}
+          onChange={(v) => update({ ...settings, financialAwareness: v })}
+        />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Your Voice">
-        <VoiceStyleBlock />
-
+        <CollapsibleSection title="What You Love">
+        <WhatYouLoveBlock />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Hey Conductor">
-        <HeyConductorBlock />
-
+        <CollapsibleSection title="Notifications">
+        <ToggleRow label="Health context" value={settings.healthEnabled} onChange={setHealth} />
+        <ToggleRow label="Childcare" value={settings.childcareEnabled} onChange={setChildcare} />
+        <Row
+          label="In-person requirements"
+          right={<Lock size={16} color={MUTED} />}
+        />
+        <SectionHeader title="On the Horizon" subtext="One surprising signal from the bigger picture" />
+        <ToggleRow label="Watching" value={settings.horizonEnabled} onChange={setHorizon} />
+        <ChevronRow
+          label="Frequency"
+          rightText={settings.horizonFrequency}
+          onPress={cycleFrequency}
+        />
+        {settings.horizonEnabled && (
+          <ChevronRow label="View The Horizon" onPress={() => router.push('/horizon' as never)} />
+        )}
         </CollapsibleSection>
 
-        <CollapsibleSection title="Your Conductor">
-        <AppearanceBlock />
-        <AppIconRow />
-        <Row label="Conductor" subtext="Version 1.0.0" />
+        <CollapsibleSection title="Privacy & Data">
+        <SecuritySection />
         <Row
           label="API Access"
           subtext="Send signals to Conductor from any service"
           onPress={handleShowApiKey}
           right={<ChevronRight size={18} color={MUTED} />}
         />
+        <ChevronRow
+          label="Privacy Dashboard"
+          onPress={() => router.push('/privacy-dashboard' as never)}
+        />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Your Conductor">
+        <AppearanceBlock />
+        <AppIconRow />
+        <LanguageRow />
+        <HeyConductorBlock />
+        <ShortcutsLibraryBlock />
+        <Row label="Conductor" subtext="Version 1.0.0" />
         <ChevronRow
           label="Memory"
           onPress={() => router.push('/journal' as never)}
@@ -2336,18 +2320,6 @@ export default function SettingsScreen() {
           label="Directory"
           onPress={() => router.push('/directory' as never)}
         />
-        <ChevronRow
-          label="Privacy & Data"
-          onPress={() => router.push('/privacy-dashboard' as never)}
-        />
-        <ChevronRow
-          label="Household profile"
-          onPress={() => router.push('/profile-setup' as never)}
-        />
-
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Founding Household">
         <ReferralBlock />
         </CollapsibleSection>
 
