@@ -1664,11 +1664,20 @@ export default function TakeoffScreen() {
             <Text style={[styles.title, { color: bandTheme.title }]}>{mode.title}</Text>
           </View>
 
-          {pulse ? (
+          {pulse || pulseData ? (
             // The Pulse — synthesis layer output. One warm editorial
             // sentence; tap expands inline into the full health + context
             // card via LayoutAnimation. Card sections render from
             // pulseData with per-field null guards.
+            //
+            // The headline sentence (`pulse`) is best-effort on the backend
+            // (a Haiku synthesis call that can return null), but `pulseData`
+            // is built deterministically. Gating the whole block on `pulse`
+            // alone hid the entire Pulse — card included — whenever that
+            // call came back empty (notably on Takeoff). Render whenever
+            // either is present; show the sentence only when we have it, and
+            // surface the data card directly (expanded) when there's no
+            // headline to collapse from.
             <TouchableOpacity
               onPress={() => {
                 if (!pulseDiscovered) { setIntroFeatureId('pulse'); return; }
@@ -1678,7 +1687,7 @@ export default function TakeoffScreen() {
               hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
               style={[styles.pulseWrap, { opacity: pulseDiscovered ? 1 : 0.45 }]}>
               <Text style={styles.pulseLabel}>THE PULSE</Text>
-              <Text style={styles.pulseText}>{pulse}</Text>
+              {pulse ? <Text style={styles.pulseText}>{pulse}</Text> : null}
               {showPulseTip ? (
                 <View style={styles.tooltipInline} pointerEvents="box-none">
                   <Tooltip
@@ -1690,7 +1699,7 @@ export default function TakeoffScreen() {
                   />
                 </View>
               ) : null}
-              {pulseExpanded && pulseData ? (
+              {(pulseExpanded || !pulse) && pulseData ? (
                 <View style={styles.pulseCard}>
                   <PulseHealthSection health={pulseData.health} />
                   <PulseConditionsSection weather={pulseData.weather} />
