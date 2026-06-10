@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  LayoutAnimation,
   Linking,
   Modal,
   Platform,
@@ -32,8 +33,15 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
+
+// Android needs an explicit opt-in for LayoutAnimation (used by the
+// collapsible settings sections). iOS enables it by default.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const BG = '#0f0f0f';
 const OFF_WHITE = '#f0ede8';
@@ -407,6 +415,42 @@ function SectionHeader({
           {catchphrase}
         </Text>
       ) : null}
+    </View>
+  );
+}
+
+// Collapsible category section — a tappable header that expands/collapses
+// its children with a layout animation. Used to tame the (long) Settings
+// screen into scannable groups. Collapsed by default unless defaultOpen.
+function CollapsibleSection({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <View>
+      <TouchableOpacity
+        activeOpacity={0.6}
+        onPress={() => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setOpen((o) => !o);
+        }}
+        style={styles.collapsibleHeader}>
+        <Text style={styles.sectionHeader}>{title}</Text>
+        <ChevronRight
+          size={18}
+          color={theme.muted}
+          style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}
+        />
+      </TouchableOpacity>
+      {open ? <View>{children}</View> : null}
     </View>
   );
 }
@@ -1931,12 +1975,9 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Your House</Text>
         <HouseholdNameRow />
 
-        <SectionHeader title="Appearance" />
-        <AppearanceBlock />
-
         <SecuritySection />
 
-        <SectionHeader title="Household" />
+        <CollapsibleSection title="Your Household">
         <Row label="RangerOaks925" subtext="Your household" />
         <ChevronRow label="Invite a member" onPress={() => handleInviteMember(userId)} />
         <Row
@@ -1968,6 +2009,11 @@ export default function SettingsScreen() {
           }
         />
         <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
+        <ChevronRow
+          label="Send a message"
+          subtext="Message your household through Conductor"
+          onPress={() => router.push('/communicate' as never)}
+        />
         <Row
           label="Location"
           subtext={
@@ -2020,19 +2066,27 @@ export default function SettingsScreen() {
           }
         />
 
-        <SectionHeader title="What You Love" subtext="Conductor watches for opportunities, not just obligations" catchphraseFeatureId="emotional_intelligence" />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="What You Love">
         <WhatYouLoveBlock />
 
-        <SectionHeader title="Financial Intelligence" subtext="How much Conductor engages with your finances" catchphraseFeatureId="vault" />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Financial Intelligence">
         <FinancialAwarenessBlock
           value={settings.financialAwareness}
           onChange={(v) => update({ ...settings, financialAwareness: v })}
         />
 
-        <SectionHeader title="Extend with Shortcuts" subtext="Connect any app to Conductor without sharing access" />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Extend with Shortcuts">
         <ShortcutsLibraryBlock />
 
-        <SectionHeader title="Programme" subtext="When the day opens and closes" catchphraseFeatureId="brief" />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Your Brief" defaultOpen>
         <ChevronRow
           label="Takeoff"
           rightText={format12Hour(settings.takeoffTime)}
@@ -2060,10 +2114,9 @@ export default function SettingsScreen() {
           onChange={setMidday}
         />
 
-        <SectionHeader
-          title="Always On"
-          subtext="These appear in every brief when relevant"
-        />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Notifications">
         <ToggleRow label="Health context" value={settings.healthEnabled} onChange={setHealth} />
         <ToggleRow label="Childcare" value={settings.childcareEnabled} onChange={setChildcare} />
         <Row
@@ -2071,10 +2124,9 @@ export default function SettingsScreen() {
           right={<Lock size={16} color={MUTED} />}
         />
 
-        <SectionHeader
-          title="What Matters Most"
-          subtext="Flag categories to prioritize in your brief"
-        />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="What Matters Most">
         {CATEGORIES.map((c) => (
           <ToggleRow
             key={c.key}
@@ -2084,10 +2136,9 @@ export default function SettingsScreen() {
           />
         ))}
 
-        <SectionHeader
-          title="On the Horizon"
-          subtext="One surprising signal from the bigger picture"
-        />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="On the Horizon">
         <ToggleRow label="Watching" value={settings.horizonEnabled} onChange={setHorizon} />
         <ChevronRow
           label="Frequency"
@@ -2098,10 +2149,9 @@ export default function SettingsScreen() {
           <ChevronRow label="View The Horizon" onPress={() => router.push('/horizon' as never)} />
         )}
 
-        <SectionHeader
-          title="Awareness"
-          subtext="What Conductor has learned"
-        />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="What Conductor Sees">
         <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
         <ChevronRow
           label="Signal Filters"
@@ -2239,16 +2289,25 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        <SectionHeader title="Language / Idioma" />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Language">
         <LanguageRow />
 
-        <SectionHeader title="Your Voice" subtext="How Conductor talks to you" catchphraseFeatureId="ask" />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Your Voice">
         <VoiceStyleBlock />
 
-        <SectionHeader title="Hey Conductor" subtext="Hands-free interaction" />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Hey Conductor">
         <HeyConductorBlock />
 
-        <SectionHeader title="Your Conductor" />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Your Conductor">
+        <AppearanceBlock />
         <AppIconRow />
         <Row label="Conductor" subtext="Version 1.0.0" />
         <Row
@@ -2286,8 +2345,11 @@ export default function SettingsScreen() {
           onPress={() => router.push('/profile-setup' as never)}
         />
 
-        <SectionHeader title="Founding Household" />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Founding Household">
         <ReferralBlock />
+        </CollapsibleSection>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -2467,6 +2529,16 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   sectionHeaderWrap: {
     marginTop: 28,
     marginBottom: 4,
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 26,
+    marginBottom: 6,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: SOFT_BORDER,
   },
   sectionHeader: {
     color: MUTED,
