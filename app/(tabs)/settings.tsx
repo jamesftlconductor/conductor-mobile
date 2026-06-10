@@ -823,7 +823,6 @@ function OverwatchPickerRow({
 
 function HouseholdNameRow() {
   const userId = useUserId();
-  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [name, setName] = useState<string>('');
@@ -831,6 +830,7 @@ function HouseholdNameRow() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -842,7 +842,9 @@ function HouseholdNameRow() {
       finally { if (!cancelled) setLoaded(true); }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [userId]);
+
+  if (!userId) return null;
 
   async function persist() {
     try {
@@ -893,13 +895,13 @@ function HouseholdNameRow() {
 
 function LanguageRow() {
   const userId = useUserId();
-  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [lang, setLang] = useState<'en' | 'es'>('en');
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!userId) return;
     (async () => {
       try {
         const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${userId}`);
@@ -908,7 +910,9 @@ function LanguageRow() {
       } catch { /* skip */ }
       finally { setLoaded(true); }
     })();
-  }, []);
+  }, [userId]);
+
+  if (!userId) return null;
 
   async function pick(next: 'en' | 'es') {
     setLang(next);
@@ -1084,7 +1088,6 @@ const HOBBY_OPTIONS: { id: string; label: string }[] = [
 
 function WhatYouLoveBlock() {
   const userId = useUserId();
-  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
@@ -1093,6 +1096,7 @@ function WhatYouLoveBlock() {
   // still renders the empty grid so the user can set hobbies for the
   // first time even if the GET hiccups.
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -1107,7 +1111,9 @@ function WhatYouLoveBlock() {
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [userId]);
+
+  if (!userId) return null;
 
   // Optimistic toggle — flip local state first, then POST the new
   // full array. The backend bust of currentTakeoff means the next
@@ -1172,7 +1178,6 @@ function WhatYouLoveBlock() {
 
 function VoiceStyleBlock() {
   const userId = useUserId();
-  if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [tone, setTone] = useState<StyleTone>('balanced');
@@ -1181,6 +1186,7 @@ function VoiceStyleBlock() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -1195,7 +1201,9 @@ function VoiceStyleBlock() {
       finally { if (!cancelled) setLoaded(true); }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [userId]);
+
+  if (!userId) return null;
 
   async function persist(patch: Record<string, string>) {
     try {
@@ -1397,7 +1405,6 @@ function HeyConductorBlock() {
 
 function ReferralBlock() {
   const userId = useUserId();
-  if (!userId) return null;
   const [data, setData] = useState<{
     referralCode?: string;
     referralCount?: number;
@@ -1408,6 +1415,7 @@ function ReferralBlock() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -1419,7 +1427,9 @@ function ReferralBlock() {
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [userId]);
+
+  if (!userId) return null;
 
   async function share() {
     if (!data?.referralCode) return;
