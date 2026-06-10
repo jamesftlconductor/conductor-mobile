@@ -37,6 +37,21 @@ type DirectoryCard = {
   screenLink: string | null;
 };
 
+// Static personality taglines (The Conductor's voice, ≤8 words) shown
+// beneath the matching card's title. Keyed by card id so they render in
+// both languages. Compass → the Patterns card, Privacy → the Your Data
+// Controls card (the directory has no literal Compass/Privacy card).
+const CARD_TAGLINES: Record<string, string> = {
+  signals: 'Everything your household needs to know.',
+  crew: 'The people The Conductor looks after.',
+  vault: 'Nothing lapses. Nothing forgotten.',
+  horizon: 'Further out than the brief. Closer than you think.',
+  patterns: 'How your household actually runs.',
+  maintenance: 'Your home, ahead of the season.',
+  network: 'The households you trust.',
+  controls: 'Your data. Your call. Always.',
+};
+
 const DIRECTORY_CARDS_EN: DirectoryCard[] = [
   // ── Section 1 — The Basics ──
   { id: 'brief', section: 'The Basics', sectionNumber: 1, title: 'The Brief',
@@ -417,6 +432,9 @@ export default function DirectoryScreen() {
               <Text style={styles.cardSection}>{item.section.toUpperCase()}</Text>
               <CardCatchphrase featureId={item.id} />
               <Text style={styles.cardTitle}>{item.title}</Text>
+              {CARD_TAGLINES[item.id] ? (
+                <Text style={styles.cardTagline}>{CARD_TAGLINES[item.id]}</Text>
+              ) : null}
               <View style={styles.brassDivider} />
               <Text style={styles.cardBody}>{item.body}</Text>
               {item.example ? (
@@ -549,6 +567,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontSize: 24,
     fontWeight: '700',
     marginTop: 8,
+  },
+  cardTagline: {
+    color: accentColor,
+    fontSize: 13,
+    fontStyle: 'italic',
+    letterSpacing: 0.2,
+    marginTop: 6,
   },
   brassDivider: {
     height: 1,
