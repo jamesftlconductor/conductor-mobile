@@ -1548,7 +1548,6 @@ async function handleInviteMember(userId: string) {
 
 export default function SettingsScreen() {
   const userId = useUserId();
-  if (!userId) return null;
   const { theme: t_theme, accentColor: t_accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(t_theme, t_accentColor), [t_theme, t_accentColor]);
   const settingsUrgentCount = useUrgentCount();
@@ -1619,6 +1618,7 @@ export default function SettingsScreen() {
   const workCalSavedOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (!userId) return;
     loadSettings().then((s) => {
       setSettings(s);
       setWorkCalDraft(s.workCalendarName);
@@ -1651,7 +1651,7 @@ export default function SettingsScreen() {
         // ignore — fall through to TextInput
       }
     })();
-  }, []);
+  }, [userId]);
 
   async function selectWorkCalendar(name: string) {
     // Consumer-primary guard: a user on a consumer email account
@@ -1693,6 +1693,7 @@ export default function SettingsScreen() {
   // screens and navigates back.
   useFocusEffect(
     useCallback(() => {
+      if (!userId) return;
       let cancelled = false;
       fetch(`${API_BASE}/signals?type=missedcues&userId=${userId}`)
         .then((r) => (r.ok ? r.json() : null))
@@ -1755,7 +1756,7 @@ export default function SettingsScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [userId]),
   );
 
   function update(next: Settings) {
@@ -1951,6 +1952,11 @@ export default function SettingsScreen() {
     update({ ...settings, [editingTime.key]: editingTime.draft });
     setEditingTime(null);
   }
+
+  // All hooks above this line run unconditionally (rules-of-hooks); the
+  // userId-dependent effects guard internally and key on [userId], so the
+  // screen still defers its data loads until userId resolves.
+  if (!userId) return null;
 
   if (!loaded) {
     return <View style={styles.container} />;
