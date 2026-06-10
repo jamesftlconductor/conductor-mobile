@@ -1315,9 +1315,15 @@ export default function TakeoffScreen() {
         ? data.yearInReview
         : null);
       setEveningCards(Array.isArray(data.eveningCards) ? (data.eveningCards as EveningCard[]) : []);
-      setPulse(typeof data.pulse === 'string' && data.pulse.length > 0
-        ? data.pulse
-        : null);
+      // Morning Pulse (data.pulse) on Takeoff; evening Pulse
+      // (data.eveningPulse) on Clearance/Dusk — same render + position.
+      setPulse(
+        typeof data.pulse === 'string' && data.pulse.length > 0
+          ? data.pulse
+          : typeof data.eveningPulse === 'string' && data.eveningPulse.length > 0
+            ? data.eveningPulse
+            : null
+      );
       setPulseFlags(Array.isArray(data.pulseFlags) ? data.pulseFlags : []);
       setPulseData(data.pulseData && typeof data.pulseData === 'object'
         ? (data.pulseData as PulseData)

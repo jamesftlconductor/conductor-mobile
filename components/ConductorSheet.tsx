@@ -533,7 +533,7 @@ export function ConductorSheet() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.chipsRow}
-                contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+                contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}>
                 {chips.map((chip) => (
                   <TouchableOpacity
                     key={chip}
@@ -875,8 +875,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       textTransform: 'uppercase',
     },
     chipsRow: {
+      // flexGrow/flexShrink 0 so the conversation's flex:1 below can't
+      // compress the chips row and clip the chips vertically.
       flexGrow: 0,
-      paddingVertical: 12,
+      flexShrink: 0,
+      paddingVertical: 10,
     },
     chip: {
       borderWidth: 1,
@@ -884,6 +887,8 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       borderRadius: 16,
       paddingVertical: 6,
       paddingHorizontal: 14,
+      minHeight: 30,
+      justifyContent: 'center',
     },
     chipText: {
       color: accentColor,

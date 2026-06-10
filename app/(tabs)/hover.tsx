@@ -435,22 +435,23 @@ function RotatingRing({
   // properties are native-supported.
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
-  // Ring-zoom alignment — refs let the rotation loop ease itself to the
-  // absolute frame on expand WITHOUT a second effect racing the loop.
+  // Ring-zoom — currentAnimRef lets the expand effect interrupt the
+  // in-flight spin so rotation can be snapped to the absolute frame.
   const currentAnimRef = useRef<Animated.CompositeAnimation | null>(null);
-  const aligningRef = useRef(false);
-  const isExpandedRef = useRef(isExpanded);
 
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
 
-  // On expand, interrupt the in-flight spin so the loop re-evaluates and
-  // (seeing paused+expanded) eases rotation to its nearest absolute frame.
+  // On expand, interrupt the in-flight spin and SNAP rotation to the
+  // absolute frame instantly (no easing) so signals land at their true
+  // time positions immediately — today at the top of the inner ring.
   useEffect(() => {
-    isExpandedRef.current = isExpanded;
-    if (isExpanded) currentAnimRef.current?.stop();
-  }, [isExpanded]);
+    if (isExpanded) {
+      currentAnimRef.current?.stop();
+      rotation.setValue(0);
+    }
+  }, [isExpanded, rotation]);
 
   useEffect(() => {
     const targetScale = isExpanded
@@ -484,36 +485,12 @@ function RotatingRing({
     function tick() {
       if (stopped) return;
       if (pausedRef.current) {
-        // Ring-zoom: when paused because this ring is EXPANDED, ease the
-        // rotation to its nearest absolute frame (spin → 0deg) over ~2.2s
-        // so signals settle at true time positions — today at the top of
-        // the inner ring, chronological on middle/outer. Selection-pause
-        // (a Finale-selected dot) leaves rotation alone so the chosen dot
-        // doesn't drift.
-        if (isExpandedRef.current && !aligningRef.current) {
-          const v = (rotation as any)._value ?? 0;
-          const nearest = Math.round(v);
-          if (Math.abs(v - nearest) > 0.001) {
-            aligningRef.current = true;
-            const align = Animated.timing(rotation, {
-              toValue: nearest,
-              duration: 2200,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            });
-            currentAnimRef.current = align;
-            align.start(({ finished }) => {
-              aligningRef.current = false;
-              // Normalize 1 → 0 (visually identical, 360deg ≡ 0deg) so the
-              // loop always resumes spinning from 0 without extrapolation.
-              if (finished && nearest !== 0) rotation.setValue(0);
-            });
-          }
-        }
+        // Rotation is held while paused (ring expanded — already snapped to
+        // the absolute frame by the expand effect — or a Finale-selected
+        // dot is frozen in place). Just keep re-checking.
         setTimeout(tick, 80);
         return;
       }
-      aligningRef.current = false;
       const startVal = (rotation as any)._value ?? 0;
       const remainingFrac = 1 - (startVal % 1);
       const duration = ring.rotationMs * remainingFrac;
@@ -620,8 +597,6 @@ function RotatingRing({
   );
 }
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
-
 function SignalDot({
   meta,
   x,
@@ -662,19 +637,6 @@ function SignalDot({
   void isAttributed;
   const dotColor = crewOverride || accentColor;
   const scale = useRef(new Animated.Value(1)).current;
-  // Ring-zoom: the dot's position springs to its target (x, y) so signals
-  // glide to their time-slot positions when a ring expands (and back on
-  // collapse), settling smoothly within ~2s (well under the 2.5s cap).
-  // useNativeDriver:false because left/top are layout props — fine, since
-  // it's a different view subtree from the native-driven scale below.
-  const posX = useRef(new Animated.Value(x)).current;
-  const posY = useRef(new Animated.Value(y)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(posX, { toValue: x, useNativeDriver: false, tension: 14, friction: 9 }),
-      Animated.spring(posY, { toValue: y, useNativeDriver: false, tension: 14, friction: 9 }),
-    ]).start();
-  }, [x, y, posX, posY]);
   const pausedRef = useRef(paused);
   const highlightRef = useRef(highlight);
   const isFirstPulseRef = useRef(!!freshlyAdded);
@@ -728,13 +690,12 @@ function SignalDot({
     : scale;
 
   return (
-    <AnimatedTouchable
+    // Ring-zoom: dots render directly at their (x, y), so when a ring
+    // expands they SNAP to their time-slot positions instantly — no easing.
+    <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.7}
-      style={[
-        styles.signalHit,
-        { left: Animated.subtract(posX, 18), top: Animated.subtract(posY, 18), opacity: baseOpacity },
-      ]}
+      style={[styles.signalHit, { left: x - 18, top: y - 18, opacity: baseOpacity }]}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
       <Animated.View
         style={[
@@ -763,7 +724,7 @@ function SignalDot({
           </View>
         ) : null}
       </Animated.View>
-    </AnimatedTouchable>
+    </TouchableOpacity>
   );
 }
 
