@@ -2,26 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import * as security from '@/app/security';
-import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
-import { Minimap } from '@/components/Minimap';
-import { openConductorSheet } from '@/hooks/useConductorSheet';
-import { useCatchphrase } from '@/hooks/useCatchphrase';
-import {
-  ICON_COLORS,
-  ICON_TAGLINES,
-  MONTH_ICONS,
-  MONTH_NAMES,
-  type IconKey,
-} from '@/hooks/useDynamicIcon';
-import { useUrgentCount } from '@/hooks/useUrgentCount';
-import { useUserId } from '@/hooks/useUserId';
-import { getCatchphrase, type Detail, type Tone } from '@/utils/catchphrases';
 import { ChevronRight, Lock } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
-  LayoutAnimation,
   Linking,
   Modal,
   Platform,
@@ -33,15 +18,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  UIManager,
   View,
 } from 'react-native';
-
-// Android needs an explicit opt-in for LayoutAnimation (used by the
-// collapsible settings sections). iOS enables it by default.
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 const BG = '#0f0f0f';
 const OFF_WHITE = '#f0ede8';
@@ -50,6 +28,7 @@ const SAGE = '#86efac';
 const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
+const USER_ID = 'james_totalhome_gmail_com';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
 // Shared so the three failure paths in handleInvite (network, non-2xx,
@@ -77,8 +56,6 @@ const CATEGORIES: { key: CategoryKey; label: string; storeKey: string }[] = [
 const HORIZON_FREQUENCIES = ['Weekly', 'Bi-weekly', 'Monthly'] as const;
 type HorizonFrequency = (typeof HORIZON_FREQUENCIES)[number];
 
-type FinancialAwareness = 'silent' | 'awareness' | 'tracking' | 'planning';
-
 type Settings = {
   takeoffTime: string;       // "HH:MM" 24-hour
   clearanceTime: string;     // "HH:MM" 24-hour
@@ -89,17 +66,6 @@ type Settings = {
   horizonFrequency: HorizonFrequency;
   workCalendarName: string;  // Empty string = unset
   middayEnabled: boolean;    // Opt-in midday check-in push
-  middayHour: number;        // Local hour for the midday check-in (default 1pm)
-  // Overwatch threshold — the local hour after which brief mode
-  // becomes "Overwatch" (the quiet, end-of-day variant). Stored as a
-  // 24-hour integer; backend reads it directly.
-  overwatchHour: number;
-  // Weekend takeoff delay — when true, Saturday/Sunday push the
-  // takeoff hour forward by 1 hour relative to the weekday default.
-  weekendTakeoffDelay: boolean;
-  // Financial intelligence — how much engagement Conductor brings to
-  // money topics. Default is 'silent' (only anomalies surface).
-  financialAwareness: FinancialAwareness;
 };
 
 const DEFAULTS: Settings = {
@@ -119,31 +85,7 @@ const DEFAULTS: Settings = {
   horizonFrequency: 'Weekly',
   workCalendarName: '',
   middayEnabled: false,
-  middayHour: 13,             // 1pm default
-  overwatchHour: 23,          // 11pm default per spec
-  weekendTakeoffDelay: false,
-  financialAwareness: 'silent',
 };
-
-const FINANCIAL_OPTIONS: { id: FinancialAwareness; title: string; sub: string }[] = [
-  { id: 'silent',    title: 'Silent',    sub: 'Track quietly. Only alerts on anomalies and fraud.' },
-  { id: 'awareness', title: 'Awareness', sub: 'Surface renewals, price changes, and unusual charges.' },
-  { id: 'tracking',  title: 'Tracking',  sub: 'Track against typical patterns. Surface category overruns.' },
-  { id: 'planning',  title: 'Planning',  sub: 'Full financial intelligence in your brief.' },
-];
-
-// Overwatch options shown in the Settings picker. Stored hour is the
-// integer Settings.overwatchHour; the 23.5 case is represented in the
-// UI but rounded down to 23 in storage for now since the backend gate
-// is hour-granular (refine to minutes if user feedback warrants).
-const OVERWATCH_OPTIONS: { hour: number; label: string }[] = [
-  { hour: 22, label: '10pm' },
-  { hour: 23, label: '11pm' },
-  // 11:30 lives in the same hour bucket as 11pm for backend purposes
-  // but the user-visible label communicates the intent.
-  { hour: 23, label: '11:30pm' },
-  { hour: 0,  label: 'Midnight' },
-];
 
 function format12Hour(hhmm: string) {
   const [h] = hhmm.split(':').map((n) => parseInt(n, 10));
@@ -163,7 +105,7 @@ function buildFlaggedCategories(map: Record<CategoryKey, boolean>): string[] {
   return CATEGORIES.filter((c) => map[c.key]).map((c) => c.label.toLowerCase());
 }
 
-async function persistAndSync(settings: Settings, userId: string) {
+async function persistAndSync(settings: Settings) {
   // Local persistence: one key per setting per spec.
   const writes: [string, string][] = [
     ['takeoffTime', settings.takeoffTime],
@@ -174,10 +116,6 @@ async function persistAndSync(settings: Settings, userId: string) {
     ['horizonFrequency', settings.horizonFrequency],
     ['workCalendarName', settings.workCalendarName],
     ['middayEnabled', String(settings.middayEnabled)],
-    ['middayHour', String(settings.middayHour)],
-    ['overwatchHour', String(settings.overwatchHour)],
-    ['weekendTakeoffDelay', String(settings.weekendTakeoffDelay)],
-    ['financialAwareness', settings.financialAwareness],
     ...CATEGORIES.map(
       (c) => [c.storeKey, String(settings.categoryEnabled[c.key])] as [string, string]
     ),
@@ -189,7 +127,7 @@ async function persistAndSync(settings: Settings, userId: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      userId: userId,
+      userId: USER_ID,
       preferences: {
         takeoffTime: settings.takeoffTime,
         clearanceTime: settings.clearanceTime,
@@ -201,10 +139,6 @@ async function persistAndSync(settings: Settings, userId: string) {
         categoryEnabled: settings.categoryEnabled,
         workCalendarName: settings.workCalendarName.trim(),
         middayEnabled: settings.middayEnabled,
-        middayHour: settings.middayHour,
-        overwatchHour: settings.overwatchHour,
-        weekendTakeoffDelay: settings.weekendTakeoffDelay,
-        financialAwareness: settings.financialAwareness,
       },
     }),
   }).catch(() => {});
@@ -220,10 +154,6 @@ async function loadSettings(): Promise<Settings> {
     'horizonFrequency',
     'workCalendarName',
     'middayEnabled',
-    'middayHour',
-    'overwatchHour',
-    'weekendTakeoffDelay',
-    'financialAwareness',
     ...CATEGORIES.map((c) => c.storeKey),
   ];
   try {
@@ -243,21 +173,6 @@ async function loadSettings(): Promise<Settings> {
           : DEFAULTS.horizonFrequency,
       workCalendarName: map.workCalendarName || DEFAULTS.workCalendarName,
       middayEnabled: bool('middayEnabled', DEFAULTS.middayEnabled),
-      middayHour: (() => {
-        const n = parseInt(map.middayHour || '', 10);
-        return isNaN(n) ? DEFAULTS.middayHour : n;
-      })(),
-      overwatchHour: (() => {
-        const n = parseInt(map.overwatchHour || '', 10);
-        return isNaN(n) ? DEFAULTS.overwatchHour : n;
-      })(),
-      weekendTakeoffDelay: bool('weekendTakeoffDelay', DEFAULTS.weekendTakeoffDelay),
-      financialAwareness: (() => {
-        const v = map.financialAwareness;
-        return v === 'silent' || v === 'awareness' || v === 'tracking' || v === 'planning'
-          ? v
-          : DEFAULTS.financialAwareness;
-      })(),
       categoryEnabled: CATEGORIES.reduce((acc, c) => {
         acc[c.key] = bool(c.storeKey, DEFAULTS.categoryEnabled[c.key]);
         return acc;
@@ -273,8 +188,6 @@ async function loadSettings(): Promise<Settings> {
 // mount and on focus so a change made in one place reflects
 // everywhere.
 function SecuritySection() {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [enabled, setEnabledLocal] = useState(false);
   const [lockAfter, setLockAfterLocal] = useState<security.LockAfterMinutes>(5);
@@ -394,72 +307,11 @@ function SecuritySection() {
   );
 }
 
-function SectionHeader({
-  title,
-  subtext,
-  catchphraseFeatureId,
-}: {
-  title: string;
-  subtext?: string;
-  // Optional feature ID — when set, the section gains a single-line
-  // catchphrase in the user's chosen voice (read live via the hook).
-  catchphraseFeatureId?: string;
-}) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const catchphrase = useCatchphrase(catchphraseFeatureId || '');
+function SectionHeader({ title, subtext }: { title: string; subtext?: string }) {
   return (
     <View style={styles.sectionHeaderWrap}>
       <Text style={styles.sectionHeader}>{title}</Text>
       {!!subtext && <Text style={styles.sectionSubtext}>{subtext}</Text>}
-      {catchphraseFeatureId && catchphrase ? (
-        <Text
-          style={{
-            color: theme.muted,
-            fontSize: 11,
-            fontStyle: 'italic',
-            marginTop: 4,
-            letterSpacing: 0.3,
-          }}>
-          {catchphrase}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-// Collapsible category section — a tappable header that expands/collapses
-// its children with a layout animation. Used to tame the (long) Settings
-// screen into scannable groups. Collapsed by default unless defaultOpen.
-function CollapsibleSection({
-  title,
-  defaultOpen = false,
-  children,
-}: {
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <View>
-      <TouchableOpacity
-        activeOpacity={0.6}
-        onPress={() => {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setOpen((o) => !o);
-        }}
-        style={styles.collapsibleHeader}>
-        <Text style={styles.sectionHeader}>{title}</Text>
-        <ChevronRight
-          size={18}
-          color={theme.muted}
-          style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}
-        />
-      </TouchableOpacity>
-      {open ? <View>{children}</View> : null}
     </View>
   );
 }
@@ -477,8 +329,6 @@ function Row({
   onPress?: () => void;
   disabled?: boolean;
 }) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const Wrap: React.ComponentType<any> = onPress && !disabled ? TouchableOpacity : View;
   return (
     <Wrap style={styles.row} onPress={onPress} activeOpacity={0.6}>
@@ -519,331 +369,16 @@ function ToggleRow({
   );
 }
 
-// App Icon row — surfaces the currently-active icon as a colored
-// swatch plus the month name + tagline ("December — Christmas").
-// Tap routes to the full selector screen. Reads currentIcon from
-// AsyncStorage on focus; falls through to the current calendar
-// month when nothing is stored yet.
-function AppIconRow() {
-  const { theme, accentColor } = useTheme();
-  const [icon, setIcon] = useState<IconKey>('january');
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const stored = await AsyncStorage.getItem('currentIcon');
-        if (cancelled) return;
-        if (stored && [...MONTH_ICONS, 'founding'].includes(stored as IconKey)) {
-          setIcon(stored as IconKey);
-        } else {
-          setIcon(MONTH_ICONS[new Date().getMonth()]);
-        }
-      } catch { /* fall through to default */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-  const isFounding = icon === 'founding';
-  const monthName = isFounding ? 'Founding' : MONTH_NAMES[MONTH_ICONS.indexOf(icon as any)];
-  const tagline = ICON_TAGLINES[icon];
-  return (
-    <TouchableOpacity
-      onPress={() => router.push('/icon-selector' as never)}
-      activeOpacity={0.6}
-      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 14,
-        paddingHorizontal: 22,
-      }}>
-      <View
-        style={{
-          width: 24,
-          height: 24,
-          borderRadius: 6,
-          backgroundColor: ICON_COLORS[icon],
-          marginRight: 12,
-        }}
-      />
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: theme.text, fontSize: 14 }}>
-          App Icon
-        </Text>
-        <Text style={{ color: theme.muted, fontSize: 12, marginTop: 2 }}>
-          {monthName} — {tagline}
-        </Text>
-      </View>
-      <ChevronRight size={18} color={theme.muted} />
-    </TouchableOpacity>
-  );
-}
-
-// iOS Shortcuts library — a hand-curated catalog of shortcut templates
-// users can install to forward signals from other apps into Conductor
-// via /api/ingest. The templateId values below are intentionally
-// placeholders; substitute real shortcut share URLs once published on
-// iCloud. The Install button opens the iCloud Shortcuts share link;
-// iOS handles the install handshake natively.
-const SHORTCUT_CATEGORIES: { category: string; items: { id: string; icon: string; name: string; desc: string }[] }[] = [
-  {
-    category: 'BANKING',
-    items: [
-      { id: 'banking-large-tx', icon: '💳', name: 'Large transaction alert', desc: 'When a charge over a set amount arrives → Conductor signal' },
-    ],
-  },
-  {
-    category: 'SCHOOL',
-    items: [
-      { id: 'school-classdojo', icon: '🎒', name: 'ClassDojo message', desc: 'Forward ClassDojo notifications to Conductor crew signals' },
-      { id: 'school-remind',    icon: '🏫', name: 'Remind message',    desc: 'School messages to Conductor' },
-    ],
-  },
-  {
-    category: 'HEALTH',
-    items: [
-      { id: 'health-workout', icon: '🏋️', name: 'Workout complete', desc: 'Log Apple Watch workouts to Conductor health context' },
-      { id: 'health-hr',      icon: '❤️', name: 'High heart rate',   desc: 'Unusual heart rate → Conductor health signal' },
-    ],
-  },
-  {
-    category: 'HOME',
-    items: [
-      { id: 'home-door',   icon: '🔓', name: 'Door unlocked', desc: 'August/smart lock events to Conductor' },
-      { id: 'home-garage', icon: '🚪', name: 'Garage opened', desc: 'Garage door events to Conductor' },
-    ],
-  },
-  {
-    category: 'TRAVEL',
-    items: [
-      { id: 'travel-flight', icon: '✈️', name: 'Flight update',    desc: 'Forward airline notifications to Conductor travel signal' },
-      { id: 'travel-hotel',  icon: '🏨', name: 'Hotel check-in',   desc: 'Hotel confirmation to Conductor' },
-    ],
-  },
-  {
-    category: 'LIFESTYLE',
-    items: [
-      { id: 'life-resy',    icon: '🍽️',  name: 'Restaurant reservation',  desc: 'OpenTable/Resy bookings to Conductor' },
-      { id: 'life-concert', icon: '🎟️',  name: 'Concert tickets',         desc: 'Ticketmaster purchases to Conductor event signal' },
-      { id: 'life-grocery', icon: '🛒',  name: 'Grocery order',           desc: 'Instacart orders to Conductor' },
-    ],
-  },
-];
-
-function ShortcutsLibraryBlock() {
-  const { theme, accentColor } = useTheme();
-  return (
-    <View style={{ paddingHorizontal: 22, paddingVertical: 8 }}>
-      {SHORTCUT_CATEGORIES.map((group) => (
-        <View key={group.category} style={{ marginBottom: 14 }}>
-          <Text style={{
-            color: theme.muted,
-            fontSize: 10,
-            letterSpacing: 2,
-            fontWeight: '600',
-            marginBottom: 8,
-            marginTop: 4,
-          }}>
-            {group.category}
-          </Text>
-          {group.items.map((item) => (
-            <View
-              key={item.id}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 10,
-                borderBottomWidth: StyleSheet.hairlineWidth,
-                borderBottomColor: 'rgba(255,255,255,0.06)',
-              }}>
-              <Text style={{ fontSize: 20, marginRight: 12 }}>{item.icon}</Text>
-              <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '500' }}>
-                  {item.name}
-                </Text>
-                <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2, lineHeight: 14 }}>
-                  {item.desc}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => Linking.openURL(`https://www.icloud.com/shortcuts/${item.id}`).catch(() => {})}
-                activeOpacity={0.6}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                style={{
-                  paddingVertical: 6,
-                  paddingHorizontal: 12,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: accentColor,
-                }}>
-                <Text style={{ color: accentColor, fontSize: 11, fontWeight: '600' }}>
-                  Install →
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      ))}
-
-      {/* Generic integration rows — IFTTT / Zapier / direct webhook.
-          These are static links because the webhook URL is per-
-          household and assembled server-side; once household API
-          keys ship in onboarding, swap this label for the live URL. */}
-      <View style={{ marginTop: 6 }}>
-        <TouchableOpacity
-          onPress={() => Linking.openURL('https://ifttt.com').catch(() => {})}
-          style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.06)' }}
-          activeOpacity={0.6}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-          <Text style={{ color: theme.text, fontSize: 13 }}>Connect via IFTTT →</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => Linking.openURL('https://zapier.com').catch(() => {})}
-          style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.06)' }}
-          activeOpacity={0.6}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-          <Text style={{ color: theme.text, fontSize: 13 }}>Connect via Zapier →</Text>
-        </TouchableOpacity>
-        <View style={{ paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.06)' }}>
-          <Text style={{ color: theme.text, fontSize: 13 }}>Webhook URL</Text>
-          <Text style={{ color: theme.muted, fontSize: 11, marginTop: 4 }}>
-            POST to /api/ingest with X-Conductor-Key header
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// Financial awareness — stacked option cards. Tap to select; brass
-// border on the active tier. Defaults to 'silent' (only anomalies
-// surface in the brief). Backend reads this from user preferences
-// and applies the corresponding filter inside the brief pool build.
-function FinancialAwarenessBlock({
-  value,
-  onChange,
-}: {
-  value: FinancialAwareness;
-  onChange: (v: FinancialAwareness) => void;
-}) {
-  const { theme, accentColor } = useTheme();
-  return (
-    <View style={{ paddingHorizontal: 22, paddingVertical: 10 }}>
-      {FINANCIAL_OPTIONS.map((o) => {
-        const active = o.id === value;
-        return (
-          <TouchableOpacity
-            key={o.id}
-            onPress={() => onChange(o.id)}
-            activeOpacity={0.6}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            style={{
-              borderWidth: 1,
-              borderColor: active ? accentColor : 'rgba(255,255,255,0.06)',
-              backgroundColor: active ? 'rgba(184,150,12,0.08)' : 'transparent',
-              borderRadius: 12,
-              padding: 14,
-              marginBottom: 10,
-            }}>
-            <Text style={{
-              color: active ? accentColor : theme.text,
-              fontSize: 14,
-              fontWeight: active ? '600' : '500',
-              marginBottom: 4,
-            }}>
-              {o.title}
-            </Text>
-            <Text style={{
-              color: theme.muted,
-              fontSize: 12,
-              lineHeight: 17,
-            }}>
-              {o.sub}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
-
-// Overwatch threshold picker — four discrete options as a horizontal
-// pill row, mirroring the existing settings pill style. Selection
-// state shown with the accentColor border + tint. Storage is the
-// integer hour; the 11:30pm label still maps to hour=23 (backend gate
-// is hour-granular for now).
-function OverwatchPickerRow({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (h: number) => void;
-}) {
-  const { theme, accentColor } = useTheme();
-  return (
-    <View style={{ paddingHorizontal: 22, paddingVertical: 12 }}>
-      <Text style={{ color: theme.text, fontSize: 14, marginBottom: 8 }}>
-        Overwatch begins at
-      </Text>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {OVERWATCH_OPTIONS.map((o, idx) => {
-          const active = o.hour === value && (
-            o.label === '11pm' ? value === 23 :
-            o.label === '11:30pm' ? value === 23 :
-            true
-          );
-          // 11pm / 11:30pm share hour=23. Disambiguate by index so
-          // only one of the two reads as "active" at a time. We
-          // remember which label was last picked via a separate
-          // marker in storage — for now, defer that nuance and let
-          // 11pm win when both map to 23.
-          const isActive = idx === 0 ? value === 22
-            : idx === 1 ? value === 23
-            : idx === 2 ? false   // 11:30 distinct UI but same hour bucket
-            : value === 0;
-          return (
-            <TouchableOpacity
-              key={o.label}
-              onPress={() => onChange(o.hour)}
-              activeOpacity={0.6}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: isActive ? accentColor : 'rgba(255,255,255,0.08)',
-                backgroundColor: isActive ? 'rgba(184,150,12,0.08)' : 'transparent',
-                alignItems: 'center',
-              }}>
-              <Text style={{
-                color: isActive ? accentColor : theme.muted,
-                fontSize: 12,
-                fontWeight: isActive ? '600' : '400',
-              }}>
-                {o.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 function HouseholdNameRow() {
-  const userId = useUserId();
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [name, setName] = useState<string>('');
   const [editing, setEditing] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${userId}`);
+        const res = await fetch(`${API_BASE}/signals?type=profile&userId=${USER_ID}`);
         const data = await res.json();
         if (cancelled) return;
         if (data?.profile?.householdName) setName(data.profile.householdName);
@@ -851,16 +386,14 @@ function HouseholdNameRow() {
       finally { if (!cancelled) setLoaded(true); }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
-
-  if (!userId) return null;
+  }, []);
 
   async function persist() {
     try {
       await fetch(`${API_BASE}/signals?type=profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: userId, householdName: name.trim() || null }),
+        body: JSON.stringify({ userId: USER_ID, householdName: name.trim() || null }),
       });
     } catch { /* best-effort */ }
     setEditing(false);
@@ -903,25 +436,19 @@ function HouseholdNameRow() {
 }
 
 function LanguageRow() {
-  const userId = useUserId();
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [lang, setLang] = useState<'en' | 'es'>('en');
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!userId) return;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${userId}`);
+        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${USER_ID}`);
         const data = await res.json();
         if (data?.preferences?.language === 'es') setLang('es');
       } catch { /* skip */ }
       finally { setLoaded(true); }
     })();
-  }, [userId]);
-
-  if (!userId) return null;
+  }, []);
 
   async function pick(next: 'en' | 'es') {
     setLang(next);
@@ -929,10 +456,10 @@ function LanguageRow() {
       await fetch(`${API_BASE}/signals?type=preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: userId, preferences: { language: next } }),
+        body: JSON.stringify({ userId: USER_ID, preferences: { language: next } }),
       });
       // Bust takeoff cache so next brief reflects new language.
-      fetch(`${API_BASE}/brief?userId=${userId}&mode=takeoff&forceFresh=1`).catch(() => {});
+      fetch(`${API_BASE}/brief?userId=${USER_ID}&mode=takeoff&forceFresh=1`).catch(() => {});
     } catch { /* skip */ }
   }
 
@@ -977,229 +504,17 @@ type StyleTone = 'direct' | 'balanced' | 'warm';
 type StyleHumor = 'yes' | 'occasionally' | 'no';
 type StyleDetail = 'brief' | 'standard' | 'thorough';
 
-function AppearanceBlock() {
-  const { themeMode, accentKey, theme, accentColor, isDark, setThemeMode, setAccentKey } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const modes: { id: ThemeMode; label: string }[] = [
-    { id: 'dark', label: 'Dark' },
-    { id: 'light', label: 'Light' },
-    { id: 'system', label: 'System' },
-  ];
-  const accentList: { id: AccentKey; name: string; color: string }[] = (
-    Object.keys(ACCENTS) as AccentKey[]
-  ).map((key) => ({
-    id: key,
-    name: ACCENTS[key].name,
-    color: ACCENTS[key][isDark ? 'dark' : 'light'],
-  }));
-  return (
-    <View style={{ paddingHorizontal: 22, paddingVertical: 14 }}>
-      <Text style={{ color: theme.muted, fontSize: 10, letterSpacing: 1.5, marginBottom: 8, fontWeight: '600' }}>
-        THEME
-      </Text>
-      <View
-        style={{
-          flexDirection: 'row',
-          backgroundColor: theme.inputBackground,
-          borderRadius: 10,
-          padding: 3,
-          marginBottom: 18,
-        }}>
-        {modes.map((m) => {
-          const active = themeMode === m.id;
-          return (
-            <TouchableOpacity
-              key={m.id}
-              onPress={() => setThemeMode(m.id)}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 8,
-                alignItems: 'center',
-                backgroundColor: active ? accentColor : 'transparent',
-              }}>
-              <Text
-                style={{
-                  color: active ? '#0f0f0f' : theme.muted,
-                  fontSize: 12,
-                  fontWeight: active ? '600' : '400',
-                }}>
-                {m.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <Text style={{ color: theme.muted, fontSize: 10, letterSpacing: 1.5, marginBottom: 10, fontWeight: '600' }}>
-        ACCENT COLOR
-      </Text>
-      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
-        {accentList.map((a) => {
-          const active = accentKey === a.id;
-          return (
-            <TouchableOpacity
-              key={a.id}
-              onPress={() => setAccentKey(a.id)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                backgroundColor: a.color,
-                borderWidth: active ? 3 : 0,
-                borderColor: theme.text,
-              }}
-            />
-          );
-        })}
-      </View>
-
-      <View
-        style={{
-          marginTop: 4,
-          padding: 14,
-          backgroundColor: theme.card,
-          borderLeftWidth: 2,
-          borderLeftColor: accentColor,
-          borderRadius: 6,
-        }}>
-        <Text style={{ color: theme.muted, fontSize: 9, letterSpacing: 2, marginBottom: 6, fontWeight: '600' }}>
-          PREVIEW
-        </Text>
-        <Text style={{ color: theme.text, fontSize: 13, lineHeight: 19 }}>
-          Your <Text style={{ color: accentColor, fontWeight: '600' }}>HVAC tune-up</Text> is due before June.
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-// Mirror of onboarding's HOBBY_OPTIONS — keys MUST match
-// api/signals.js HOBBY_KEYS or the save round-trip drops them.
-const HOBBY_OPTIONS: { id: string; label: string }[] = [
-  { id: 'water',    label: '🌊 Water' },
-  { id: 'music',    label: '🎵 Music' },
-  { id: 'food',     label: '🍽️ Food' },
-  { id: 'golf',     label: '⛳ Golf' },
-  { id: 'fitness',  label: '🏋️ Fitness' },
-  { id: 'art',      label: '🎨 Art' },
-  { id: 'travel',   label: '✈️ Travel' },
-  { id: 'sports',   label: '🏈 Sports' },
-  { id: 'outdoors', label: '🌱 Outdoors' },
-  { id: 'film',     label: '🎬 Film' },
-  { id: 'wine',     label: '🍷 Wine & Spirits' },
-  { id: 'cycling',  label: '🚴 Cycling' },
-  { id: 'books',    label: '📚 Books' },
-  { id: 'gaming',   label: '🎮 Gaming' },
-  { id: 'wellness', label: '🧘 Wellness' },
-];
-
-function WhatYouLoveBlock() {
-  const userId = useUserId();
-  const { theme, accentColor } = useTheme();
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [loaded, setLoaded] = useState(false);
-
-  // Load existing hobbies on mount. Silent failure — the section
-  // still renders the empty grid so the user can set hobbies for the
-  // first time even if the GET hiccups.
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/signals?type=hobbies&userId=${userId}`);
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        const list: string[] = Array.isArray(data?.hobbies) ? data.hobbies : [];
-        if (!cancelled) {
-          setPicked(new Set(list));
-          setLoaded(true);
-        }
-      } catch { /* silent */ }
-    })();
-    return () => { cancelled = true; };
-  }, [userId]);
-
-  if (!userId) return null;
-
-  // Optimistic toggle — flip local state first, then POST the new
-  // full array. The backend bust of currentTakeoff means the next
-  // brief regenerates with the change, so no extra plumbing needed
-  // here. Save failures fall through silently (user can retry by
-  // re-tapping); we don't roll back optimistic state to avoid
-  // making the UI feel flaky on a single 500.
-  function toggle(id: string) {
-    const next = new Set(picked);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setPicked(next);
-    fetch(`${API_BASE}/signals?type=hobbies`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: userId,
-        hobbies: Array.from(next),
-      }),
-    }).catch(() => { /* silent */ });
-  }
-
-  // Until the GET resolves, render the grid in a slightly faded
-  // state so the user doesn't tap an "empty" grid and then watch
-  // their selection mysteriously appear a beat later.
-  const opacity = loaded ? 1 : 0.5;
-
-  return (
-    <View style={{ paddingHorizontal: 22, paddingTop: 4, paddingBottom: 14, opacity }}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {HOBBY_OPTIONS.map((h) => {
-          const active = picked.has(h.id);
-          return (
-            <TouchableOpacity
-              key={h.id}
-              onPress={() => toggle(h.id)}
-              activeOpacity={0.6}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-              style={{
-                paddingVertical: 10,
-                paddingHorizontal: 14,
-                borderRadius: 22,
-                borderWidth: 1,
-                borderColor: active ? accentColor : 'rgba(255,255,255,0.06)',
-                backgroundColor: active ? 'rgba(184,150,12,0.08)' : 'rgba(255,255,255,0.03)',
-              }}>
-              <Text
-                style={{
-                  color: active ? accentColor : theme.text,
-                  fontSize: 13,
-                  fontWeight: active ? '600' : '400',
-                }}>
-                {h.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 function VoiceStyleBlock() {
-  const userId = useUserId();
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [tone, setTone] = useState<StyleTone>('balanced');
   const [humor, setHumor] = useState<StyleHumor>('occasionally');
   const [detail, setDetail] = useState<StyleDetail>('standard');
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${userId}`);
+        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${USER_ID}`);
         const data = await res.json();
         if (cancelled) return;
         const p = data?.preferences || {};
@@ -1210,20 +525,18 @@ function VoiceStyleBlock() {
       finally { if (!cancelled) setLoaded(true); }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
-
-  if (!userId) return null;
+  }, []);
 
   async function persist(patch: Record<string, string>) {
     try {
       await fetch(`${API_BASE}/signals?type=preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: userId, preferences: patch }),
+        body: JSON.stringify({ userId: USER_ID, preferences: patch }),
       });
       // Bust takeoff cache so the next brief reflects new voice
       // immediately, not after the cache TTL expires.
-      fetch(`${API_BASE}/brief?userId=${userId}&mode=takeoff&forceFresh=1`, { method: 'GET' })
+      fetch(`${API_BASE}/brief?userId=${USER_ID}&mode=takeoff&forceFresh=1`, { method: 'GET' })
         .catch(() => {});
     } catch { /* best-effort */ }
   }
@@ -1271,39 +584,6 @@ function VoiceStyleBlock() {
         value={detail}
         onChange={(v) => { setDetail(v as StyleDetail); persist({ communicationDetail: v }); }}
       />
-
-      {/* Live catchphrase preview — the user's tone × detail
-          choice doesn't just shape the brief, it shapes the
-          entire product's surface language. Showing the vault
-          catchphrase in their selected voice makes the impact
-          immediately visible. */}
-      <View
-        style={{
-          marginTop: 14,
-          paddingVertical: 10,
-          paddingHorizontal: 14,
-          borderRadius: 8,
-          backgroundColor: theme.card,
-          borderLeftWidth: 2,
-          borderLeftColor: accentColor,
-        }}>
-        <Text style={{
-          color: theme.muted,
-          fontSize: 9,
-          letterSpacing: 2,
-          fontWeight: '600',
-          marginBottom: 6,
-        }}>
-          FEATURES SOUND LIKE
-        </Text>
-        <Text style={{
-          color: accentColor,
-          fontSize: 12,
-          fontStyle: 'italic',
-        }}>
-          {getCatchphrase('vault', tone as Tone, detail as Detail)}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -1392,7 +672,7 @@ function HeyConductorBlock() {
     <View>
       <ToggleRow
         label="Activate with shake"
-        subtext="Shake the phone to open The Conductor"
+        subtext="Shake the phone to open Ask Conductor"
         value={shake}
         onChange={(v) => { setShake(v); AsyncStorage.setItem('shakeEnabled', String(v)); }}
       />
@@ -1413,7 +693,6 @@ function HeyConductorBlock() {
 }
 
 function ReferralBlock() {
-  const userId = useUserId();
   const [data, setData] = useState<{
     referralCode?: string;
     referralCount?: number;
@@ -1424,11 +703,10 @@ function ReferralBlock() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/signals?type=referral&userId=${userId}`);
+        const res = await fetch(`${API_BASE}/signals?type=referral&userId=${USER_ID}`);
         const json = await res.json();
         if (cancelled) return;
         if (res.ok && json?.ok) setData(json);
@@ -1436,9 +714,7 @@ function ReferralBlock() {
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
-
-  if (!userId) return null;
+  }, []);
 
   async function share() {
     if (!data?.referralCode) return;
@@ -1523,8 +799,6 @@ function ChevronRow({
   rightText?: string;
   onPress: () => void;
 }) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   return (
     <Row
       label={label}
@@ -1544,9 +818,9 @@ function comingSoon(label: string) {
   Alert.alert(label, 'Still coming.');
 }
 
-async function handleInviteMember(userId: string) {
+async function handleInviteMember() {
   try {
-    const r = await fetch(`${API_BASE}/invite/generate?userId=${userId}`);
+    const r = await fetch(`${API_BASE}/invite/generate?userId=${USER_ID}`);
     if (!r.ok) {
       Alert.alert('Invite a member', INVITE_FAILED_MESSAGE);
       return;
@@ -1566,10 +840,6 @@ async function handleInviteMember(userId: string) {
 }
 
 export default function SettingsScreen() {
-  const userId = useUserId();
-  const { theme: t_theme, accentColor: t_accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(t_theme, t_accentColor), [t_theme, t_accentColor]);
-  const settingsUrgentCount = useUrgentCount();
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
   const [editingTime, setEditingTime] = useState<null | {
@@ -1582,16 +852,6 @@ export default function SettingsScreen() {
   // Oura connection state — polled on focus so the row reflects whether
   // the OAuth flow completed in Safari since the last visit.
   const [ouraConnected, setOuraConnected] = useState<boolean | null>(null);
-  // Nextdoor neighborhood connection state — same polled-on-focus
-  // pattern as Oura so the row flips to ✓ as soon as the OAuth
-  // round-trip completes in Safari.
-  const [nextdoorConnected, setNextdoorConnected] = useState<boolean | null>(null);
-  const [nextdoorNeighborhood, setNextdoorNeighborhood] = useState<string | null>(null);
-  // Outlook connection state — same polled-on-focus pattern as Oura
-  // and Nextdoor. Flips to ✓ as soon as the OAuth round-trip
-  // completes in Safari and the device returns to Settings.
-  const [outlookConnected, setOutlookConnected] = useState<boolean | null>(null);
-  const [outlookEmail, setOutlookEmail] = useState<string | null>(null);
   // API key modal — shows the household's API key with a copy button.
   const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
@@ -1625,11 +885,6 @@ export default function SettingsScreen() {
     { id: string; summary: string; backgroundColor: string | null; isWorkCalendar: boolean; primary: boolean }[]
   >([]);
   const [detectedWorkCalendar, setDetectedWorkCalendar] = useState<string | null>(null);
-  // Picker needs to know if the user is on a consumer email so it can
-  // refuse to save their primary calendar as the work calendar. Without
-  // this, a user could accidentally privacy-strip their own personal
-  // calendar — exactly the bug Fix B addresses on the backend.
-  const [userIsConsumer, setUserIsConsumer] = useState<boolean>(false);
   const [showCalPicker, setShowCalPicker] = useState(false);
   // "Saved" confirmation flag for the work-calendar input. Animated.Value
   // holds the opacity so the affordance can fade in immediately, hold for
@@ -1637,7 +892,6 @@ export default function SettingsScreen() {
   const workCalSavedOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!userId) return;
     loadSettings().then((s) => {
       setSettings(s);
       setWorkCalDraft(s.workCalendarName);
@@ -1649,7 +903,7 @@ export default function SettingsScreen() {
     (async () => {
       try {
         const res = await fetch(
-          `https://conductor-ivory.vercel.app/api/calendar?action=list&userId=${userId}`
+          `https://conductor-ivory.vercel.app/api/calendar?action=list&userId=${USER_ID}`
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -1664,29 +918,14 @@ export default function SettingsScreen() {
             }))
           );
           setDetectedWorkCalendar(typeof data?.detectedWorkCalendar === 'string' ? data.detectedWorkCalendar : null);
-          setUserIsConsumer(data?.userIsConsumer === true);
         }
       } catch {
         // ignore — fall through to TextInput
       }
     })();
-  }, [userId]);
+  }, []);
 
   async function selectWorkCalendar(name: string) {
-    // Consumer-primary guard: a user on a consumer email account
-    // (gmail.com, icloud.com, etc.) cannot save their own primary
-    // calendar as their work calendar — that would silently
-    // privacy-strip every personal event they own. Refuse + alert.
-    const picked = calendarList.find((c) => c.summary === name);
-    if (picked && picked.primary && userIsConsumer) {
-      Alert.alert(
-        'That looks personal',
-        'This looks like your personal calendar — please select a work calendar instead. ' +
-        'Conductor privacy-strips events from your work calendar to time blocks; doing that ' +
-        'to your primary would hide every event you own.',
-      );
-      return;
-    }
     setShowCalPicker(false);
     setWorkCalDraft(name);
     const next = { ...settings, workCalendarName: name };
@@ -1695,7 +934,7 @@ export default function SettingsScreen() {
       await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: userId, preferences: { workCalendarName: name } }),
+        body: JSON.stringify({ userId: USER_ID, preferences: { workCalendarName: name } }),
       });
       Animated.sequence([
         Animated.timing(workCalSavedOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
@@ -1712,9 +951,8 @@ export default function SettingsScreen() {
   // screens and navigates back.
   useFocusEffect(
     useCallback(() => {
-      if (!userId) return;
       let cancelled = false;
-      fetch(`${API_BASE}/signals?type=missedcues&userId=${userId}`)
+      fetch(`${API_BASE}/signals?type=missedcues&userId=${USER_ID}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (cancelled || !d) return;
@@ -1724,7 +962,7 @@ export default function SettingsScreen() {
       // Vault count = items with renewalDate within the next 90 days. The
       // server returns all active items; we filter client-side so the
       // threshold can change without an API tweak.
-      fetch(`${API_BASE}/signals?type=vault&userId=${userId}`)
+      fetch(`${API_BASE}/signals?type=vault&userId=${USER_ID}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (cancelled || !d) return;
@@ -1739,33 +977,17 @@ export default function SettingsScreen() {
         .catch(() => {});
       // Oura connection state — polled on focus so the row reflects
       // an OAuth flow that just completed in Safari.
-      fetch(`${API_BASE}/oura/status?userId=${userId}`)
+      fetch(`${API_BASE}/oura/status?userId=${USER_ID}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (cancelled || !d) return;
           setOuraConnected(d.connected === true);
         })
         .catch(() => {});
-      fetch(`${API_BASE}/nextdoor/status?userId=${userId}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (cancelled || !d) return;
-          setNextdoorConnected(d.connected === true);
-          setNextdoorNeighborhood(d.neighborhood || null);
-        })
-        .catch(() => {});
-      fetch(`${API_BASE}/outlook/status?userId=${userId}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (cancelled || !d) return;
-          setOutlookConnected(d.connected === true);
-          setOutlookEmail(d.email || null);
-        })
-        .catch(() => {});
       // Household location — first hit also runs IP-based auto-detection
       // server-side, so subsequent renders show a real city even if the
       // user has never manually set it.
-      fetch(`${API_BASE}/signals?type=location&userId=${userId}`)
+      fetch(`${API_BASE}/signals?type=location&userId=${USER_ID}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (cancelled || !d?.location) return;
@@ -1775,13 +997,12 @@ export default function SettingsScreen() {
       return () => {
         cancelled = true;
       };
-    }, [userId]),
+    }, []),
   );
 
   function update(next: Settings) {
     setSettings(next);
-    if (!userId) return;
-    persistAndSync(next, userId).catch(() => {});
+    persistAndSync(next).catch(() => {});
   }
 
   function setHealth(v: boolean) { update({ ...settings, healthEnabled: v }); }
@@ -1790,59 +1011,7 @@ export default function SettingsScreen() {
   function setMidday(v: boolean) { update({ ...settings, middayEnabled: v }); }
 
   function handleConnectOura() {
-    Linking.openURL(`${API_BASE}/oura/auth?userId=${userId}`);
-  }
-
-  function handleConnectNextdoor() {
-    Linking.openURL(`${API_BASE}/nextdoor/auth?userId=${userId}`);
-  }
-
-  async function handleDisconnectNextdoor() {
-    Alert.alert(
-      'Disconnect Nextdoor',
-      'Conductor will stop reading your neighborhood feed. Safety alerts, recommendations, and local deals from Nextdoor will no longer surface in your brief. You can reconnect anytime.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await fetch(`${API_BASE}/nextdoor/disconnect?userId=${userId}`, { method: 'GET' });
-              setNextdoorConnected(false);
-              setNextdoorNeighborhood(null);
-            } catch {
-              // best-effort
-            }
-          },
-        },
-      ]
-    );
-  }
-
-  function handleConnectOutlook() {
-    Linking.openURL(`${API_BASE}/outlook/auth?userId=${userId}`);
-  }
-
-  async function handleDisconnectOutlook() {
-    Alert.alert(
-      'Disconnect Outlook',
-      'Conductor will stop reading your Outlook mail and calendar. Signals already imported stay in your radar. You can reconnect anytime.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await fetch(`${API_BASE}/outlook/disconnect?userId=${userId}`, { method: 'GET' });
-              setOutlookConnected(false);
-              setOutlookEmail(null);
-            } catch { /* best-effort */ }
-          },
-        },
-      ]
-    );
+    Linking.openURL(`${API_BASE}/oura/auth?userId=${USER_ID}`);
   }
 
   async function handleDisconnectOura() {
@@ -1856,7 +1025,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await fetch(`${API_BASE}/oura/disconnect?userId=${userId}`, { method: 'GET' });
+              await fetch(`${API_BASE}/oura/disconnect?userId=${USER_ID}`, { method: 'GET' });
               setOuraConnected(false);
             } catch { /* best-effort */ }
           },
@@ -1871,7 +1040,7 @@ export default function SettingsScreen() {
     if (apiKey) return;
     setApiKeyLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/ingest/key?userId=${userId}`);
+      const res = await fetch(`${API_BASE}/ingest/key?userId=${USER_ID}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (typeof data?.apiKey === 'string') setApiKey(data.apiKey);
@@ -1898,7 +1067,7 @@ export default function SettingsScreen() {
       const res = await fetch(`${API_BASE}/signals?type=location`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: userId, city, state }),
+        body: JSON.stringify({ userId: USER_ID, city, state }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -1972,118 +1141,28 @@ export default function SettingsScreen() {
     setEditingTime(null);
   }
 
-  // All hooks above this line run unconditionally (rules-of-hooks); the
-  // userId-dependent effects guard internally and key on [userId], so the
-  // screen still defers its data loads until userId resolves.
-  if (!userId) return null;
-
   if (!loaded) {
     return <View style={styles.container} />;
   }
 
   return (
     <View style={styles.container}>
-      {/* Minimap top-right — matches the universal "tap to ask
-          Conductor" affordance every screen has. Settings doesn't
-          use ScreenHeader (custom layout) so we place this manually. */}
-      <View style={{ position: 'absolute', top: 60, right: 24, zIndex: 50 }}>
-        <Minimap
-          floating={false}
-          urgentCount={settingsUrgentCount}
-          onPress={() => openConductorSheet('settings')}
-        />
-      </View>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
-
-        <CollapsibleSection title="Your Brief" defaultOpen>
-        <ChevronRow
-          label="Takeoff"
-          rightText={format12Hour(settings.takeoffTime)}
-          onPress={() => openTimeEditor('takeoffTime', 'Takeoff')}
-        />
-        <ToggleRow
-          label="Weekend Takeoff"
-          subtext="Deliver 1 hour later on weekends"
-          value={settings.weekendTakeoffDelay}
-          onChange={(v) => update({ ...settings, weekendTakeoffDelay: v })}
-        />
-        <ChevronRow
-          label="Clearance"
-          rightText={format12Hour(settings.clearanceTime)}
-          onPress={() => openTimeEditor('clearanceTime', 'Clearance')}
-        />
-        <OverwatchPickerRow
-          value={settings.overwatchHour}
-          onChange={(h) => update({ ...settings, overwatchHour: h })}
-        />
-        <ToggleRow
-          label="Midday Check-in"
-          subtext="A quick afternoon status check — what's resolved, what's left"
-          value={settings.middayEnabled}
-          onChange={setMidday}
-        />
-        {settings.middayEnabled ? (
-          <ChevronRow
-            label="Midday time"
-            rightText={format12Hour(`${String(settings.middayHour).padStart(2, '0')}:00`)}
-            onPress={() => {
-              const opts = [11, 12, 13, 14, 15];
-              Alert.alert('Midday check-in time', undefined, [
-                ...opts.map((h) => ({
-                  text:
-                    format12Hour(`${String(h).padStart(2, '0')}:00`) +
-                    (settings.middayHour === h ? '  ✓' : ''),
-                  onPress: () => update({ ...settings, middayHour: h }),
-                })),
-                { text: 'Cancel', style: 'cancel' as const },
-              ]);
-            }}
-          />
-        ) : null}
-        <SectionHeader title="Your Voice" subtext="How Conductor talks to you" />
-        <VoiceStyleBlock />
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Your Household">
         <HouseholdNameRow />
+
+
+        <SecuritySection />
+
+        <SectionHeader title="Household" />
         <Row label="RangerOaks925" subtext="Your household" />
-        <ChevronRow label="Invite a member" onPress={() => handleInviteMember(userId)} />
-        <Row
-          label="Location"
-          subtext={
-            location?.city
-              ? `${location.city}, ${location.state || ''}${location.source === 'manual' ? '' : ' · auto-detected'}`
-              : 'Detecting…'
-          }
-          onPress={openLocationEditor}
-          right={<ChevronRight size={18} color={MUTED} />}
-        />
-        <ChevronRow
-          label="Household profile"
-          onPress={() => router.push('/profile-setup' as never)}
-        />
-        <ChevronRow
-          label="Send a message"
-          subtext="Message your household through Conductor"
-          onPress={() => router.push('/communicate' as never)}
-        />
-        <SectionHeader title="Priorities" subtext="Flag categories to prioritize in your brief" />
-        {CATEGORIES.map((c) => (
-          <ToggleRow
-            key={c.key}
-            label={c.label}
-            value={settings.categoryEnabled[c.key]}
-            onChange={(v) => setCategory(c.key, v)}
-          />
-        ))}
-        <SectionHeader title="Household Tools" />
+        <ChevronRow label="Invite a member" onPress={handleInviteMember} />
         <Row
           label="Missed Cues"
-          onPress={() => router.push('/missed-cues')}
+          onPress={() => router.push('/(tabs)/missed-cues')}
           right={
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {missedCuesCount > 0 && (
@@ -2109,6 +1188,17 @@ export default function SettingsScreen() {
             </View>
           }
         />
+        <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
+        <Row
+          label="Location"
+          subtext={
+            location?.city
+              ? `${location.city}, ${location.state || ''}${location.source === 'manual' ? '' : ' · auto-detected'}`
+              : 'Detecting…'
+          }
+          onPress={openLocationEditor}
+          right={<ChevronRight size={18} color={MUTED} />}
+        />
         <ChevronRow
           label="Service Providers"
           onPress={() => router.push('/providers' as never)}
@@ -2123,6 +1213,10 @@ export default function SettingsScreen() {
         />
         <ChevronRow
           label="The Programme"
+          // Cast: expo-router's typed-routes generator hasn't regenerated
+          // since app/programme.tsx was added. The push resolves correctly
+          // at runtime via the file-system route; the typed lookup will
+          // pick it up on the next `expo start`/build.
           onPress={() => router.push('/programme' as never)}
         />
         <ChevronRow
@@ -2137,13 +1231,6 @@ export default function SettingsScreen() {
           label="Life Transitions"
           onPress={() => router.push('/transition' as never)}
         />
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Your Crew">
-        <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
-        </CollapsibleSection>
-
-        <CollapsibleSection title="What Conductor Sees">
         <Row
           label="Connected accounts"
           right={
@@ -2152,6 +1239,67 @@ export default function SettingsScreen() {
               <Text style={styles.connectedItem}>Calendar ✓</Text>
             </View>
           }
+        />
+
+        <SectionHeader title="Programme" subtext="When the day opens and closes" />
+        <ChevronRow
+          label="Takeoff"
+          rightText={format12Hour(settings.takeoffTime)}
+          onPress={() => openTimeEditor('takeoffTime', 'Takeoff')}
+        />
+        <ChevronRow
+          label="Clearance"
+          rightText={format12Hour(settings.clearanceTime)}
+          onPress={() => openTimeEditor('clearanceTime', 'Clearance')}
+        />
+        <ToggleRow
+          label="Midday Check-in"
+          subtext="A brief update at 1pm"
+          value={settings.middayEnabled}
+          onChange={setMidday}
+        />
+
+        <SectionHeader
+          title="Always On"
+          subtext="These appear in every brief when relevant"
+        />
+        <ToggleRow label="Health context" value={settings.healthEnabled} onChange={setHealth} />
+        <ToggleRow label="Childcare" value={settings.childcareEnabled} onChange={setChildcare} />
+        <Row
+          label="In-person requirements"
+          right={<Lock size={16} color={MUTED} />}
+        />
+
+        <SectionHeader
+          title="What Matters Most"
+          subtext="Flag categories to prioritize in your brief"
+        />
+        {CATEGORIES.map((c) => (
+          <ToggleRow
+            key={c.key}
+            label={c.label}
+            value={settings.categoryEnabled[c.key]}
+            onChange={(v) => setCategory(c.key, v)}
+          />
+        ))}
+
+        <SectionHeader
+          title="On the Horizon"
+          subtext="One surprising signal from the bigger picture"
+        />
+        <ToggleRow label="Watching" value={settings.horizonEnabled} onChange={setHorizon} />
+        <ChevronRow
+          label="Frequency"
+          rightText={settings.horizonFrequency}
+          onPress={cycleFrequency}
+        />
+        {settings.horizonEnabled && (
+          <ChevronRow label="View The Horizon" onPress={() => router.push('/horizon' as never)} />
+        )}
+
+        <SectionHeader
+          title="Awareness"
+          subtext="What Conductor has learned"
         />
         <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
         <ChevronRow
@@ -2176,57 +1324,6 @@ export default function SettingsScreen() {
             <View style={styles.ouraConnectRow}>
               <Text style={styles.ouraConnectLabel}>Oura Ring</Text>
               <Text style={styles.ouraConnectAction}>Connect Oura Ring →</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        {/* Outlook — secondary mail/calendar driver. Same OAuth-via-
-            Safari + polled-status pattern as Oura/Nextdoor. Lives in
-            the same What Conductor Sees section so a user with both
-            Gmail and a work Outlook can layer the second inbox in
-            with one tap. */}
-        {outlookConnected === true ? (
-          <Row
-            label="📧 Outlook"
-            subtext={outlookEmail ? `Connected — ${outlookEmail}` : 'Connected'}
-            right={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <Text style={styles.ouraConnectedText}>✓</Text>
-                <TouchableOpacity onPress={handleDisconnectOutlook} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={styles.ouraDisconnectLink}>Disconnect</Text>
-                </TouchableOpacity>
-              </View>
-            }
-          />
-        ) : (
-          <TouchableOpacity onPress={handleConnectOutlook} activeOpacity={0.6}>
-            <View style={styles.ouraConnectRow}>
-              <Text style={styles.ouraConnectLabel}>📧 Outlook</Text>
-              <Text style={styles.ouraConnectAction}>Connect Outlook →</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        {/* Nextdoor neighborhood intelligence — connects via OAuth so
-            safety alerts and recommendations surface in the brief. */}
-        {nextdoorConnected === true ? (
-          <Row
-            label="🏘️ Nextdoor"
-            subtext={nextdoorNeighborhood ? `Connected — ${nextdoorNeighborhood}` : 'Connected'}
-            right={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <Text style={styles.ouraConnectedText}>✓</Text>
-                <TouchableOpacity
-                  onPress={handleDisconnectNextdoor}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Text style={styles.ouraDisconnectLink}>Disconnect</Text>
-                </TouchableOpacity>
-              </View>
-            }
-          />
-        ) : (
-          <TouchableOpacity onPress={handleConnectNextdoor} activeOpacity={0.6}>
-            <View style={styles.ouraConnectRow}>
-              <Text style={styles.ouraConnectLabel}>🏘️ Nextdoor</Text>
-              <Text style={styles.ouraConnectAction}>Connect Nextdoor →</Text>
             </View>
           </TouchableOpacity>
         )}
@@ -2290,59 +1387,23 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        </CollapsibleSection>
+        <SectionHeader title="Language / Idioma" />
+        <LanguageRow />
 
-        <CollapsibleSection title="Financial Intelligence">
-        <FinancialAwarenessBlock
-          value={settings.financialAwareness}
-          onChange={(v) => update({ ...settings, financialAwareness: v })}
-        />
-        </CollapsibleSection>
+        <SectionHeader title="Your Voice" subtext="How Conductor talks to you" />
+        <VoiceStyleBlock />
 
-        <CollapsibleSection title="What You Love">
-        <WhatYouLoveBlock />
-        </CollapsibleSection>
+        <SectionHeader title="Hey Conductor" subtext="Hands-free interaction" />
+        <HeyConductorBlock />
 
-        <CollapsibleSection title="Notifications">
-        <ToggleRow label="Health context" value={settings.healthEnabled} onChange={setHealth} />
-        <ToggleRow label="Childcare" value={settings.childcareEnabled} onChange={setChildcare} />
-        <Row
-          label="In-person requirements"
-          right={<Lock size={16} color={MUTED} />}
-        />
-        <SectionHeader title="On the Horizon" subtext="One surprising signal from the bigger picture" />
-        <ToggleRow label="Watching" value={settings.horizonEnabled} onChange={setHorizon} />
-        <ChevronRow
-          label="Frequency"
-          rightText={settings.horizonFrequency}
-          onPress={cycleFrequency}
-        />
-        {settings.horizonEnabled && (
-          <ChevronRow label="View The Horizon" onPress={() => router.push('/horizon' as never)} />
-        )}
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Privacy & Data">
-        <SecuritySection />
+        <SectionHeader title="Conductor" />
+        <Row label="Conductor" subtext="Version 1.0.0" />
         <Row
           label="API Access"
           subtext="Send signals to Conductor from any service"
           onPress={handleShowApiKey}
           right={<ChevronRight size={18} color={MUTED} />}
         />
-        <ChevronRow
-          label="Privacy Dashboard"
-          onPress={() => router.push('/privacy-dashboard' as never)}
-        />
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Your Conductor">
-        <AppearanceBlock />
-        <AppIconRow />
-        <LanguageRow />
-        <HeyConductorBlock />
-        <ShortcutsLibraryBlock />
-        <Row label="Conductor" subtext="Version 1.0.0" />
         <ChevronRow
           label="Memory"
           onPress={() => router.push('/journal' as never)}
@@ -2363,8 +1424,17 @@ export default function SettingsScreen() {
           label="Directory"
           onPress={() => router.push('/directory' as never)}
         />
+        <ChevronRow
+          label="Privacy & Data"
+          onPress={() => router.push('/privacy-dashboard' as never)}
+        />
+        <ChevronRow
+          label="Household profile"
+          onPress={() => router.push('/profile-setup' as never)}
+        />
+
+        <SectionHeader title="Founding Household" />
         <ReferralBlock />
-        </CollapsibleSection>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -2518,13 +1588,7 @@ export default function SettingsScreen() {
   );
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string };
-function makeStyles(theme: ThemeColors, accentColor: string) {
-  const BRASS = accentColor;
-  const BG = theme.background;
-  const OFF_WHITE = theme.text;
-  const MUTED = theme.muted;
-  return StyleSheet.create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: BG,
@@ -2544,16 +1608,6 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   sectionHeaderWrap: {
     marginTop: 28,
     marginBottom: 4,
-  },
-  collapsibleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 26,
-    marginBottom: 6,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: SOFT_BORDER,
   },
   sectionHeader: {
     color: MUTED,
@@ -2884,5 +1938,4 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: 8,
   },
-  });
-}
+});

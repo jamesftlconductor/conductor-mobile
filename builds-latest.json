@@ -1,0 +1,100 @@
+[
+  {
+    "id": "e90da4fe-0511-4d37-b3ff-d4cdc654bc78",
+    "status": "IN_PROGRESS",
+    "platform": "IOS",
+    "artifacts": {
+      "xcodeBuildLogsUrl": "https://job-logs.eascdn.net/production-xcode-logs/e90da4fe-0511-4d37-b3ff-d4cdc654bc78?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T023046Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=76a8dd2b24cbb2abcd4518c2a32c52709dd58c3d1da7dd4916aa52847c4e764ce5df134498c1e3ce9da6ddac0f7c099b6a66304323caf029e74d993ecef850b826958de62861ca8f908df74a78b951497d2a78d574a1488f197cc199cd02e98f4f94cb68d8e36d07c41fa61d2a59b2dfd7ac56aa23e613aab564d198203e6e6857a79c4ccf6e7ee2c5d4a46c12fe4ab4c7df6e447c7a69bc1556812a6ed11e5009ecb537a5f960eb5a2e6c5e6fbea8b8d632c78073f098c160c00150037b4f273b6fe464262751335f5ff8da8d4d88e334ae1d23372fbe75d0ac587e0796cb0674483a7a944e48662b247303ad4d4ec418ed963ea53b8ef167b59085596c4e12"
+    },
+    "fingerprint": {
+      "id": "019e2893-152e-7d0c-89da-589201fe353e",
+      "hash": "adf1c7292f9346001fccd51497fc4c21a8808d79"
+    },
+    "initiatingActor": {
+      "id": "38b2852e-1923-43af-8cc5-f063950b9673",
+      "displayName": "jamesftl"
+    },
+    "logFiles": [
+      "https://job-logs.eascdn.net/production/e90da4fe-0511-4d37-b3ff-d4cdc654bc78/1778812001423-aaeacf89-4d0c-463b-8380-218ee6b0ffb3.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T022641Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=02f9eaa3ae599b66898a2b8ba850419783a9dfc1edc4bf8ee00c5812ae4341af78c1c24a54f61c8c51c066973e70d46657b7c4233a23c4f20eb00e22ee476916b398933d0b9c5821460dee070905ee3ce90e69a93a6dfb9b56cede6291591d7fd20260f5f765bd31b7c2693941b763c99618dbc6487d01d194cfa7725948d8085078f7976ed9fb69818886e0e145e13d4ce5f501b60ab5af827acb185d1fc864224c2f8f843c1af3bc19d29fe55fd1e516909dd67f0a38580a1b3ba4eaa4982ccc926e81037660ec3e7560835b7b047dace8c657a04646a2313c0eb9c654ff4cd92c2a251f8fc3b47107e5eb8f3679aec410e2958760d6a7c4746ec36920edcf",
+      "https://job-logs.eascdn.net/production/e90da4fe-0511-4d37-b3ff-d4cdc654bc78/1778812003722-eac995f5-3d99-4ac3-9072-672994067748.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T023046Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=c0135ed650253909f31777ccf56113fbd43792a4da466b09acf293dae80660f7fc227126aa9d1f8602120f278bb9caa7523221c5950c806eb03374d62a3ae33600db03487a5c2a76ac4ac03099e71887e8548849f0f5a7a485165648288a89e6acafbbd37f2352e0c6dc6d91c33beeca25fdbe9e0ec30ae87beab3e91f2d7ad8d9166ec8557179f097c05a43cd8e8a1e051693da10f55cb67b9b46b402235a9265b5c587a78bd4cc642c41e520ac775fb2e486117b809d8b0ebb9e96061fc41e814e6a08d721d608404818e8a3b1d46e68c05cd3f866f84120e20d0e5701f58ab0748ccfb10d96498cdacd1ec5c009d82b06e9d06c68138b23ef5888802021a3",
+      "https://job-logs.eascdn.net/production/e90da4fe-0511-4d37-b3ff-d4cdc654bc78/1778812004024-15a74263-7226-4d5a-967f-177a2dd9e696.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T023046Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=1b4f9bdc3f6f2821fea7ea4165817bf461217fd396fd6acc1cf1b4504fba3d4566d18201b0e323c0118083e822c4e8ca2afd9e3d6f189974746fe27a0e76a7cdbd319fffbbb43cc2aecae98ab159e1f6c0613228f3a568d1597f4a596170f216d958f7d3b3229cf183d8b25b9b821bd724ecce2783f343c641f95b6d3cd34a6f0f84621f9709ebad42d3ff7276df7faf8dc6a00efac9b6c4fe690eb97307a4d55b8ff13eb47ac5468ae41b1dca985143eb58f8fd7c18c2df4178325fb0f960f9c949af9f4cc355e072038ac31aa1faedee5ba148f693abbe3505f371b2b235a02aee84d13a07685c4f3e4a68783ac56ff38362afb105ea108ce658bf88cea465",
+      "https://job-logs.eascdn.net/production/e90da4fe-0511-4d37-b3ff-d4cdc654bc78/1778812004229-dfbd7d5b-ea84-4c3e-89d7-8e0e4812d122.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T023046Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=0290d65ef5f46313e15379e38a74c74cd41eb262de273a9310310b0d324bd9c54f722aaae8bcaaeff0c48f01fd19b14cf3fbc4cb3ec2b8ed830c7c105557601baa245f1766b2c458d2a225fe87165d377be575ca44603434c58a316367770af573865e3934f570f3c700602c22cf0a738383348ecbdc931ac119932dc37d8f232cbdf79470d1e2db1eddb0be8756a6b155eb9b22df154db7b17a386d6d2676da31f1cc9dc6accfa2f5cff2607bb7a47723a9b2da773a7b210f91a366afa82dccb6a6fadff320e034aaade17233005b4337c37a99e8e4e8aaed7559484a2da9b772c5b5e691cb0f45238e4251b200ed7fe2becec24a427e1697d7f2cc6c4bb033"
+    ],
+    "project": {
+      "id": "04f4211f-0b25-420c-b079-4e7e394dfb76",
+      "name": "conductor-mobile",
+      "slug": "conductor-mobile",
+      "ownerAccount": {
+        "id": "76dc4bb2-9e60-445e-99d1-f9b03e140e06",
+        "name": "jamesftl"
+      }
+    },
+    "channel": "preview",
+    "distribution": "INTERNAL",
+    "buildProfile": "preview",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.0",
+    "appBuildVersion": "1",
+    "runtimeVersion": "1.0.0",
+    "gitCommitHash": "dd358cb73c7fed5fe6ac61d5bcb4d19e38af490b",
+    "gitCommitMessage": "Wire 'preview' channel into preview build profile\n\nMissing piece in the OTA pipeline — eas.json had no channel field, so\npreview-profile builds were produced without an expo-channel-name\nembedded. Device polled EAS Update with no channel header and EAS\nreturned nothing, even though the preview branch had updates ready.\nConfirmed root cause via eas channel:list (empty) + eas build:view\n(no channel field on eb4d78f3).\n\nAdds 'channel: preview' so future builds embed the channel and can\nresolve to the preview branch via the channel→branch mapping.\n\nThe currently-installed eb4d78f3 build still has no channel embedded\nand cannot be retrofitted — the next preview build picks this up and\nwill be the first OTA-receiving binary in practice.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+    "priority": "HIGH",
+    "createdAt": "2026-05-15T02:26:41.128Z",
+    "updatedAt": "2026-05-15T02:27:34.844Z",
+    "expirationDate": "2026-08-13T02:26:41.148Z",
+    "isForIosSimulator": false
+  },
+  {
+    "id": "42c2c9a9-72e8-4f40-990b-2ccfdfa81083",
+    "status": "FINISHED",
+    "platform": "IOS",
+    "artifacts": {
+      "buildUrl": "https://expo.dev/artifacts/eas/9f9xzpBoHhbP6VUqXTTktR.ipa",
+      "xcodeBuildLogsUrl": "https://job-logs.eascdn.net/production-xcode-logs/42c2c9a9-72e8-4f40-990b-2ccfdfa81083?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T023046Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=36889ec4e8173b2637f0016021f93942eea8b7e9def179b4d5f146616a340d31345826cbe41898b91858613d89abafdd16473b3581669e298d3abe0d4a5fa899b7880943a41c2d4125b65b8404ea1ffab74f15ba597a66360d883dd27a47b9d402cd91d2733e0f6be391012d81a2db128699fdeb049c50ed7dca4d9e5e4a74012f5c7bc596f8b692668530a565a091ab2d6519df7dbc67a9753ac9eaa81d0e838ba33aafae9686c58f2db4f328ed1be76342a1d6fb9c51fcd751ae175858c41c9337726577b03490fd10e88b13b4aa93f04eefc15bf4f418e92df83ae45f590ed27fb8bcda979225fd9444aa0bdc79aa36746c3d0a23d3513f1dbea7a6df9361",
+      "applicationArchiveUrl": "https://expo.dev/artifacts/eas/9f9xzpBoHhbP6VUqXTTktR.ipa"
+    },
+    "fingerprint": {
+      "id": "019e2893-152e-7d0c-89da-589201fe353e",
+      "hash": "adf1c7292f9346001fccd51497fc4c21a8808d79"
+    },
+    "initiatingActor": {
+      "id": "38b2852e-1923-43af-8cc5-f063950b9673",
+      "displayName": "jamesftl"
+    },
+    "logFiles": [
+      "https://job-logs.eascdn.net/production/42c2c9a9-72e8-4f40-990b-2ccfdfa81083/1778797188668-7b9e0122-8f4e-46be-8124-02d17ae171cf.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T023046Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=2fbd68c18b7fa7e4b0b52e00fab293958fee207cd807cbbe7731bb113327697f455d10cae57fd9c2ebe742a20b7a8f9f666440347ca9153119523ffba3b7ad1deed8ebc1c0a88e53ce1783a47d70ebace1cfcfc54cc7e57811c52d0ec4492b6c372e9ee594b35267f2615d5d68b1edbba13ae5cb047e15aa2958b2167aad08e530db3a4e821878cca716e71fdb942839b6223aeeea00252675dd5d383ebd242b32798f48644809acd4cd377a034338f9b201c715a2bd03a7f8c5543fae9f1336b44e1bdb372749bd9dadac56cfd9d83d109e62860e2cbebfeaaff650436f56496f2bd72c31b709de6d4666f3970d5fb36ac8e799c3501529583554abd54e6806",
+      "https://job-logs.eascdn.net/production/42c2c9a9-72e8-4f40-990b-2ccfdfa81083/1778797192787-b49a5f74-1829-4e05-8c45-15ec4ad17fc2.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T023046Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=b5b0b47ca82128ff8613a088aba9a03d3c1bd45df590783785034794d38195308d20e1c325332e977227d334d53734763c01a88e6e3c6aafb9e4a16c4f78d6239e02ba7b67553d6678daa1ab359e3be386889b7ff95d3a33cb20b891545ca41f07de1bcb6d939e590f2725e05939bb1328fc0caf64416b2f8e9477366f4dd9a17c79f4f58225fc86222953ba0939ab78ec14d9e2af699e4a51a27704d1d27b0a113f019fc87f5286e67fce3f01a9425ba15733e1269796d3c1013e427629c98b3842ac55e44ba6633d6e0d8427aa51e73f58e60fc9cbaf1e40ddfd751b94d71cf2b83651c4cb7a7affbdfa6ebd5ac270bd28847fe43888fd356e836b462ef8eb",
+      "https://job-logs.eascdn.net/production/42c2c9a9-72e8-4f40-990b-2ccfdfa81083/1778797193092-4726fc34-e963-4ef8-b4a5-0afd6756d78a.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T023046Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=03395d6f8c62fea8316b1d1c43ace3204617fdcead4401fd5ae6826cacbf1bb1a61f3f205c78a8b1451e9ff2b63208ad0eeb96b0e9e9784b19dd27cdcd7594daf742c996a5602a95776c303d75845aeb377bca660c2177293fea5894ab0a1d61c79bead45b9ecaf349981de268499103f910b35c420b71e3493b4e215cca459876fbcda27c1c5792a5d953c418130a78b7057844c4fa8bfb340d023e7466364ea59cae995ef7ad145506342008a6a884b8f29a864a1c5854d9a04fd6766f5057d1472dcc83626425ded6df13041298282a81eeec9ef18e4ca6258eedc2cb1cf467afcbe9b0028ad3af0579ce7b4c83b99517ae43b31e6356e310c80954aefc46",
+      "https://job-logs.eascdn.net/production/42c2c9a9-72e8-4f40-990b-2ccfdfa81083/1778797193286-f9c67cc6-7988-46ed-9621-a5c42e367721.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260515%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260515T023046Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=4530fe6b25c8029bbb7f65797692c5cc2f4906b96b7fc5cebeb5b2d2547de2fc1bb426a437f711543f5da4ffd5906dbe01ac39f3306ae8201c2293bc70f77df27727b78a4b30dea9dd9de151de0755487cf65f5d775e0ce22a1cfa6301a390b17bc475e85ec2d0e521c141864adef02eed77172e9f76b5b64737dd9de829a5eeb534dbd130fc1380c1f79aaa43b759ce91da395e3217488fbbcad4d0bd705e0fda6d167c1175e96153500bd59ef70b73f2c0a2ac7bb4cb34a77f26ea2900986f5b8c201230893a825229406f0a3276a23ec8c827e5a982a7da56c2ccea6983748013372cb244b8c7db76ba7c41ab14e0d33d2cb90a879af947e9c4b1566161cf"
+    ],
+    "project": {
+      "id": "04f4211f-0b25-420c-b079-4e7e394dfb76",
+      "name": "conductor-mobile",
+      "slug": "conductor-mobile",
+      "ownerAccount": {
+        "id": "76dc4bb2-9e60-445e-99d1-f9b03e140e06",
+        "name": "jamesftl"
+      }
+    },
+    "channel": "preview",
+    "distribution": "INTERNAL",
+    "buildProfile": "preview",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.0",
+    "appBuildVersion": "1",
+    "runtimeVersion": "1.0.0",
+    "gitCommitHash": "dd358cb73c7fed5fe6ac61d5bcb4d19e38af490b",
+    "gitCommitMessage": "Wire 'preview' channel into preview build profile\n\nMissing piece in the OTA pipeline — eas.json had no channel field, so\npreview-profile builds were produced without an expo-channel-name\nembedded. Device polled EAS Update with no channel header and EAS\nreturned nothing, even though the preview branch had updates ready.\nConfirmed root cause via eas channel:list (empty) + eas build:view\n(no channel field on eb4d78f3).\n\nAdds 'channel: preview' so future builds embed the channel and can\nresolve to the preview branch via the channel→branch mapping.\n\nThe currently-installed eb4d78f3 build still has no channel embedded\nand cannot be retrofitted — the next preview build picks this up and\nwill be the first OTA-receiving binary in practice.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+    "priority": "HIGH",
+    "createdAt": "2026-05-14T22:19:48.358Z",
+    "updatedAt": "2026-05-15T02:00:38.688Z",
+    "completedAt": "2026-05-14T22:26:27.189Z",
+    "expirationDate": "2026-08-12T22:19:48.386Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 162,
+      "buildQueueTime": 50432,
+      "buildDuration": 344009
+    }
+  }
+]

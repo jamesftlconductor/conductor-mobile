@@ -11,48 +11,11 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
-import { WeeklySymphony } from '@/components/WeeklySymphony';
-import { openConductorSheet } from '@/hooks/useConductorSheet';
-import { useUrgentCount } from '@/hooks/useUrgentCount';
-import { useDiscovered } from '@/hooks/useDiscovered';
-import { getUserId, useUserId } from '@/hooks/useUserId';
-import FeatureIntroduction from '@/components/FeatureIntroduction';
-
-// Per-feature intro content. Lives next to the call site so copy
-// changes don't require touching the modal component.
-const FEATURE_INTROS: Record<string, { name: string; icon: string; description: string }> = {
-  pulse: {
-    name: 'The Pulse',
-    icon: '◉',
-    description:
-      'One sentence that synthesizes your health, the weather, and your signal load into what kind of day it actually is.',
-  },
-  signals: {
-    name: 'Signals',
-    icon: '●',
-    description:
-      "Anything your household needs to know or act on. Tap any signal to see details, context, and next steps.",
-  },
-  minimap: {
-    name: 'The Conductor',
-    icon: '⌖',
-    description:
-      'Your household in miniature. Tap from any screen to ask The Conductor anything.',
-  },
-  feedback: {
-    name: 'Brief feedback',
-    icon: '✓',
-    description:
-      "Tell The Conductor how it's doing. Your feedback shapes tomorrow's brief.",
-  },
-};
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
 import { useShakeToAsk } from '@/components/useShakeToAsk';
 import { conductorHaptics } from '@/app/haptics';
-import { useTheme } from '@/app/theme';
-import { useMemo } from 'react';
 // Defensive native-module require: the binary running this OTA may
 // predate the expo-speech install. A top-level `import * as Speech
 // from 'expo-speech'` would crash the bundle on that binary. Defer
@@ -136,11 +99,10 @@ const DEFAULT_SIGNAL_COLOR = '#ef4444';
 const PENDING_SIGNAL_KEY = 'conductor:pendingSignalId';
 const EXPO_PUSH_TOKEN_KEY = 'expoPushToken';
 const HEALTH_CONTEXT_KEY = 'healthContext';
+const PUSH_USER_ID = 'james_totalhome_gmail_com';
 
 async function syncHealthIfStale() {
   try {
-    const userId = await getUserId();
-    if (!userId) return;
     const cachedRaw = await AsyncStorage.getItem(HEALTH_CONTEXT_KEY);
     const cached: HealthSnapshot | null = cachedRaw ? JSON.parse(cachedRaw) : null;
     // Refresh once per local calendar day. Comparing toDateString() handles
@@ -157,7 +119,7 @@ async function syncHealthIfStale() {
     await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, healthData: snapshot }),
+      body: JSON.stringify({ userId: PUSH_USER_ID, healthData: snapshot }),
     });
   } catch {
     // Best-effort — never block app startup on health sync.
@@ -205,8 +167,6 @@ async function registerNotificationCategories() {
 async function registerForPushNotifications() {
   try {
     if (!Device.isDevice) return;
-    const userId = await getUserId();
-    if (!userId) return;
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
@@ -242,7 +202,7 @@ async function registerForPushNotifications() {
     const res = await fetch('https://conductor-ivory.vercel.app/api/signals?type=preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, expoPushToken: token }),
+      body: JSON.stringify({ userId: PUSH_USER_ID, expoPushToken: token }),
     });
     if (!res.ok) return;
 
@@ -252,53 +212,23 @@ async function registerForPushNotifications() {
   }
 }
 
-// Helper for theme-aware brass-tinted rgba values. The codebase had
-// dozens of `rgba(184,150,12,0.X)` literals — these are the brass
-// accent at varied alpha for borders, soft fills, dividers. Now the
-// accent comes from the user's chosen palette (brass / amber / copper /
-// forest / navy), so we parse its hex and emit rgba() at the desired
-// opacity.
-function accentRgba(accentColor: string, opacity: number): string {
-  const hex = accentColor.replace('#', '');
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${opacity})`;
-}
-
-// Band themes were module-level constants tied to the dark palette.
-// They're now factories so they pick up the current theme + accent.
-// Clearance is intentionally a quieter variant of the same palette
-// (uses surface for bg, slightly muted text) — same evening-mood
-// design intent but rendered in whatever theme the user picked.
-type BandTheme = {
-  bg: string;
-  title: string;
-  brief: string;
-  greeting: string;
-  divider: string;
-  timestamp: string;
+const TAKEOFF_THEME = {
+  bg: '#0f0f0f',
+  title: '#f0ede8',
+  brief: '#f0ede8',
+  greeting: '#6b6865',
+  divider: 'rgba(255,255,255,0.12)',
+  timestamp: '#5a5855',
 };
-function makeTakeoffTheme(theme: { background: string; text: string; muted: string }): BandTheme {
-  return {
-    bg: theme.background,
-    title: theme.text,
-    brief: theme.text,
-    greeting: theme.muted,
-    divider: 'rgba(255,255,255,0.12)',
-    timestamp: theme.muted,
-  };
-}
-function makeClearanceTheme(theme: { background: string; surface: string; text: string; muted: string }): BandTheme {
-  return {
-    bg: theme.surface,
-    title: theme.text,
-    brief: theme.text,
-    greeting: theme.muted,
-    divider: 'rgba(255,255,255,0.05)',
-    timestamp: theme.muted,
-  };
-}
+
+const CLEARANCE_THEME = {
+  bg: '#080808',
+  title: '#c8c5c0',
+  brief: '#d4d1cc',
+  greeting: '#4a4845',
+  divider: 'rgba(255,255,255,0.05)',
+  timestamp: '#3a3835',
+};
 
 // Time bands:
 //   < 7   → Overwatch (overnight idle screen)
@@ -366,52 +296,10 @@ function buildAskChips(args: {
   return chips;
 }
 
-// getBriefMode — picks the brief band for the current hour. The
-// overwatchHour parameter is the user-configured threshold from
-// Settings (default 23 = 11pm). Hours strictly below 7 always render
-// Overwatch as before — that's the overnight-quiet contract.
-type WeeklyAchievementsPayload = {
-  instruments: {
-    monday: boolean;
-    tuesday: boolean;
-    wednesday: boolean;
-    thursday: boolean;
-    friday: boolean;
-    saturday: boolean;
-    sunday: boolean;
-  };
-  instrumentsEarned: number;
-  symphonyVariation: 'full' | 'major' | 'moderate' | 'sparse' | 'minimal';
-  symphonyKey: 'major' | 'minor';
-  soundSequence: string[];
-  weekStart?: string;
-};
-
-// Evening card discriminated union. Backend (api/clearance.js
-// generateEveningCards) emits whichever variants apply tonight; the
-// mobile renderer maps over them and selects the matching block.
-type EveningCard =
-  | { type: 'quick_actions'; items: { signalId: string | number; description: string; action: string }[] }
-  | { type: 'opportunity'; title: string; description: string; ctaText: string; ctaAction: string }
-  | { type: 'suppressed'; items: { description: string; daysSuppressed: number; action: string }[] }
-  | { type: 'observation'; text: string }
-  | { type: 'joke_offer'; offer: string };
-
-function getBriefMode(hour: number, overwatchHour: number = 23) {
-  // overwatchHour === 0 means "midnight" — the user wants Overwatch
-  // to begin at the rollover into the next day. The raw comparison
-  // `hour >= 0` would be true for every hour, so normalize to 24
-  // for the boundary check. This is the Midnight picker option.
-  const effective = overwatchHour === 0 ? 24 : overwatchHour;
-  if (hour < 7 || hour >= effective) return { title: 'Overwatch', endpoint: null as string | null };
-  // Dusk — the wind-down hour right before Overwatch begins. The named
-  // evening period between Clearance and Overwatch; it carries the
-  // evening (Clearance) brief forward under a calmer name.
-  if (hour >= effective - 1) return { title: 'Dusk', endpoint: 'clearance' as string | null };
-  // Clearance — the evening close, the hour before Dusk.
-  if (hour >= effective - 2) return { title: 'Clearance', endpoint: 'clearance' as string | null };
-  // 7am up to the evening close is Takeoff.
-  return { title: 'Takeoff', endpoint: 'brief' as string | null };
+function getBriefMode(hour: number) {
+  if (hour < 7 || hour >= 22) return { title: 'Overwatch', endpoint: null as string | null };
+  if (hour < 21) return { title: 'Takeoff', endpoint: 'brief' as string | null };
+  return { title: 'Clearance', endpoint: 'clearance' as string | null };
 }
 
 async function fetchWithTimeout(url: string, timeoutMs: number) {
@@ -443,8 +331,6 @@ function roundInt(n: number | null | undefined): string {
 }
 
 function PulseHealthSection({ health }: { health: PulseData['health'] }) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   if (!health) {
     return (
       <View style={styles.pulseSection}>
@@ -468,7 +354,7 @@ function PulseHealthSection({ health }: { health: PulseData['health'] }) {
       </View>
     );
   }
-  const sleepColor = sleep != null && sleep < 6 ? accentColor : '#a8a5a0';
+  const sleepColor = sleep != null && sleep < 6 ? '#b8960c' : '#a8a5a0';
   let hrvBelowPct: number | null = null;
   if (hrv?.current != null && hrv?.baseline7d) {
     hrvBelowPct = Math.round((1 - hrv.current / hrv.baseline7d) * 100);
@@ -543,8 +429,6 @@ function PulseHealthSection({ health }: { health: PulseData['health'] }) {
 }
 
 function PulseTimelineSection({ weather }: { weather: PulseData['weather'] }) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   // Today's Timeline — sunrise/peak/rain/UV/sunset. Renders only
   // when at least one of these is present so the section doesn't
   // appear on locations where the API returns nulls.
@@ -575,8 +459,6 @@ function PulseTimelineSection({ weather }: { weather: PulseData['weather'] }) {
 }
 
 function PulseConditionsSection({ weather }: { weather: PulseData['weather'] }) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   // Always show the header even when individual fields are absent, to mark
   // the section's place in the card structure. Individual rows guard on
   // null so a missing humidity reading just drops that one line.
@@ -621,23 +503,17 @@ function PulseLoadSection({
   signalLoad: PulseData['signalLoad'];
   urgentCount: number;
 }) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  // Defensive: signalLoad comes from /api/brief and could be missing
-  // on a malformed payload. signalLoad.charAt would crash.
-  const safeLoad = typeof signalLoad === 'string' && signalLoad.length > 0 ? signalLoad : 'unknown';
-  const loadLabel = safeLoad.charAt(0).toUpperCase() + safeLoad.slice(1);
-  const safeUrgent = typeof urgentCount === 'number' ? urgentCount : 0;
+  const loadLabel = signalLoad.charAt(0).toUpperCase() + signalLoad.slice(1);
   let loadColor = '#a8a5a0';
-  if (safeLoad === 'heavy') loadColor = '#f59e0b';
-  else if (safeLoad === 'moderate') loadColor = accentColor;
+  if (signalLoad === 'heavy') loadColor = '#f59e0b';
+  else if (signalLoad === 'moderate') loadColor = '#b8960c';
   return (
     <View style={styles.pulseSection}>
       <Text style={styles.pulseSectionLabel}>SIGNAL LOAD</Text>
       <Text style={[styles.pulseRow, { color: loadColor }]}>{loadLabel}</Text>
-      {safeUrgent > 0 ? (
+      {urgentCount > 0 ? (
         <Text style={[styles.pulseRow, { color: '#ef4444' }]}>
-          {safeUrgent} urgent
+          {urgentCount} urgent
         </Text>
       ) : null}
     </View>
@@ -645,8 +521,6 @@ function PulseLoadSection({
 }
 
 function PulseFlagsSection({ flags }: { flags: string[] }) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const phrased = (flags || [])
     .map((f) => PULSE_FLAG_PHRASES[f])
     .filter((p): p is string => typeof p === 'string' && p.length > 0);
@@ -663,294 +537,7 @@ function PulseFlagsSection({ flags }: { flags: string[] }) {
   );
 }
 
-// Renders the optional 4-card stack at the bottom of Clearance. Cards
-// are display-only — taps on the ack/action affordances fire haptic +
-// add a key to the parent's acked set, which fades the matching item.
-function EveningCardsStack({
-  cards,
-  acked,
-  onAck,
-}: {
-  cards: EveningCard[];
-  acked: Set<string>;
-  onAck: (key: string) => void;
-}) {
-  const { theme, accentColor } = useTheme();
-  return (
-    <View style={{ marginTop: 28, marginBottom: 12 }}>
-      {cards.map((card, idx) => {
-        const base = {
-          backgroundColor: theme.surface,
-          borderColor: theme.border || 'rgba(255,255,255,0.08)',
-          borderWidth: 1,
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 12,
-        };
-        const labelStyle = {
-          color: accentColor,
-          fontSize: 9,
-          letterSpacing: 2,
-          fontWeight: '600' as const,
-          marginBottom: 10,
-          textTransform: 'uppercase' as const,
-        };
-        const mutedLabel = {
-          ...labelStyle,
-          color: theme.muted,
-        };
-
-        if (card.type === 'quick_actions') {
-          return (
-            <View key={`qa-${idx}`} style={base}>
-              <Text style={labelStyle}>Clear the Deck</Text>
-              {card.items.map((it) => {
-                const key = `qa-${it.signalId}`;
-                const done = acked.has(key);
-                return (
-                  <View
-                    key={key}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 8,
-                      opacity: done ? 0.4 : 1,
-                    }}>
-                    <Text style={{ color: theme.text, flex: 1, fontSize: 14 }} numberOfLines={2}>
-                      {it.description}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => onAck(key)}
-                      activeOpacity={0.6}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      disabled={done}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 12,
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: accentColor,
-                      }}>
-                      <Text style={{ color: accentColor, fontSize: 12, fontWeight: '600' }}>
-                        {done ? '✓' : it.action}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </View>
-          );
-        }
-        if (card.type === 'opportunity') {
-          const key = `opp-${idx}`;
-          const done = acked.has(key);
-          return (
-            <View key={key} style={[base, { opacity: done ? 0.5 : 1 }]}>
-              <Text style={labelStyle}>{card.title}</Text>
-              <Text style={{ color: theme.text, fontSize: 14, lineHeight: 20 }}>
-                {card.description}
-              </Text>
-              <TouchableOpacity
-                onPress={() => onAck(key)}
-                activeOpacity={0.6}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                style={{
-                  alignSelf: 'flex-start',
-                  marginTop: 12,
-                  paddingVertical: 8,
-                  paddingHorizontal: 14,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: accentColor,
-                }}>
-                <Text style={{ color: accentColor, fontSize: 12, fontWeight: '600' }}>
-                  {done ? '✓' : card.ctaText}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          );
-        }
-        if (card.type === 'suppressed') {
-          return (
-            <View key={`sup-${idx}`} style={base}>
-              <Text style={mutedLabel}>Conductor Held Back</Text>
-              {card.items.map((it, i) => {
-                const key = `sup-${idx}-${i}`;
-                const done = acked.has(key);
-                return (
-                  <TouchableOpacity
-                    key={key}
-                    onPress={() => onAck(key)}
-                    activeOpacity={0.6}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    disabled={done}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 8,
-                      opacity: done ? 0.3 : 1,
-                    }}>
-                    <Text style={{ color: theme.muted, flex: 1, fontSize: 13 }} numberOfLines={2}>
-                      {it.description}
-                    </Text>
-                    <Text style={{ color: theme.muted, fontSize: 11 }}>
-                      {done ? '✓' : 'Noted'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          );
-        }
-        if (card.type === 'observation') {
-          return (
-            <View key={`obs-${idx}`} style={base}>
-              <Text style={{
-                color: theme.text,
-                fontSize: 14,
-                fontStyle: 'italic',
-                lineHeight: 22,
-              }}>
-                {card.text}
-              </Text>
-            </View>
-          );
-        }
-        if (card.type === 'joke_offer') {
-          return (
-            <JokeOfferCard
-              key={`joke-${idx}`}
-              offer={card.offer}
-              base={base}
-              theme={theme}
-              accentColor={accentColor}
-            />
-          );
-        }
-        return null;
-      })}
-    </View>
-  );
-}
-
-// Self-contained joke card — same fetch + reveal pattern as the
-// Ground brief variant but rendered inside the evening stack. Keeps
-// the offer line on tap, swaps to setup → 800ms → punchline + light
-// haptic, then stays.
-function JokeOfferCard({
-  offer,
-  base,
-  theme,
-  accentColor,
-}: {
-  offer: string;
-  base: any;
-  theme: any;
-  accentColor: string;
-}) {
-  const userId = useUserId();
-  const [loading, setLoading] = useState(false);
-  const [setup, setSetup] = useState<string | null>(null);
-  const [punchline, setPunchline] = useState<string | null>(null);
-  if (!userId) return null;
-  return (
-    <View style={base}>
-      {setup ? (
-        <View>
-          <Text style={{ color: theme.text, fontSize: 14, lineHeight: 20 }}>{setup}</Text>
-          {punchline ? (
-            <Text style={{
-              color: accentColor,
-              fontSize: 14,
-              lineHeight: 20,
-              marginTop: 8,
-              fontWeight: '500',
-            }}>
-              {punchline}
-            </Text>
-          ) : null}
-        </View>
-      ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{
-            flex: 1,
-            color: theme.muted,
-            fontSize: 13,
-            fontStyle: 'italic',
-            lineHeight: 19,
-          }}>
-            {offer}
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.6}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            disabled={loading}
-            onPress={async () => {
-              if (loading) return;
-              setLoading(true);
-              try {
-                const res = await fetch('https://conductor-ivory.vercel.app/api/ask', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    userId,
-                    question: 'tell me a joke',
-                  }),
-                });
-                const data = await res.json();
-                const text = typeof data?.answer === 'string' ? data.answer : '';
-                const parts = text.split(/\n\n+/);
-                const s = parts[0] || text || '';
-                const p = parts.slice(1).join('\n\n') || '';
-                if (!s) return;
-                setSetup(s);
-                setTimeout(() => {
-                  setPunchline(p || '');
-                  conductorHaptics.newSignal();
-                }, 800);
-              } catch {
-                // silent
-              } finally {
-                setLoading(false);
-              }
-            }}>
-            <Text style={{ color: accentColor, fontSize: 18, fontWeight: '700', paddingHorizontal: 4 }}>
-              →
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-}
-
 export default function TakeoffScreen() {
-  const userId = useUserId();
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  // userId-gated render: if AsyncStorage hasn't yielded an id yet, drop
-  // a null surface. The boot guard in _layout.tsx is already steering
-  // unidentified users to /onboarding; this is the secondary belt for
-  // the brief few frames before the redirect fires.
-  if (!userId) return null;
-  // Feature-discovery dimming state. Each of these surfaces renders
-  // at 45% opacity until the user taps it once and reads the intro,
-  // then permanently lights up. introFeatureId tracks which intro
-  // modal is currently open; clearing it on dismiss flips the
-  // discovered state for that feature.
-  const [pulseDiscovered, markPulseDiscovered] = useDiscovered('pulse');
-  const [signalsDiscovered, markSignalsDiscovered] = useDiscovered('signals');
-  const [minimapDiscovered, markMinimapDiscovered] = useDiscovered('minimap');
-  const [feedbackDiscovered, markFeedbackDiscovered] = useDiscovered('feedback');
-  const [introFeatureId, setIntroFeatureId] = useState<string | null>(null);
-  function dismissIntro() {
-    const id = introFeatureId;
-    setIntroFeatureId(null);
-    if (id === 'pulse') markPulseDiscovered();
-    else if (id === 'signals') markSignalsDiscovered();
-    else if (id === 'minimap') markMinimapDiscovered();
-    else if (id === 'feedback') markFeedbackDiscovered();
-  }
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
   const [transparency, setTransparency] = useState<string | null>(null);
@@ -964,11 +551,6 @@ export default function TakeoffScreen() {
   // returns null on non-Sunday and on empty memory weeks; the mobile
   // section is conditional on truthy.
   const [weekInReview, setWeekInReview] = useState<string | null>(null);
-  // Evening cards — clearance only. Shape: array of cards with `type`
-  // discriminator. State init is [] so the renderer can short-circuit
-  // on length === 0 without a null-check tax.
-  const [eveningCards, setEveningCards] = useState<EveningCard[]>([]);
-  const [eveningAcked, setEveningAcked] = useState<Set<string>>(new Set());
   // Month in Review — only populated on the last day of an ET month
   // (clearance only). Rendered below Week in Review when present.
   const [monthInReview, setMonthInReview] = useState<string | null>(null);
@@ -1011,17 +593,6 @@ export default function TakeoffScreen() {
   // device. Setting a flag never un-sets — these are first-run hints.
   const [showSignalTapTip, setShowSignalTapTip] = useState(false);
   const [showPulseTip, setShowPulseTip] = useState(false);
-  // Resolution moment — a brief "Rested ✓" toast fades in at the
-  // top of the brief screen for 2s when the user taps Done on a
-  // quick-action popover or the Finale Rest button (via deep-link
-  // params from FinaleSheet). Pairs with conductorHaptics.signalRested
-  // for the haptic side of the moment.
-  const [restedToast, setRestedToast] = useState(false);
-  // ConductorSheet is mounted once at root in app/_layout.tsx; tapping
-  // the minimap calls openConductorSheet('ground') and the sheet
-  // listens via its own hook.
-  const urgentCount = useUrgentCount();
-
   // Took Care Of band — items Conductor auto-resolved or expired
   // in the last 48h. Collapsed by default. Per-item dismissals are
   // persisted to AsyncStorage so a return-to-Ground doesn't undo
@@ -1043,32 +614,6 @@ export default function TakeoffScreen() {
   // same prompt doesn't reappear when the brief refreshes within
   // the same ET day.
   const [conductorQuestion, setConductorQuestion] = useState<string | null>(null);
-  // First-brief onboarding question — backend sets isFirstBrief +
-  // morningQuestion together exactly once per household. Renders with
-  // a real "Tell The Conductor →" button rather than the muted
-  // conductorQuestion ack/dismiss row.
-  const [morningQuestion, setMorningQuestion] = useState<string | null>(null);
-  const [isFirstBrief, setIsFirstBrief] = useState(false);
-  // Joke offer — subtle line below the brief on tough-but-not-broken
-  // days. State here covers fetched joke + visibility (offer fades
-  // out once the joke lands). Spoken via expo-speech if voice is on.
-  const [jokeOffer, setJokeOffer] = useState<string | null>(null);
-  const [jokeSetup, setJokeSetup] = useState<string | null>(null);
-  const [jokePunchline, setJokePunchline] = useState<string | null>(null);
-  const [jokeLoading, setJokeLoading] = useState(false);
-  // Streak milestone observation — surfaces on the named thresholds
-  // (7/14/21/30/60/90/100/365). Brass color + slight size bump per
-  // spec to distinguish from the regular brief line.
-  const [streakObservation, setStreakObservation] = useState<string | null>(null);
-  // Icon note — 1st-of-month flavor line. Tied to the dynamic icon
-  // system. Auto-fades 3 seconds after appearing so it doesn't
-  // linger past its moment.
-  const [iconNote, setIconNote] = useState<string | null>(null);
-  // Weekly Symphony — Sunday Clearance only. Backend ships
-  // weeklyAchievements as null on non-Sundays, and on Sunday returns
-  // the seven-instrument bitmap + variation/key/sequence.
-  const [weeklyAchievements, setWeeklyAchievements] = useState<WeeklyAchievementsPayload | null>(null);
-  const [symphonyPlaying, setSymphonyPlaying] = useState(false);
   const [conductorQuestionAcked, setConductorQuestionAcked] = useState<
     'ack' | 'dismissed' | null
   >(null);
@@ -1106,23 +651,6 @@ export default function TakeoffScreen() {
       } catch { /* ignore */ }
     })();
   }, []);
-
-  // Pull the user's Overwatch threshold once on mount. Stored by
-  // Settings as a stringified integer hour (default 23 = 11pm); a
-  // missing/invalid value falls through to the default so existing
-  // installs keep their old behavior until the user changes it.
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem('overwatchHour');
-        const n = parseInt(raw || '', 10);
-        if (!isNaN(n) && n >= 0 && n <= 23) {
-          setOverwatchHour(n);
-          setMode(getBriefMode(new Date().getHours(), n));
-        }
-      } catch { /* ignore */ }
-    })();
-  }, []);
   const stopSpeech = useCallback(() => {
     try { Speech.stop(); } catch { /* ignore */ }
     setSpeechActive(false);
@@ -1145,13 +673,12 @@ export default function TakeoffScreen() {
     }
   }, []);
 
-  // Shake-to-ask: shake opens The Conductor sheet from anywhere
-  // (this listener happens to live in Ground, but openConductorSheet
-  // is a global module-state mutation — the root-mounted sheet
-  // picks it up regardless of which screen is in focus).
+  // Shake-to-ask: shake fires haptic + focuses the question input so
+  // the keyboard's native dictation button is one tap away. Reuses
+  // existing ask input so we don't need a separate "Listening" state.
   useShakeToAsk(() => {
     conductorHaptics.newSignal();
-    openConductorSheet('shake');
+    setTimeout(() => askInputRef.current?.focus(), 60);
   });
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
@@ -1162,8 +689,7 @@ export default function TakeoffScreen() {
   // as "no name yet, render the bare greeting."
   const [userName, setUserName] = useState('there');
   const [date, setDate] = useState('');
-  const [overwatchHour, setOverwatchHour] = useState(23);
-  const [mode, setMode] = useState(getBriefMode(new Date().getHours(), 23));
+  const [mode, setMode] = useState(getBriefMode(new Date().getHours()));
   const [showYesterday, setShowYesterday] = useState(false);
   const navigation = useNavigation();
 
@@ -1190,7 +716,7 @@ export default function TakeoffScreen() {
     else if (hour < 17) setGreeting('Good afternoon');
     else setGreeting('Good evening');
 
-    setMode(getBriefMode(hour, overwatchHour));
+    setMode(getBriefMode(hour));
 
     setDate(now.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -1212,13 +738,13 @@ export default function TakeoffScreen() {
         const actionId = response.actionIdentifier;
         const data: any = response.notification.request.content.data || {};
         const signalId = data.signalId;
-        const targetUserId = data.userId || userId;
+        const userId = data.userId || 'james_totalhome_gmail_com';
         if (!signalId) return;
         if (actionId === 'REST') {
           fetch('https://conductor-ivory.vercel.app/api/signals', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: signalId, userId: targetUserId, state: 'resolved' }),
+            body: JSON.stringify({ id: signalId, userId, state: 'resolved' }),
           }).catch(() => {});
         } else if (actionId === 'HOLD') {
           fetch('https://conductor-ivory.vercel.app/api/signals', {
@@ -1226,7 +752,7 @@ export default function TakeoffScreen() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               id: signalId,
-              userId: targetUserId,
+              userId,
               state: 'active',
               notedAt: new Date().toISOString(),
             }),
@@ -1241,7 +767,7 @@ export default function TakeoffScreen() {
 
   async function checkConnection() {
     try {
-      const res = await fetch(`https://conductor-ivory.vercel.app/api/signals?userId=${userId}`);
+      const res = await fetch('https://conductor-ivory.vercel.app/api/signals?userId=james_totalhome_gmail_com');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!Array.isArray(data.signals)) throw new Error('Invalid response: missing signals array');
@@ -1274,7 +800,7 @@ export default function TakeoffScreen() {
     setAskLoading(false);
     setAskAnswer(null);
     setAskError(false);
-    const { endpoint } = getBriefMode(new Date().getHours(), overwatchHour);
+    const { endpoint } = getBriefMode(new Date().getHours());
     if (!endpoint) {
       // Overwatch mode — no brief to fetch. Just exit loading so the
       // OverwatchView renders.
@@ -1282,6 +808,7 @@ export default function TakeoffScreen() {
       return;
     }
     try {
+      const userId = 'james_totalhome_gmail_com'; // temporary hardcode — will come from OAuth
       const res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/${endpoint}?userId=${userId}`);
       const data = await res.json();
       if (typeof data.user === 'string' && data.user.length > 0) {
@@ -1314,7 +841,6 @@ export default function TakeoffScreen() {
       setYearInReview(typeof data.yearInReview === 'string' && data.yearInReview.length > 0
         ? data.yearInReview
         : null);
-      setEveningCards(Array.isArray(data.eveningCards) ? (data.eveningCards as EveningCard[]) : []);
       setPulse(typeof data.pulse === 'string' && data.pulse.length > 0
         ? data.pulse
         : null);
@@ -1375,49 +901,6 @@ export default function TakeoffScreen() {
         setConductorQuestion(incomingQ);
       }
       setConductorQuestionAcked(null);
-
-      // Morning question is only present on the first brief (backend
-      // sets both fields together). On subsequent briefs we clear so
-      // a re-render doesn't surface a stale onboarding card.
-      setIsFirstBrief(data.isFirstBrief === true);
-      setMorningQuestion(
-        data.isFirstBrief === true && typeof data.morningQuestion === 'string' && data.morningQuestion.length > 0
-          ? data.morningQuestion
-          : null
-      );
-
-      // Joke offer — backend only emits this when eligible AND
-      // hasn't been shown to this household today. Local state
-      // resets on every brief load so a stale offer doesn't linger
-      // after dismissal.
-      setJokeOffer(
-        typeof data.jokeOffer === 'string' && data.jokeOffer.length > 0
-          ? data.jokeOffer
-          : null
-      );
-      setJokeSetup(null);
-      setJokePunchline(null);
-      setJokeLoading(false);
-      setStreakObservation(
-        typeof data.streakObservation === 'string' && data.streakObservation.length > 0
-          ? data.streakObservation
-          : null
-      );
-      const note = typeof data.iconNote === 'string' && data.iconNote.length > 0
-        ? data.iconNote
-        : null;
-      setIconNote(note);
-      if (note) {
-        // 3-second auto-fade — note doesn't linger past its moment.
-        // setTimeout is cleaned up by the next brief reload's reset.
-        setTimeout(() => setIconNote(null), 3000);
-      }
-      // Sunday Clearance ships weeklyAchievements; other days null.
-      setWeeklyAchievements(
-        data?.weeklyAchievements && typeof data.weeklyAchievements === 'object'
-          ? (data.weeklyAchievements as WeeklyAchievementsPayload)
-          : null,
-      );
     } catch (err) {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
@@ -1430,7 +913,7 @@ export default function TakeoffScreen() {
     // Fire-and-forget — populates the Took Care Of band after the
     // main brief renders so the brief isn't blocked on this fetch.
     fetch(
-      `https://conductor-ivory.vercel.app/api/signals?type=autoResolutions&userId=${userId}`
+      'https://conductor-ivory.vercel.app/api/signals?type=autoResolutions&userId=james_totalhome_gmail_com'
     )
       .then((r) => r.json())
       .then((d) => {
@@ -1506,7 +989,7 @@ export default function TakeoffScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId,
+          userId: 'james_totalhome_gmail_com',
           question: q,
         }),
       });
@@ -1558,7 +1041,7 @@ export default function TakeoffScreen() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId,
+        userId: 'james_totalhome_gmail_com',
         briefType,
         rating,
         briefDate: new Date().toISOString(),
@@ -1614,7 +1097,7 @@ export default function TakeoffScreen() {
         </GestureDetector>
         <YesterdayModal
           visible={showYesterday}
-          userId={userId}
+          userId="james_totalhome_gmail_com"
           onClose={() => setShowYesterday(false)}
         />
       </>
@@ -1632,30 +1115,21 @@ export default function TakeoffScreen() {
       }
     });
 
-  const bandTheme = mode.title === 'Takeoff' ? makeTakeoffTheme(theme) : makeClearanceTheme(theme);
+  const theme = mode.title === 'Takeoff' ? TAKEOFF_THEME : CLEARANCE_THEME;
 
   return (
-    <View style={[styles.container, { backgroundColor: bandTheme.bg }]}>
-      {/* Positioned to the left of the Minimap (40x40 at right: 20, top: 60).
-          Minimap's left edge is 60px from screen right; HelpButton's right
-          edge sits at 68px to give an 8px gap. */}
-      {/* Directory entry — small accent "?" top-left, opposite the Minimap.
-          App-navigation search now lives inside ConductorSheet. */}
-      <HelpButton cardId="brief" left={16} />
-      {restedToast ? (
-        <View pointerEvents="none" style={styles.restedToast}>
-          <Text style={styles.restedToastText}>Rested ✓</Text>
-        </View>
-      ) : null}
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <HelpButton cardId="brief" />
       <GestureDetector gesture={swipeGesture}>
         <ScrollView
           style={styles.scrollFlex}
           contentContainerStyle={styles.content}>
+          <Minimap />
           <View style={styles.header}>
-            <Text style={[styles.greeting, { color: bandTheme.greeting }]}>
+            <Text style={[styles.greeting, { color: theme.greeting }]}>
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
             </Text>
-            <Text style={[styles.title, { color: bandTheme.title }]}>{mode.title}</Text>
+            <Text style={[styles.title, { color: theme.title }]}>{mode.title}</Text>
           </View>
 
           {pulse ? (
@@ -1664,13 +1138,10 @@ export default function TakeoffScreen() {
             // card via LayoutAnimation. Card sections render from
             // pulseData with per-field null guards.
             <TouchableOpacity
-              onPress={() => {
-                if (!pulseDiscovered) { setIntroFeatureId('pulse'); return; }
-                togglePulse();
-              }}
+              onPress={togglePulse}
               activeOpacity={0.6}
               hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
-              style={[styles.pulseWrap, { opacity: pulseDiscovered ? 1 : 0.45 }]}>
+              style={styles.pulseWrap}>
               <Text style={styles.pulseLabel}>THE PULSE</Text>
               <Text style={styles.pulseText}>{pulse}</Text>
               {showPulseTip ? (
@@ -1713,8 +1184,8 @@ export default function TakeoffScreen() {
                   onSubmitEditing={submitAsk}
                   onFocus={() => setAskFocused(true)}
                   onBlur={() => setAskFocused(false)}
-                  placeholder="Ask The Conductor..."
-                  placeholderTextColor={theme.muted}
+                  placeholder="Ask Conductor..."
+                  placeholderTextColor="#5a5855"
                   returnKeyType="send"
                   editable={!askLoading}
                   blurOnSubmit={false}
@@ -1769,10 +1240,10 @@ export default function TakeoffScreen() {
               ) : null}
               {!askLoading && !askError && askAnswer ? (
                 <View style={styles.askAnswerCard}>
-                  <Text style={[styles.askAnswerText, { color: bandTheme.brief }]}>{askAnswer}</Text>
+                  <Text style={[styles.askAnswerText, { color: theme.brief }]}>{askAnswer}</Text>
                   {speechActive ? (
                     <TouchableOpacity onPress={stopSpeech} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 8 }}>■ Stop</Text>
+                      <Text style={{ color: '#5a5855', fontSize: 11, marginTop: 8 }}>■ Stop</Text>
                     </TouchableOpacity>
                   ) : null}
                   {askAction?.type === 'confirm_setting' ? (
@@ -1789,10 +1260,10 @@ export default function TakeoffScreen() {
                           flex: 1,
                           paddingVertical: 11,
                           borderRadius: 22,
-                          backgroundColor: accentColor,
+                          backgroundColor: '#b8960c',
                           alignItems: 'center',
                         }}>
-                        <Text style={{ color: theme.background, fontSize: 13, fontWeight: '600' }}>
+                        <Text style={{ color: '#0f0f0f', fontSize: 13, fontWeight: '600' }}>
                           Yes, do it →
                         </Text>
                       </TouchableOpacity>
@@ -1803,10 +1274,10 @@ export default function TakeoffScreen() {
                           paddingVertical: 11,
                           borderRadius: 22,
                           borderWidth: StyleSheet.hairlineWidth,
-                          borderColor: theme.inputBackground,
+                          borderColor: 'rgba(255,255,255,0.06)',
                           alignItems: 'center',
                         }}>
-                        <Text style={{ color: theme.muted, fontSize: 13 }}>No thanks</Text>
+                        <Text style={{ color: '#5a5855', fontSize: 13 }}>No thanks</Text>
                       </TouchableOpacity>
                     </View>
                   ) : null}
@@ -1824,28 +1295,22 @@ export default function TakeoffScreen() {
 
           <Text style={styles.inFlowDate}>{date}</Text>
 
-          <View style={[styles.divider, { backgroundColor: bandTheme.divider }]} />
+          <View style={[styles.divider, { backgroundColor: theme.divider }]} />
 
           <TouchableOpacity
             onPress={() => setShowYesterday(true)}
-            activeOpacity={0.6}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            activeOpacity={0.6}>
             <Text style={styles.inFlowYesterday}>Yesterday&apos;s Programme →</Text>
           </TouchableOpacity>
 
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator color={bandTheme.brief} />
+              <ActivityIndicator color={theme.brief} />
               <Text style={styles.loadingText}>Generating your brief...</Text>
             </View>
           ) : (
             <View style={styles.briefContainer}>
-              <Text
-                style={[
-                  styles.brief,
-                  { color: bandTheme.brief },
-                  !signalsDiscovered && { opacity: 0.45 },
-                ]}>
+              <Text style={[styles.brief, { color: theme.brief }]}>
                 {(segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment]).map((seg, i) => {
                   if (seg.type === 'signal') {
                     const color = (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
@@ -1858,17 +1323,13 @@ export default function TakeoffScreen() {
                     return (
                       <Text
                         key={i}
-                        onPress={() => {
-                          if (!signalsDiscovered) { setIntroFeatureId('signals'); return; }
-                          handleSignalTap(seg.signalId);
-                        }}
-                        onLongPress={() => {
-                          if (!signalsDiscovered) { setIntroFeatureId('signals'); return; }
+                        onPress={() => handleSignalTap(seg.signalId)}
+                        onLongPress={() =>
                           setQuickActionTarget({
                             signalId: seg.signalId,
                             phrase: seg.content || '',
-                          });
-                        }}
+                          })
+                        }
                         style={{
                           textDecorationLine: acted === 'done' ? 'line-through' : 'underline',
                           textDecorationColor: color,
@@ -1918,8 +1379,8 @@ export default function TakeoffScreen() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             signalId: handoff.signalId,
-                            acknowledgedBy: userId,
-                            userId,
+                            acknowledgedBy: 'james_totalhome_gmail_com',
+                            userId: 'james_totalhome_gmail_com',
                           }),
                         }
                       );
@@ -2044,7 +1505,7 @@ export default function TakeoffScreen() {
                     fetch('https://conductor-ivory.vercel.app/api/maintenance', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action: 'dismiss', userId }),
+                      body: JSON.stringify({ action: 'dismiss', userId: 'james_totalhome_gmail_com' }),
                     }).catch(() => {});
                   }}
                   style={styles.maintOfferSecondary}
@@ -2079,7 +1540,7 @@ export default function TakeoffScreen() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          userId,
+                          userId: 'james_totalhome_gmail_com',
                           question: q,
                           response: 'acknowledged',
                         }),
@@ -2112,7 +1573,7 @@ export default function TakeoffScreen() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          userId,
+                          userId: 'james_totalhome_gmail_com',
                           question: q,
                           response: 'dismissed',
                         }),
@@ -2126,111 +1587,6 @@ export default function TakeoffScreen() {
             </View>
           ) : null}
 
-          {!loading && iconNote ? (
-            // Icon note — single muted italic line below The Pulse,
-            // 1st-of-month only. Backend gates this; mobile just
-            // renders + auto-fades.
-            <View style={styles.iconNoteWrap}>
-              <Text style={styles.iconNoteText}>{iconNote}</Text>
-            </View>
-          ) : null}
-
-          {!loading && streakObservation ? (
-            // Streak milestone — brass-colored single line. Appears
-            // exactly once per milestone via the household:{id}:
-            // streakAck:{N} key on the backend.
-            <View style={styles.streakObsWrap}>
-              <Text style={styles.streakObsText}>{streakObservation}</Text>
-            </View>
-          ) : null}
-
-          {!loading && jokeOffer ? (
-            // Joke offer — subtle line below the brief on tough-but-
-            // not-broken days. Backend only emits when eligible; the
-            // arrow tap fetches a joke from /api/ask, animates setup
-            // → 800ms pause → punchline with a light haptic, then
-            // the offer line itself fades.
-            <View style={styles.jokeOfferWrap}>
-              <View style={styles.jokeOfferDivider} />
-              {jokeSetup ? (
-                <View>
-                  <Text style={styles.jokeSetup}>{jokeSetup}</Text>
-                  {jokePunchline ? (
-                    <Text style={styles.jokePunchline}>{jokePunchline}</Text>
-                  ) : null}
-                </View>
-              ) : (
-                <View style={styles.jokeOfferRow}>
-                  <Text style={styles.jokeOfferText}>{jokeOffer}</Text>
-                  <TouchableOpacity
-                    activeOpacity={0.6}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    disabled={jokeLoading}
-                    onPress={async () => {
-                      if (jokeLoading) return;
-                      setJokeLoading(true);
-                      try {
-                        const res = await fetch('https://conductor-ivory.vercel.app/api/ask', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            userId,
-                            question: 'tell me a joke',
-                          }),
-                        });
-                        const data = await res.json();
-                        // Easter egg response shape: answer = "setup\n\npunchline".
-                        // Fall back to a single block on the off chance the
-                        // shape changes server-side.
-                        const text = typeof data?.answer === 'string' ? data.answer : '';
-                        const parts = text.split(/\n\n+/);
-                        const setup = parts[0] || text || '';
-                        const punchline = parts.slice(1).join('\n\n') || '';
-                        if (!setup) return;
-                        setJokeSetup(setup);
-                        setTimeout(() => {
-                          setJokePunchline(punchline || '');
-                          conductorHaptics.newSignal();
-                        }, 800);
-                      } catch {
-                        // silent — leave the offer line visible
-                      } finally {
-                        setJokeLoading(false);
-                      }
-                    }}>
-                    <Text style={styles.jokeOfferArrow}>→</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          ) : null}
-
-          {!loading && isFirstBrief && morningQuestion ? (
-            // First-brief morning question — onboarding moment that
-            // introduces The Conductor. Slightly more prominent than
-            // the weekly variant; a real brass button rather than
-            // muted ack/dismiss row, since this is the user's first
-            // proper invitation to ask anything.
-            <View style={styles.morningQuestionWrap}>
-              <Text style={styles.morningQuestionText}>{morningQuestion}</Text>
-              <TouchableOpacity
-                activeOpacity={0.6}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                onPress={() => {
-                  // Open the ConductorSheet with the question as the
-                  // breadcrumb context so the sheet header reads
-                  // naturally ("Asked from your house" with the
-                  // morning prompt fresh in mind).
-                  openConductorSheet('first-brief-question');
-                }}
-                style={styles.morningQuestionBtn}>
-                <Text style={styles.morningQuestionBtnText}>
-                  Tell The Conductor →
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
           {!loading && yearInReview ? (
             // Year in Review — clearance only, December 31 only.
             // Treated as the major surface: thicker brass divider,
@@ -2238,7 +1594,7 @@ export default function TakeoffScreen() {
             <View style={styles.yearInReviewWrap}>
               <View style={styles.yearInReviewBrassLine} />
               <Text style={styles.yearInReviewLabel}>THIS YEAR</Text>
-              <Text style={[styles.yearInReviewText, { color: bandTheme.brief }]}>
+              <Text style={[styles.yearInReviewText, { color: theme.brief }]}>
                 {yearInReview}
               </Text>
               <Text style={styles.yearInReviewFooter}>
@@ -2255,41 +1611,10 @@ export default function TakeoffScreen() {
             <View style={styles.weekInReviewWrap}>
               <View style={styles.weekInReviewBrassLine} />
               <Text style={styles.weekInReviewLabel}>THIS WEEK</Text>
-              <Text style={[styles.weekInReviewText, { color: bandTheme.brief }]}>
+              <Text style={[styles.weekInReviewText, { color: theme.brief }]}>
                 {weekInReview}
               </Text>
             </View>
-          ) : null}
-
-          {!loading && mode.title === 'Clearance' && weeklyAchievements ? (
-            <WeeklySymphony
-              achievements={weeklyAchievements}
-              isSunday={new Date().getDay() === 0}
-              playing={symphonyPlaying}
-              onPlay={() => {
-                // Audio playback deferred — expo-av isn't in the
-                // install. For now we visually "play" by toggling
-                // the button state for the rough length the
-                // composition would occupy, then reset.
-                setSymphonyPlaying(true);
-                setTimeout(() => setSymphonyPlaying(false), 4500);
-              }}
-            />
-          ) : null}
-
-          {!loading && mode.title === 'Clearance' && eveningCards.length > 0 ? (
-            <EveningCardsStack
-              cards={eveningCards}
-              acked={eveningAcked}
-              onAck={(key) => {
-                conductorHaptics.newSignal();
-                setEveningAcked((prev) => {
-                  const next = new Set(prev);
-                  next.add(key);
-                  return next;
-                });
-              }}
-            />
           ) : null}
 
           {!loading && monthInReview ? (
@@ -2299,7 +1624,7 @@ export default function TakeoffScreen() {
             <View style={styles.weekInReviewWrap}>
               <View style={styles.weekInReviewBrassLine} />
               <Text style={styles.weekInReviewLabel}>THIS MONTH</Text>
-              <Text style={[styles.weekInReviewText, { color: bandTheme.brief }]}>
+              <Text style={[styles.weekInReviewText, { color: theme.brief }]}>
                 {monthInReview}
               </Text>
             </View>
@@ -2325,7 +1650,7 @@ export default function TakeoffScreen() {
                 <Animated.Text
                   style={[
                     styles.theReadText,
-                    { color: bandTheme.brief, opacity: theReadOpacity },
+                    { color: theme.brief, opacity: theReadOpacity },
                   ]}>
                   {theRead}
                 </Animated.Text>
@@ -2338,17 +1663,10 @@ export default function TakeoffScreen() {
             // signing off on the brief. ✓ is always white; ✗ defaults to
             // muted and brightens when chosen. Both dim to 0.2 when their
             // sibling is the active selection.
-            <View
-              style={[
-                styles.feedbackSignature,
-                !feedbackDiscovered && { opacity: 0.45 },
-              ]}>
+            <View style={styles.feedbackSignature}>
               <Text style={styles.feedbackSigPrompt}>Was this helpful?</Text>
               <TouchableOpacity
-                onPress={() => {
-                  if (!feedbackDiscovered) { setIntroFeatureId('feedback'); return; }
-                  handleFeedback('up');
-                }}
+                onPress={() => handleFeedback('up')}
                 activeOpacity={0.7}
                 hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
                 <Text
@@ -2360,17 +1678,14 @@ export default function TakeoffScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => {
-                  if (!feedbackDiscovered) { setIntroFeatureId('feedback'); return; }
-                  handleFeedback('down');
-                }}
+                onPress={() => handleFeedback('down')}
                 activeOpacity={0.7}
                 hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
                 <Text
                   style={[
                     styles.feedbackSigX,
                     {
-                      color: feedback === 'down' ? theme.text : theme.muted,
+                      color: feedback === 'down' ? '#f0ede8' : '#5a5855',
                       opacity: feedback === 'up' ? 0.2 : 1,
                     },
                   ]}>
@@ -2391,31 +1706,9 @@ export default function TakeoffScreen() {
         </ScrollView>
       </GestureDetector>
 
-      {/* Floating Minimap — rendered as a root sibling (NOT inside the
-          ScrollView) so it paints above the brief content and reliably
-          receives taps. As a scroll child its absolute box was overlapped
-          by later content Views which swallowed the tap. Discovery dimming:
-          when undiscovered, an outer Pressable catches the tap and opens
-          the intro; the Minimap inside is pointerEvents:none so its own
-          onPress doesn't fire. */}
-      {minimapDiscovered ? (
-        <Minimap
-          urgentCount={urgentCount}
-          onPress={() => openConductorSheet('ground')}
-        />
-      ) : (
-        <Pressable
-          onPress={() => setIntroFeatureId('minimap')}
-          style={styles.minimapDiscoveryWrap}>
-          <View pointerEvents="none">
-            <Minimap urgentCount={urgentCount} floating={false} onPress={() => {}} />
-          </View>
-        </Pressable>
-      )}
-
       <YesterdayModal
         visible={showYesterday}
-        userId={userId}
+        userId="james_totalhome_gmail_com"
         onClose={() => setShowYesterday(false)}
       />
 
@@ -2443,14 +1736,6 @@ export default function TakeoffScreen() {
           Optimistic UI: chip styling flips immediately, API call fires
           in the background, errors silently revert via the next brief
           fetch. */}
-      <FeatureIntroduction
-        visible={introFeatureId != null}
-        featureId={introFeatureId || ''}
-        name={(introFeatureId && FEATURE_INTROS[introFeatureId]?.name) || ''}
-        icon={(introFeatureId && FEATURE_INTROS[introFeatureId]?.icon) || ''}
-        description={(introFeatureId && FEATURE_INTROS[introFeatureId]?.description) || ''}
-        onDismiss={dismissIntro}
-      />
       <Modal
         visible={quickActionTarget != null}
         animationType="fade"
@@ -2471,33 +1756,15 @@ export default function TakeoffScreen() {
                   if (!t) return;
                   setQuickActed((m) => ({ ...m, [String(t.signalId)]: 'done' }));
                   setQuickActionTarget(null);
-                  // Success haptic + transient "Rested ✓" toast. Both
-                  // fire optimistically before the PATCH lands so the
-                  // moment of resolution feels immediate even on a
-                  // slow network. The toast auto-dismisses after 2s.
-                  conductorHaptics.signalRested();
-                  setRestedToast(true);
-                  setTimeout(() => setRestedToast(false), 2000);
                   fetch('https://conductor-ivory.vercel.app/api/signals', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       id: t.signalId,
                       state: 'resolved',
-                      userId,
+                      userId: 'james_totalhome_gmail_com',
                     }),
-                  }).then(() => {
-                    // Refresh the Took Care Of band so the just-rested
-                    // signal joins it without a manual pull-to-refresh.
-                    return fetch(
-                      `https://conductor-ivory.vercel.app/api/signals?type=autoResolutions&userId=${userId}`
-                    );
-                  })
-                  .then((r) => r?.json?.())
-                  .then((d) => {
-                    if (Array.isArray(d?.items)) setAutoResolutions(d.items);
-                  })
-                  .catch(() => {});
+                  }).catch(() => {});
                 }}>
                 <Text style={styles.quickActionDoneText}>Done ✓</Text>
               </TouchableOpacity>
@@ -2514,7 +1781,7 @@ export default function TakeoffScreen() {
                     body: JSON.stringify({
                       id: t.signalId,
                       state: 'snoozed',
-                      userId,
+                      userId: 'james_totalhome_gmail_com',
                     }),
                   }).catch(() => {});
                 }}>
@@ -2534,7 +1801,7 @@ export default function TakeoffScreen() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      userId,
+                      userId: 'james_totalhome_gmail_com',
                       signalId: t.signalId,
                     }),
                   }).catch(() => {});
@@ -2545,7 +1812,7 @@ export default function TakeoffScreen() {
                     body: JSON.stringify({
                       id: t.signalId,
                       state: 'expired',
-                      userId,
+                      userId: 'james_totalhome_gmail_com',
                     }),
                   }).catch(() => {});
                 }}>
@@ -2559,46 +1826,13 @@ export default function TakeoffScreen() {
   );
 }
 
-type ThemeColors = { background: string; surface: string; text: string; muted: string; border: string; inputBackground: string };
-function makeStyles(theme: ThemeColors, accentColor: string) {
-  return StyleSheet.create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.background,
+    backgroundColor: '#0f0f0f',
   },
   scrollFlex: {
     flex: 1,
-  },
-  // Floating-minimap discovery wrapper — pins the undiscovered (dimmed)
-  // minimap at the same top-right spot the floating Minimap uses, so the
-  // intro-opening Pressable sits exactly over the widget.
-  minimapDiscoveryWrap: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
-    zIndex: 10,
-    opacity: 0.45,
-  },
-  // Resolution-moment toast — absolutely-positioned brass pill near
-  // the top of the screen. Renders for 2s on Done tap, fades out
-  // automatically when restedToast flips back to false.
-  restedToast: {
-    position: 'absolute',
-    top: 70,
-    alignSelf: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: accentColor + '26',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: accentColor + '66',
-    zIndex: 50,
-  },
-  restedToastText: {
-    color: accentColor,
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
   },
   // The Pulse — synthesis output sits between the greeting/title block
   // and the in-flow date. Small uppercase label + one italic editorial
@@ -2608,7 +1842,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 16,
   },
   pulseLabel: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 9,
     letterSpacing: 2,
     textTransform: 'uppercase',
@@ -2627,13 +1861,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: accentRgba(accentColor, 0.18),
+    borderTopColor: 'rgba(184, 150, 12, 0.18)',
   },
   pulseSection: {
     marginBottom: 14,
   },
   pulseSectionLabel: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 9,
     letterSpacing: 2,
     textTransform: 'uppercase',
@@ -2645,7 +1879,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 2,
   },
   pulseEmpty: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 12,
     fontStyle: 'italic',
     lineHeight: 18,
@@ -2660,7 +1894,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: theme.inputBackground,
+    borderTopColor: 'rgba(255,255,255,0.06)',
     paddingTop: 12,
   },
   askInput: {
@@ -2670,12 +1904,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 6,
   },
   askSend: {
-    color: accentColor,
+    color: '#b8960c',
     fontSize: 16,
     paddingLeft: 12,
   },
   askThinking: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 12,
     fontStyle: 'italic',
     marginTop: 8,
@@ -2694,11 +1928,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: accentRgba(accentColor, 0.4),
+    borderColor: 'rgba(184, 150, 12, 0.4)',
     borderRadius: 14,
   },
   askChipText: {
-    color: accentColor,
+    color: '#b8960c',
     fontSize: 11,
     letterSpacing: 0.3,
   },
@@ -2707,7 +1941,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingLeft: 12,
     paddingVertical: 10,
     borderLeftWidth: 2,
-    borderLeftColor: accentColor,
+    borderLeftColor: '#b8960c',
   },
   askAnswerText: {
     fontSize: 14,
@@ -2718,7 +1952,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     alignSelf: 'flex-start',
   },
   askAnother: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 11,
     letterSpacing: 0.3,
   },
@@ -2727,7 +1961,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   // because the older theme.timestamp pull rendered it darker on
   // Clearance than the spec wanted.
   inFlowDate: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 12,
     letterSpacing: 0.3,
     textAlign: 'right',
@@ -2738,7 +1972,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   // is the wrapping TouchableOpacity; the Text style only handles
   // visual placement.
   inFlowYesterday: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 11,
     letterSpacing: 0.5,
     textAlign: 'right',
@@ -2754,20 +1988,20 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 32,
   },
   greeting: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 16,
     letterSpacing: 0.5,
     marginBottom: 6,
   },
   title: {
-    color: theme.text,
+    color: '#f0ede8',
     fontSize: 42,
     fontWeight: '700',
     letterSpacing: -1,
   },
   divider: {
     height: 1,
-    backgroundColor: theme.border,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     // No marginBottom — the in-flow Yesterday's Programme link sits
     // directly below the divider with its own marginTop:8 +
     // marginBottom:16, which together produce the gap to the brief.
@@ -2787,7 +2021,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginTop: 16,
   },
   brief: {
-    color: theme.text,
+    color: '#f0ede8',
     fontSize: 20,
     lineHeight: 32,
     fontWeight: '300',
@@ -2801,7 +2035,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   weekInReviewBrassLine: {
     height: 1,
-    backgroundColor: accentRgba(accentColor, 0.2),
+    backgroundColor: 'rgba(184, 150, 12, 0.2)',
     marginBottom: 16,
   },
   yearInReviewWrap: {
@@ -2810,11 +2044,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   yearInReviewBrassLine: {
     height: 2,
-    backgroundColor: accentRgba(accentColor, 0.4),
+    backgroundColor: 'rgba(184, 150, 12, 0.4)',
     marginBottom: 18,
   },
   yearInReviewLabel: {
-    color: accentColor,
+    color: '#b8960c',
     fontSize: 10,
     letterSpacing: 3,
     fontWeight: '600',
@@ -2825,7 +2059,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     lineHeight: 24,
   },
   yearInReviewFooter: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 10,
     fontStyle: 'italic',
     marginTop: 14,
@@ -2837,18 +2071,18 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 14,
     paddingLeft: 16,
     borderLeftWidth: 3,
-    borderLeftColor: accentColor,
-    backgroundColor: accentRgba(accentColor, 0.05),
+    borderLeftColor: '#b8960c',
+    backgroundColor: 'rgba(184, 150, 12, 0.05)',
     borderRadius: 6,
   },
   maintOfferTitle: {
-    color: theme.text,
+    color: '#f0ede8',
     fontSize: 13,
     fontWeight: '500',
     marginBottom: 4,
   },
   maintOfferSub: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 12,
     fontStyle: 'italic',
     marginBottom: 12,
@@ -2860,10 +2094,10 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: accentRgba(accentColor, 0.55),
-    backgroundColor: accentRgba(accentColor, 0.10),
+    borderColor: 'rgba(184, 150, 12, 0.55)',
+    backgroundColor: 'rgba(184, 150, 12, 0.10)',
   },
-  maintOfferPrimaryText: { color: accentColor, fontSize: 12, fontWeight: '600' },
+  maintOfferPrimaryText: { color: '#b8960c', fontSize: 12, fontWeight: '600' },
   maintOfferSecondary: {
     paddingVertical: 7,
     paddingHorizontal: 14,
@@ -2871,124 +2105,23 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.10)',
   },
-  maintOfferSecondaryText: { color: theme.muted, fontSize: 12 },
+  maintOfferSecondaryText: { color: '#5a5855', fontSize: 12 },
   conductorQWrap: {
     marginTop: 18,
     marginBottom: 6,
     paddingTop: 14,
     paddingBottom: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: accentRgba(accentColor, 0.18),
-  },
-  // Icon note — 1st-of-month flavor. Very subtle: small line below
-  // The Pulse area, muted italic. Auto-fades after 3 seconds.
-  iconNoteWrap: {
-    marginTop: 10,
-    marginBottom: 2,
-  },
-  iconNoteText: {
-    color: theme.muted,
-    fontSize: 12,
-    fontStyle: 'italic',
-    lineHeight: 17,
-  },
-  // Streak milestone — single brass line above the joke offer slot.
-  // Slight size bump (15 vs the brief's 14) so the line lands as a
-  // moment, not a footnote.
-  streakObsWrap: {
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  streakObsText: {
-    color: accentColor,
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 21,
-    letterSpacing: 0.1,
-  },
-  // Joke offer — quiet line below the brief. Not a card. The
-  // muted divider above + italic offer text sit lower in the
-  // visual hierarchy than feedback rows; the arrow does the
-  // affordance work.
-  jokeOfferWrap: {
-    marginTop: 18,
-    marginBottom: 8,
-    paddingTop: 12,
-  },
-  jokeOfferDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: accentRgba(accentColor, 0.16),
-    marginBottom: 12,
-  },
-  jokeOfferRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  jokeOfferText: {
-    flex: 1,
-    color: theme.muted,
-    fontSize: 13,
-    fontStyle: 'italic',
-    lineHeight: 19,
-  },
-  jokeOfferArrow: {
-    color: accentColor,
-    fontSize: 18,
-    fontWeight: '700',
-    paddingHorizontal: 4,
-  },
-  jokeSetup: {
-    color: theme.text,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  jokePunchline: {
-    color: accentColor,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  // First-brief morning question — sits between the conductorQuestion
-  // ack row and Year/Week in Review. Wider top padding + real brass
-  // button (vs. the muted ack pills above) so the first-time user
-  // reads this as an invitation, not a checkbox.
-  morningQuestionWrap: {
-    marginTop: 22,
-    marginBottom: 8,
-    paddingTop: 18,
-    paddingBottom: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: accentRgba(accentColor, 0.22),
-  },
-  morningQuestionText: {
-    color: theme.text,
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  morningQuestionBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 22,
-    backgroundColor: accentColor,
-  },
-  morningQuestionBtnText: {
-    color: '#0f0f0f',
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.4,
+    borderTopColor: 'rgba(184, 150, 12, 0.18)',
   },
   conductorQLabel: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 9,
     letterSpacing: 2,
     marginBottom: 8,
   },
   conductorQText: {
-    color: theme.text,
+    color: '#f0ede8',
     fontSize: 13,
     fontStyle: 'italic',
     lineHeight: 19,
@@ -3005,11 +2138,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     borderWidth: StyleSheet.hairlineWidth,
   },
   conductorQOnIt: {
-    borderColor: accentRgba(accentColor, 0.55),
-    backgroundColor: accentRgba(accentColor, 0.08),
+    borderColor: 'rgba(184, 150, 12, 0.55)',
+    backgroundColor: 'rgba(184, 150, 12, 0.08)',
   },
   conductorQOnItText: {
-    color: accentColor,
+    color: '#b8960c',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -3017,11 +2150,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     borderColor: 'rgba(255,255,255,0.10)',
   },
   conductorQRemoveText: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 12,
   },
   conductorQAckedText: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 12,
     fontStyle: 'italic',
     paddingVertical: 4,
@@ -3035,7 +2168,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 4,
   },
   autoResHeaderText: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 11,
     letterSpacing: 0.3,
   },
@@ -3043,7 +2176,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.inputBackground,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
   autoResRow: {
     flexDirection: 'row',
@@ -3057,12 +2190,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontSize: 13,
   },
   autoResLabel: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 11,
     fontStyle: 'italic',
   },
   autoResDismiss: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 14,
     paddingHorizontal: 4,
   },
@@ -3071,7 +2204,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 6,
   },
   autoResDismissAllText: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 10,
   },
   autoResFooter: {
@@ -3081,7 +2214,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingTop: 6,
   },
   autoResViewAllText: {
-    color: accentColor,
+    color: '#b8960c',
     fontSize: 11,
     letterSpacing: 0.3,
   },
@@ -3096,23 +2229,23 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 7,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: accentRgba(accentColor, 0.55),
-    backgroundColor: accentRgba(accentColor, 0.07),
+    borderColor: 'rgba(184, 150, 12, 0.55)',
+    backgroundColor: 'rgba(184, 150, 12, 0.07)',
   },
   handoffBtnText: {
-    color: accentColor,
+    color: '#b8960c',
     fontSize: 12,
     letterSpacing: 0.3,
     fontWeight: '500',
   },
   handoffAckedText: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 12,
     fontStyle: 'italic',
     paddingVertical: 7,
   },
   weekInReviewLabel: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 9,
     letterSpacing: 2,
     textTransform: 'uppercase',
@@ -3129,7 +2262,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     height: 1,
     // Brass (#b8960c) at 20% opacity — a thin warm line that
     // separates the brief proper from the overflow trigger.
-    backgroundColor: accentRgba(accentColor, 0.2),
+    backgroundColor: 'rgba(184, 150, 12, 0.2)',
   },
   theReadTrigger: {
     alignSelf: 'flex-start',
@@ -3137,7 +2270,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 4,
   },
   theReadTriggerText: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 10,
     letterSpacing: 2,
   },
@@ -3158,12 +2291,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginTop: 12,
   },
   feedbackSigPrompt: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 11,
     letterSpacing: 0.3,
   },
   feedbackSigCheck: {
-    color: theme.text,
+    color: '#f0ede8',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
@@ -3180,7 +2313,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingVertical: 4,
   },
   transparencyLinkText: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 11,
     letterSpacing: 0.5,
     textAlign: 'center',
@@ -3197,17 +2330,17 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 22,
   },
   quickActionSheet: {
-    backgroundColor: theme.surface,
+    backgroundColor: '#1a1a1a',
     borderRadius: 14,
     paddingVertical: 18,
     paddingHorizontal: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: accentRgba(accentColor, 0.35),
+    borderColor: 'rgba(184, 150, 12, 0.35)',
     width: '100%',
     maxWidth: 360,
   },
   quickActionHeader: {
-    color: theme.text,
+    color: '#f0ede8',
     fontSize: 13,
     fontStyle: 'italic',
     marginBottom: 14,
@@ -3227,11 +2360,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     borderWidth: StyleSheet.hairlineWidth,
   },
   quickActionDone: {
-    borderColor: accentRgba(accentColor, 0.65),
-    backgroundColor: accentRgba(accentColor, 0.10),
+    borderColor: 'rgba(184, 150, 12, 0.65)',
+    backgroundColor: 'rgba(184, 150, 12, 0.10)',
   },
   quickActionDoneText: {
-    color: accentColor,
+    color: '#b8960c',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -3259,14 +2392,14 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     justifyContent: 'flex-end',
   },
   transparencySheet: {
-    backgroundColor: theme.surface,
+    backgroundColor: '#1a1a1a',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 24,
     paddingBottom: 36,
   },
   transparencyHeader: {
-    color: theme.text,
+    color: '#f0ede8',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.2,
@@ -3280,20 +2413,20 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     letterSpacing: 0.2,
   },
   transparencyCloseBtn: {
-    backgroundColor: theme.text,
+    backgroundColor: '#f0ede8',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
   transparencyCloseBtnText: {
-    color: theme.background,
+    color: '#0f0f0f',
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
   onboarding: {
     flex: 1,
-    backgroundColor: theme.background,
+    backgroundColor: '#0f0f0f',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
@@ -3302,25 +2435,25 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     width: 64,
     height: 64,
     borderRadius: 16,
-    backgroundColor: theme.text,
+    backgroundColor: '#f0ede8',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
   logoMark: {
-    color: theme.background,
+    color: '#0f0f0f',
     fontSize: 32,
     fontWeight: '700',
   },
   onboardingTitle: {
-    color: theme.text,
+    color: '#f0ede8',
     fontSize: 32,
     fontWeight: '700',
     letterSpacing: -1,
     marginBottom: 8,
   },
   onboardingSubtitle: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 16,
     letterSpacing: 0.3,
     marginBottom: 32,
@@ -3328,7 +2461,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   onboardingDivider: {
     width: '100%',
     height: 1,
-    backgroundColor: theme.border,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     marginBottom: 32,
   },
   onboardingBody: {
@@ -3339,7 +2472,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 40,
   },
   connectButton: {
-    backgroundColor: theme.text,
+    backgroundColor: '#f0ede8',
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 12,
@@ -3348,16 +2481,15 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     alignItems: 'center',
   },
   connectButtonText: {
-    color: theme.background,
+    color: '#0f0f0f',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
   onboardingPrivacy: {
-    color: theme.muted,
+    color: '#5a5855',
     fontSize: 12,
     textAlign: 'center',
     letterSpacing: 0.3,
   },
-  });
-}
+});

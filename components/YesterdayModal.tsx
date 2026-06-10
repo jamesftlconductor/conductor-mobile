@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -10,12 +10,11 @@ import {
   View,
 } from 'react-native';
 
+import { useTheme } from '@/app/theme';
+
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
-const BG = '#0f0f0f';
-const SHEET_BG = '#1a1a1a';
-const OFF_WHITE = '#f0ede8';
-const MUTED = '#5a5855';
-const SECTION_LABEL = '#8a8780';
+
+type ThemeColors = { background: string; surface: string; text: string; muted: string };
 
 type YesterdayPayload = {
   takeoff: string | null;
@@ -32,6 +31,8 @@ export default function YesterdayModal({
   userId: string;
   onClose: () => void;
 }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [data, setData] = useState<YesterdayPayload | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -74,7 +75,7 @@ export default function YesterdayModal({
 
           {loading && (
             <View style={styles.loading}>
-              <ActivityIndicator color={MUTED} />
+              <ActivityIndicator color={theme.muted} />
             </View>
           )}
 
@@ -105,77 +106,79 @@ export default function YesterdayModal({
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: SHEET_BG,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 36,
-    maxHeight: '80%',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 20,
-  },
-  header: {
-    color: OFF_WHITE,
-    fontSize: 18,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  headerDate: {
-    color: MUTED,
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  body: {
-    marginBottom: 24,
-  },
-  loading: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    marginBottom: 24,
-  },
-  sectionLabel: {
-    color: MUTED,
-    fontSize: 11,
-    letterSpacing: 2,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-  sectionSpacer: {
-    marginTop: 24,
-  },
-  briefText: {
-    color: SECTION_LABEL,
-    fontSize: 14,
-    lineHeight: 22,
-    letterSpacing: 0.2,
-  },
-  noBrief: {
-    color: MUTED,
-    fontStyle: 'italic',
-  },
-  closeBtn: {
-    backgroundColor: OFF_WHITE,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  closeBtnText: {
-    color: BG,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-});
+function makeStyles(theme: ThemeColors, accentColor: string) {
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'flex-end',
+    },
+    sheet: {
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 24,
+      paddingBottom: 36,
+      maxHeight: '80%',
+    },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: 20,
+    },
+    header: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: '600',
+      letterSpacing: 0.2,
+    },
+    headerDate: {
+      color: theme.muted,
+      fontSize: 12,
+      letterSpacing: 0.3,
+    },
+    body: {
+      marginBottom: 24,
+    },
+    loading: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 40,
+      marginBottom: 24,
+    },
+    sectionLabel: {
+      color: theme.muted,
+      fontSize: 11,
+      letterSpacing: 2,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      marginBottom: 10,
+    },
+    sectionSpacer: {
+      marginTop: 24,
+    },
+    briefText: {
+      color: theme.text,
+      fontSize: 14,
+      lineHeight: 22,
+      letterSpacing: 0.2,
+    },
+    noBrief: {
+      color: theme.muted,
+      fontStyle: 'italic',
+    },
+    closeBtn: {
+      backgroundColor: accentColor,
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: 'center',
+    },
+    closeBtnText: {
+      color: '#0f0f0f',
+      fontSize: 15,
+      fontWeight: '600',
+      letterSpacing: 0.3,
+    },
+  });
+}

@@ -6,24 +6,28 @@
 import { router } from 'expo-router';
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 
-const FAINT = '#a8a5a0';
+import { useTheme } from '@/app/theme';
 
 type Props = {
   cardId: string;
-  // Visual offset — defaults to the standard top right placement;
-  // pass {top, right} to nudge for screens with crowded headers.
+  // Visual offset — defaults to the standard top right placement.
+  // Pass `left` to anchor to the top-left instead (Ground uses this so
+  // the Directory "?" sits opposite the Minimap).
   top?: number;
   right?: number;
+  left?: number;
 };
 
-export function HelpButton({ cardId, top = 60, right = 22 }: Props) {
+export function HelpButton({ cardId, top = 60, right, left }: Props) {
+  const { accentColor } = useTheme();
+  const pos = left != null ? { left } : { right: right ?? 22 };
   return (
     <TouchableOpacity
       onPress={() => router.push(`/directory?card=${cardId}` as any)}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      style={[styles.btn, { top, right }]}
+      style={[styles.btn, { top, ...pos }]}
       activeOpacity={0.6}>
-      <Text style={styles.text}>?</Text>
+      <Text style={[styles.text, { color: accentColor }]}>?</Text>
     </TouchableOpacity>
   );
 }
@@ -40,9 +44,8 @@ const styles = StyleSheet.create({
     zIndex: 50,
   },
   text: {
-    color: FAINT,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
     lineHeight: 14,
   },
 });

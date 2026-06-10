@@ -125,6 +125,28 @@ function suggestionsFor(context: string): string[] {
   return SUGGESTIONS[context] || SUGGESTIONS.default;
 }
 
+// App-navigation search catalog — screen/feature destinations matched by
+// keyword. Combined with live signal-description matching, this makes the
+// Conductor input a single hub for both asking and navigating.
+type SearchDest = { label: string; emoji: string; keywords: string[]; path: string };
+const SEARCH_DESTINATIONS: SearchDest[] = [
+  { label: 'Vault', emoji: '🗄', keywords: ['vault', 'renewals', 'subscriptions', 'deadlines', 'policies'], path: '/vault' },
+  { label: 'Crew', emoji: '👥', keywords: ['crew', 'family', 'kids', 'children', 'pets'], path: '/crew' },
+  { label: 'Hover (Radar)', emoji: '🛰', keywords: ['hover', 'radar', 'signals', 'dots'], path: '/(tabs)/hover' },
+  { label: 'Paris trip', emoji: '✈️', keywords: ['paris', 'trip', 'france', 'nice', 'montpellier', 'travel'], path: '/(tabs)/hover?threadId=paris-trip-june-2026' },
+  { label: 'Horizon', emoji: '🌅', keywords: ['horizon', 'upcoming', 'coming up'], path: '/horizon' },
+  { label: 'Compass', emoji: '🧭', keywords: ['compass', 'patterns', 'awareness'], path: '/compass' },
+  { label: 'The Programme', emoji: '🗓', keywords: ['programme', 'program', 'timeline', 'schedule'], path: '/programme' },
+  { label: 'Service Providers', emoji: '🔧', keywords: ['providers', 'service', 'plumber', 'hvac'], path: '/providers' },
+  { label: 'Home Maintenance', emoji: '🏠', keywords: ['maintenance', 'seasonal'], path: '/maintenance' },
+  { label: 'Home Inventory', emoji: '📦', keywords: ['inventory', 'belongings'], path: '/inventory' },
+  { label: 'The Network', emoji: '🔗', keywords: ['network', 'connected households'], path: '/network' },
+  { label: 'Send a message', emoji: '✉️', keywords: ['communicate', 'message'], path: '/communicate' },
+  { label: 'Settings', emoji: '⚙️', keywords: ['settings', 'preferences', 'theme', 'brief time'], path: '/(tabs)/settings' },
+  { label: 'Directory', emoji: '📖', keywords: ['directory', 'help', 'how it works'], path: '/directory' },
+  { label: 'Privacy & Data', emoji: '🔒', keywords: ['privacy', 'data', 'export'], path: '/privacy-dashboard' },
+];
+
 // Flat role-keyed message list. The user message is pushed
 // immediately on submit; the conductor message is pushed when the
 // network call resolves. Decoupling user/conductor entries lets us
@@ -170,6 +192,52 @@ export function ConductorSheet() {
   const inputRef = useRef<TextInput | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const submittingRef = useRef(false);
+
+  // Combined search — live signal-description matches + screen/feature
+  // destinations, computed from the same input as Ask. Tapping a result
+  // navigates (or opens a signal's Finale on Hover); pressing send asks.
+  const [searchSignals, setSearchSignals] = useState<{ id: string | number; description: string }[]>([]);
+  useEffect(() => {
+    if (!visible || !userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?userId=${userId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const active = (Array.isArray(data?.signals) ? data.signals : []).filter(
+          (s: any) => !s.state || s.state === 'incoming' || s.state === 'active'
+        );
+        if (!cancelled) {
+          setSearchSignals(active.map((s: any) => ({ id: s.id, description: String(s.description || '') })));
+        }
+      } catch { /* best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [visible, userId]);
+
+  const searchQuery = input.trim().toLowerCase();
+  const destMatches = searchQuery
+    ? SEARCH_DESTINATIONS.filter(
+        (d) => d.label.toLowerCase().includes(searchQuery) || d.keywords.some((k) => k.includes(searchQuery) || searchQuery.includes(k))
+      )
+    : [];
+  const signalMatches = searchQuery
+    ? searchSignals.filter((s) => s.description.toLowerCase().includes(searchQuery)).slice(0, 6)
+    : [];
+  const showSearch = searchQuery.length > 0 && (destMatches.length > 0 || signalMatches.length > 0);
+
+  function goToDestination(path: string) {
+    closeConductorSheet();
+    setTimeout(() => router.push(path as never), 80);
+  }
+  function openSignalFinale(id: string | number) {
+    closeConductorSheet();
+    setTimeout(
+      () => router.push({ pathname: '/(tabs)/hover', params: { signalId: String(id) } } as never),
+      80
+    );
+  }
 
   // Backdrop arm-delay — same pattern that fixed the open-tap-closes
   // bug. Applied to backdrop Pressable AND SwipeDismissSheet enabled.
@@ -405,7 +473,7 @@ export function ConductorSheet() {
                   value={input}
                   onChangeText={setInput}
                   onSubmitEditing={() => submit(input)}
-                  placeholder="Ask The Conductor anything..."
+                  placeholder="Search or ask anything..."
                   placeholderTextColor={theme.muted}
                   returnKeyType="send"
                   blurOnSubmit={false}
@@ -426,6 +494,39 @@ export function ConductorSheet() {
                   <Text style={styles.sendGlyph}>↑</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Search results — appear above the chips as soon as the
+                  input matches a screen/feature or a signal. Tapping a
+                  result navigates or opens the signal's Finale on Hover. */}
+              {showSearch ? (
+                <ScrollView
+                  style={styles.searchResults}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ paddingVertical: 4 }}>
+                  {destMatches.map((d) => (
+                    <TouchableOpacity
+                      key={`dest-${d.label}`}
+                      onPress={() => goToDestination(d.path)}
+                      activeOpacity={0.6}
+                      style={styles.searchRow}>
+                      <Text style={styles.searchEmoji}>{d.emoji}</Text>
+                      <Text style={styles.searchLabel} numberOfLines={1}>{d.label}</Text>
+                      <Text style={styles.searchKind}>screen</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {signalMatches.map((s) => (
+                    <TouchableOpacity
+                      key={`sig-${s.id}`}
+                      onPress={() => openSignalFinale(s.id)}
+                      activeOpacity={0.6}
+                      style={styles.searchRow}>
+                      <Text style={styles.searchEmoji}>📡</Text>
+                      <Text style={styles.searchLabel} numberOfLines={1}>{s.description || 'Signal'}</Text>
+                      <Text style={styles.searchKind}>signal</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              ) : null}
 
               {/* Suggestion chips — secondary options below the input */}
               <ScrollView
@@ -746,6 +847,32 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     divider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: theme.border || 'rgba(255,255,255,0.08)',
+    },
+    searchResults: {
+      flexGrow: 0,
+      maxHeight: 200,
+      marginHorizontal: 16,
+      marginTop: 6,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border || 'rgba(255,255,255,0.08)',
+      borderRadius: 10,
+    },
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 11,
+      paddingHorizontal: 12,
+      gap: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.border || 'rgba(255,255,255,0.06)',
+    },
+    searchEmoji: { fontSize: 16, width: 22 },
+    searchLabel: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '500' },
+    searchKind: {
+      color: theme.muted,
+      fontSize: 10,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
     },
     chipsRow: {
       flexGrow: 0,
