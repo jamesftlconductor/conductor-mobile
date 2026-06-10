@@ -36,7 +36,7 @@ import {
   View,
 } from 'react-native';
 
-import { useTheme } from '@/app/theme';
+import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { useUserId } from '@/hooks/useUserId';
 import { TOKENS } from '@/utils/designTokens';
 
@@ -249,6 +249,11 @@ export default function OnboardingScreen() {
   const [modifiers, setModifiers] = useState<Set<Modifier>>(new Set());
   const [joinPreview, setJoinPreview] = useState<HouseholdPreview | null>(null);
   const [joining, setJoining] = useState(false);
+  // Joining-an-existing-household members ALSO run the per-user
+  // personalization steps now (voice/humor/theme/priorities/hobbies);
+  // isJoining routes them straight to the app (not the pipeline reveal)
+  // once they finish, since their household already has data.
+  const [isJoining, setIsJoining] = useState(false);
 
   const [tone, setTone] = useState<Tone>('balanced');
   const [detail, setDetail] = useState<Detail>('standard');
@@ -279,6 +284,7 @@ export default function OnboardingScreen() {
         try { savedPhase = await AsyncStorage.getItem(STEP_KEY); } catch { /* skip */ }
 
         if (joinType === 'joining_existing' || invite) {
+          setIsJoining(true);
           // Joining flow — fetch the preview for the target household.
           // If no householdId is known, render the joining screen with
           // partial data; user still gets a meaningful "you're joining"
@@ -303,6 +309,18 @@ export default function OnboardingScreen() {
             }
           } catch { /* best-effort */ }
           setPhase('joining');
+          return;
+        }
+
+        // Joiner who already confirmed the join (mid-personalization, e.g.
+        // after a reload): resume their personalization steps WITHOUT
+        // re-running the onboard pipeline — their household already has data.
+        if (
+          joinType === 'joined_existing' &&
+          (savedPhase === 'step2' || savedPhase === 'step3' || savedPhase === 'step4')
+        ) {
+          setIsJoining(true);
+          setPhase(savedPhase);
           return;
         }
 
@@ -416,13 +434,16 @@ export default function OnboardingScreen() {
       // Record the join outcome locally so Ground knows the user
       // landed via the join path. No backend call needed — the
       // OAuth callback already linked the user to the household.
-      await AsyncStorage.multiSet([
-        ['joinType', 'joined_existing'],
-        ['onboardingStep', 'done'],
-      ]);
+      // Record the join, but NOT done — joining members now continue into
+      // the per-user personalization steps (voice/humor/theme/priorities/
+      // hobbies) before landing in the app.
+      await AsyncStorage.setItem('joinType', 'joined_existing');
       await AsyncStorage.multiRemove(['inviteCode', PIPELINE_START_KEY]);
     } catch { /* best-effort */ }
-    router.replace('/' as never);
+    setJoining(false);
+    // Skip the household-type step (that's already configured for the
+    // household they're joining) and go straight to Your Voice.
+    setPhase('step2');
   }
 
   async function confirmStep1(w: Who, h: Housing, mods: Modifier[], name: string | null) {
@@ -496,6 +517,14 @@ export default function OnboardingScreen() {
           }),
         });
       } catch { /* best-effort */ }
+    }
+    // Joining members skip the pipeline reveal/interstitial — their
+    // household already has data — and land straight in the app.
+    if (isJoining) {
+      try { await AsyncStorage.setItem('onboardingStep', 'done'); } catch { /* best-effort */ }
+      await AsyncStorage.removeItem(PIPELINE_START_KEY).catch(() => {});
+      router.replace('/' as never);
+      return;
     }
     if (pipelineReady) {
       clearOnboardingState();
@@ -754,7 +783,8 @@ function JoiningStep({
       </View>
 
       <Text style={[s.subtitle, { fontStyle: 'italic', marginBottom: 24 }]}>
-        Your voice preferences are yours — customize anytime in Your House.
+        Next, let&apos;s set up your voice, humor, and look — these are yours,
+        separate from the rest of the household.
       </Text>
 
       <TouchableOpacity
@@ -762,7 +792,7 @@ function JoiningStep({
         disabled={joining}
         style={[s.continueBtn, joining && { opacity: 0.5 }]}>
         <Text style={s.continueBtnText}>
-          {joining ? 'Joining…' : `Join ${titleName} →`}
+          {joining ? 'Joining…' : 'Join & personalize →'}
         </Text>
       </TouchableOpacity>
     </View>
@@ -1028,10 +1058,72 @@ function Step2({
         <Text style={s.previewText}>{preview}</Text>
       </View>
 
+      <OnboardingThemePicker s={s} />
+
       <TouchableOpacity onPress={onContinue} style={s.continueBtn}>
         <Text style={s.continueBtnText}>Continue →</Text>
       </TouchableOpacity>
     </>
+  );
+}
+
+// Theme + accent color selection — folded into the Your Voice step so
+// every new user (including members joining an existing household) gets to
+// pick their look during onboarding, not just hidden away in Settings.
+// Writes through useTheme (persisted to AsyncStorage) so the choice takes
+// effect immediately and survives reloads.
+function OnboardingThemePicker({ s }: { s: StepStyles }) {
+  const { themeMode, accentKey, theme, isDark, setThemeMode, setAccentKey } = useTheme();
+  const modes: { id: ThemeMode; label: string }[] = [
+    { id: 'dark', label: 'Dark' },
+    { id: 'light', label: 'Light' },
+    { id: 'system', label: 'System' },
+  ];
+  const accents = (Object.keys(ACCENTS) as AccentKey[]).map((k) => ({
+    id: k,
+    name: ACCENTS[k].name,
+    color: ACCENTS[k][isDark ? 'dark' : 'light'],
+  }));
+  return (
+    <View style={{ marginTop: 4, marginBottom: 4 }}>
+      <Text style={s.segLabel}>Theme</Text>
+      <View style={s.segWrap}>
+        {modes.map((m) => {
+          const active = themeMode === m.id;
+          return (
+            <TouchableOpacity
+              key={m.id}
+              onPress={() => setThemeMode(m.id)}
+              style={[s.segPill, active && s.segPillActive]}>
+              <Text style={[s.segPillText, active && { color: '#0f0f0f', fontWeight: '600' }]}>
+                {m.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={[s.segLabel, { marginTop: 16 }]}>Accent color</Text>
+      <View style={{ flexDirection: 'row', gap: 14, marginTop: 4 }}>
+        {accents.map((a) => {
+          const active = accentKey === a.id;
+          return (
+            <TouchableOpacity
+              key={a.id}
+              onPress={() => setAccentKey(a.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: a.color,
+                borderWidth: active ? 3 : 0,
+                borderColor: theme.text,
+              }}
+            />
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
