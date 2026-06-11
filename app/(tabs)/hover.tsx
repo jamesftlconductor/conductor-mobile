@@ -1996,7 +1996,7 @@ export default function HoverScreen() {
             and ignores touches so the radar gestures pass through. */}
         <View pointerEvents="none" style={[styles.wordmark, { top: insets.top + 8 }]}>
           <Image
-            source={require('@/assets/wordmark.png')}
+            source={require('../../assets/wordmark.png')}
             resizeMode="contain"
             style={{ width: '100%', height: '100%' }}
           />

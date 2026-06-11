@@ -1659,7 +1659,7 @@ export default function TakeoffScreen() {
           style={styles.scrollFlex}
           contentContainerStyle={styles.content}>
           <Image
-            source={require('@/assets/wordmark.png')}
+            source={require('../../assets/wordmark.png')}
             resizeMode="contain"
             style={styles.wordmark}
           />
