@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 
 const BG = '#070707';
-const OFF_WHITE = '#f0ede8';
 const MUTED = '#5a5855';
 const SUBTLE = 'rgba(240, 237, 232, 0.18)';
 
@@ -18,76 +16,50 @@ const PHRASES = [
   'The pipeline is running.',
 ];
 
-// Three concentric dashed rings, each rotating at a different speed. The
-// outer ring's diameter is the `size` prop. Inner rings auto-scale at 0.66
-// and 0.33 to feel proportional with the radar's outer edge.
-function InlineRadar({ size }: { size: number }) {
-  const outerRotation = useRef(new Animated.Value(0)).current;
-  const middleRotation = useRef(new Animated.Value(0)).current;
-  const innerRotation = useRef(new Animated.Value(0)).current;
+// Brand C mark, breathing. Replaces the old rotating radar rings as the
+// Overwatch centerpiece — a slow, calm pulse (opacity + slight scale) suited
+// to the overnight idle screen. icon.png is opaque with a near-black navy
+// field, so we round the corners to read as the app-icon badge on the dark
+// background rather than a hard square.
+function PulsingLogo({ size }: { size: number }) {
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    function spin(value: Animated.Value, durationMs: number) {
-      const loop = () => {
-        value.setValue(0);
-        Animated.timing(value, {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
           toValue: 1,
-          duration: durationMs,
-          easing: Easing.linear,
+          duration: 1800,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
-        }).start(({ finished }) => {
-          if (finished) loop();
-        });
-      };
-      loop();
-    }
-    spin(outerRotation, 60000);
-    spin(middleRotation, 30000);
-    spin(innerRotation, 15000);
-  }, [outerRotation, middleRotation, innerRotation]);
-
-  function ringFor(value: Animated.Value, ratio: number, opacity: number) {
-    const ringSize = size * ratio;
-    const r = ringSize / 2 - 2;
-    const circumference = 2 * Math.PI * r;
-    const dashCount = Math.max(20, Math.round(r * 0.8));
-    const dashLen = circumference / dashCount / 2;
-    const spin = value.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['0deg', '360deg'],
-    });
-    return (
-      <Animated.View
-        style={{
-          position: 'absolute',
-          left: (size - ringSize) / 2,
-          top: (size - ringSize) / 2,
-          width: ringSize,
-          height: ringSize,
-          transform: [{ rotate: spin }],
-        }}>
-        <Svg width={ringSize} height={ringSize}>
-          <Circle
-            cx={ringSize / 2}
-            cy={ringSize / 2}
-            r={r}
-            stroke={OFF_WHITE}
-            strokeOpacity={opacity}
-            strokeWidth={1}
-            fill="none"
-            strokeDasharray={`${dashLen},${dashLen}`}
-          />
-        </Svg>
-      </Animated.View>
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
     );
-  }
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.05] });
 
   return (
-    <View style={{ width: size, height: size }}>
-      {ringFor(outerRotation, 1, 0.18)}
-      {ringFor(middleRotation, 0.66, 0.22)}
-      {ringFor(innerRotation, 0.33, 0.3)}
-    </View>
+    <Animated.Image
+      source={require('../assets/icon.png')}
+      resizeMode="contain"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.22,
+        opacity,
+        transform: [{ scale }],
+      }}
+    />
   );
 }
 
@@ -161,7 +133,7 @@ export default function OverwatchView({ onYesterday }: { onYesterday: () => void
   return (
     <View style={styles.container}>
       <View style={styles.center}>
-        <InlineRadar size={120} />
+        <PulsingLogo size={120} />
         <Text style={styles.dateLine}>{dateLabel}</Text>
         <Animated.Text style={[styles.phrase, { opacity: phraseFade }]} numberOfLines={2}>
           {PHRASES[phraseIndex]}
