@@ -2019,14 +2019,14 @@ export default function HoverScreen() {
             position: 'absolute',
             top: insets.top + 66,
             left: 22,
-            width: 40,
-            height: 40,
+            width: 48,
+            height: 48,
             zIndex: 50,
           }}>
           <Image
             source={require('../../assets/c-mark.png')}
             resizeMode="contain"
-            style={{ width: 40, height: 40, opacity: viewMode === 'personal' ? 1 : 0.5 }}
+            style={{ width: 48, height: 48, opacity: viewMode === 'personal' ? 1 : 0.5 }}
           />
         </TouchableOpacity>
         {/* Minimap top-right — the tap surface for ConductorSheet, the
@@ -2050,8 +2050,8 @@ export default function HoverScreen() {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={{
             position: 'absolute',
-            top: insets.top + 114,
-            right: 30,
+            top: insets.top + 122,
+            right: 34,
             width: 24,
             height: 24,
             borderRadius: 12,
@@ -2076,7 +2076,7 @@ export default function HoverScreen() {
         />
         {viewMode === 'personal' && Array.isArray(crewList) && crewList.length > 0 ? (
           <Animated.View
-            style={[styles.crewFilterRow, { top: insets.top + 116, opacity: headerOpacity }]}>
+            style={[styles.crewFilterRow, { top: insets.top + 124, opacity: headerOpacity }]}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}

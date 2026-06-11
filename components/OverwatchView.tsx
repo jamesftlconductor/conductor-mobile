@@ -131,7 +131,7 @@ export default function OverwatchView({ onYesterday }: { onYesterday: () => void
   return (
     <View style={styles.container}>
       <View style={styles.center}>
-        <PulsingLogo size={168} />
+        <PulsingLogo size={184} />
         <Text style={styles.dateLine}>{dateLabel}</Text>
         <Animated.Text style={[styles.phrase, { opacity: phraseFade }]} numberOfLines={2}>
           {PHRASES[phraseIndex]}
@@ -160,7 +160,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    transform: [{ translateY: -40 }],
   },
   dateLine: {
     color: MUTED,
