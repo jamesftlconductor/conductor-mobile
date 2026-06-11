@@ -885,6 +885,7 @@ function CollapsibleNavBar({
   onOpenConductor,
   signals,
   onSignalPress,
+  contextLabel,
 }: {
   bottomInset: number;
   urgentCount: number;
@@ -892,6 +893,10 @@ function CollapsibleNavBar({
   onOpenConductor: () => void;
   signals: Signal[];
   onSignalPress: (s: Signal) => void;
+  // Contextual title shown on the collapsed handle (was the radar's top
+  // header): "Management in Motion" in family view, "<name>'s signals"
+  // when filtered, your name in personal view.
+  contextLabel: string;
 }) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
@@ -1041,7 +1046,7 @@ function CollapsibleNavBar({
             onPress={() => toggleBar()}
             style={styles.collapsibleHandleArea}
             hitSlop={{ top: 4, bottom: 0, left: 0, right: 0 }}>
-            <Text style={styles.collapsibleHandle}>···</Text>
+            <Text style={styles.collapsibleHandle} numberOfLines={1}>{contextLabel}</Text>
             {urgentCount > 0 && !expanded ? (
               <View style={styles.collapsibleBadge}>
                 <Text style={styles.collapsibleBadgeText}>{urgentCount}</Text>
@@ -2001,15 +2006,36 @@ export default function HoverScreen() {
             style={{ width: '100%', height: '100%' }}
           />
         </View>
-        {/* Minimap at top-left — the big radar IS the same picture
-            at a larger scale, but the tap surface for ConductorSheet
-            still lives here so the affordance is universal. Keeps
-            clear of the `?` help button at top-right. */}
+        {/* Top control line — sits just below the wordmark banner.
+            Crew-filter C mark on the left, Minimap on the right, both
+            the same 40px size and aligned on the same line. */}
+        {/* Crew filter — tap the C mark to reveal the per-member filter
+            pills (personal view). Dimmed when in family view. */}
+        <TouchableOpacity
+          onPress={toggleViewMode}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{
+            position: 'absolute',
+            top: insets.top + 66,
+            left: 22,
+            width: 40,
+            height: 40,
+            zIndex: 50,
+          }}>
+          <Image
+            source={require('../../assets/c-mark.png')}
+            resizeMode="contain"
+            style={{ width: 40, height: 40, opacity: viewMode === 'personal' ? 1 : 0.5 }}
+          />
+        </TouchableOpacity>
+        {/* Minimap top-right — the tap surface for ConductorSheet, the
+            universal affordance present on every screen. */}
         <View
           style={{
             position: 'absolute',
-            top: insets.top + 8,
-            left: 22,
+            top: insets.top + 66,
+            right: 22,
             zIndex: 50,
           }}>
           <Minimap
@@ -2018,13 +2044,14 @@ export default function HoverScreen() {
             onPress={() => openConductorSheet('hover')}
           />
         </View>
+        {/* Help — tucked just below the Minimap, top-right. */}
         <TouchableOpacity
           onPress={() => setShowHelp(true)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={{
             position: 'absolute',
-            top: insets.top + 8,
-            right: 22,
+            top: insets.top + 114,
+            right: 30,
             width: 24,
             height: 24,
             borderRadius: 12,
@@ -2047,21 +2074,9 @@ export default function HoverScreen() {
             setShowHelp(false);
           }}
         />
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.topHeader, { top: insets.top + 8, opacity: headerOpacity }]}>
-          <Text style={styles.topHeaderText}>
-            {viewMode === 'family'
-              ? 'Management in Motion'
-              : crewFilter
-              ? `${crewFilter}'s signals`
-              : `${FIRST_NAME}.`}
-          </Text>
-        </Animated.View>
-
         {viewMode === 'personal' && Array.isArray(crewList) && crewList.length > 0 ? (
           <Animated.View
-            style={[styles.crewFilterRow, { top: insets.top + 56, opacity: headerOpacity }]}>
+            style={[styles.crewFilterRow, { top: insets.top + 116, opacity: headerOpacity }]}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -2113,20 +2128,6 @@ export default function HoverScreen() {
             </ScrollView>
           </Animated.View>
         ) : null}
-
-        <TouchableOpacity
-          onPress={toggleViewMode}
-          activeOpacity={0.7}
-          style={[styles.viewToggle, { top: insets.top + 8 }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text
-            style={[
-              styles.viewToggleEmoji,
-              { color: viewMode === 'family' ? '#b8960c' : '#5a5855' },
-            ]}>
-            {viewMode === 'family' ? '👨‍👩‍👧' : '👤'}
-          </Text>
-        </TouchableOpacity>
 
         {expandedRing !== null && <ReferenceCircle cx={cx} cy={cy} />}
         {expandedRing !== null && <ExpandedRingMarkers ring={expandedRing} cx={cx} cy={cy} />}
@@ -2249,6 +2250,13 @@ export default function HoverScreen() {
           onOpenConductor={() => openConductorSheet('hover')}
           signals={signals}
           onSignalPress={handleDotPress}
+          contextLabel={
+            viewMode === 'family'
+              ? 'Management in Motion'
+              : crewFilter
+              ? `${crewFilter}'s signals`
+              : `${FIRST_NAME}.`
+          }
         />
 
         <AddSignalSheet
@@ -2351,20 +2359,6 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     height: 51,
     zIndex: 4,
   },
-  topHeader: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 5,
-  },
-  topHeaderText: {
-    color: 'rgba(240, 237, 232, 0.35)',
-    fontSize: 11,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-    fontWeight: '500',
-  },
   crewFilterRow: {
     position: 'absolute',
     left: 0,
@@ -2416,15 +2410,6 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontSize: 9,
     marginTop: 4,
     textAlign: 'center',
-  },
-  viewToggle: {
-    position: 'absolute',
-    right: 16,
-    zIndex: 6,
-    padding: 4,
-  },
-  viewToggleEmoji: {
-    fontSize: 22,
   },
   centerC: {
     position: 'absolute',
@@ -2551,10 +2536,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   collapsibleHandle: {
     color: theme.muted,
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '600',
     letterSpacing: 2,
+    textTransform: 'uppercase',
     lineHeight: 18,
+    paddingHorizontal: 40,
   },
   collapsibleBadge: {
     position: 'absolute',
@@ -2563,7 +2550,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     minWidth: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#ef4444',
+    backgroundColor: accentColor,
     paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',

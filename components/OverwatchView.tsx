@@ -131,7 +131,7 @@ export default function OverwatchView({ onYesterday }: { onYesterday: () => void
   return (
     <View style={styles.container}>
       <View style={styles.center}>
-        <PulsingLogo size={120} />
+        <PulsingLogo size={168} />
         <Text style={styles.dateLine}>{dateLabel}</Text>
         <Animated.Text style={[styles.phrase, { opacity: phraseFade }]} numberOfLines={2}>
           {PHRASES[phraseIndex]}
