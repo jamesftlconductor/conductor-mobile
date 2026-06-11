@@ -18,9 +18,8 @@ const PHRASES = [
 
 // Brand C mark, breathing. Replaces the old rotating radar rings as the
 // Overwatch centerpiece — a slow, calm pulse (opacity + slight scale) suited
-// to the overnight idle screen. icon.png is opaque with a near-black navy
-// field, so we round the corners to read as the app-icon badge on the dark
-// background rather than a hard square.
+// to the overnight idle screen. c-mark.png is the gold C with its navy field
+// keyed to transparency, so it floats cleanly on the dark background.
 function PulsingLogo({ size }: { size: number }) {
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -50,12 +49,11 @@ function PulsingLogo({ size }: { size: number }) {
 
   return (
     <Animated.Image
-      source={require('../assets/icon.png')}
+      source={require('../assets/c-mark.png')}
       resizeMode="contain"
       style={{
         width: size,
         height: size,
-        borderRadius: size * 0.22,
         opacity,
         transform: [{ scale }],
       }}

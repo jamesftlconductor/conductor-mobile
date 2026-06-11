@@ -886,7 +886,7 @@ function Step1({
       {/* Brand C mark crowning the first onboarding screen, above the
           headline. 72px, centered. */}
       <Image
-        source={require('../assets/icon.png')}
+        source={require('../assets/c-mark.png')}
         resizeMode="contain"
         style={{ width: 72, height: 72, alignSelf: 'center', marginBottom: 20 }}
       />

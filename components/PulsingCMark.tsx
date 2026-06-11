@@ -39,7 +39,7 @@ export function PulsingCMark({
 
   return (
     <Animated.Image
-      source={require('../assets/icon.png')}
+      source={require('../assets/c-mark.png')}
       resizeMode="contain"
       style={[{ width: size, height: size, opacity: pulse }, style]}
     />

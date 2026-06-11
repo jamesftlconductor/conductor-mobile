@@ -483,7 +483,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
           clipped, and ignores touches so the whole widget taps through. */}
       <View pointerEvents="none" style={styles.cMark}>
         <Image
-          source={require('../assets/icon.png')}
+          source={require('../assets/c-mark.png')}
           resizeMode="contain"
           style={{ width: '100%', height: '100%' }}
         />
