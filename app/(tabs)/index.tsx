@@ -927,7 +927,7 @@ function JokeOfferCard({
 
 export default function TakeoffScreen() {
   const userId = useUserId();
-  const { theme, accentColor } = useTheme();
+  const { theme, accentColor, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   // userId-gated render: if AsyncStorage hasn't yielded an id yet, drop
   // a null surface. The boot guard in _layout.tsx is already steering
@@ -1658,10 +1658,13 @@ export default function TakeoffScreen() {
         <ScrollView
           style={styles.scrollFlex}
           contentContainerStyle={styles.content}>
+          {/* Gold-gradient wordmark on dark; in light mode the gold has no
+              contrast, so tint it to the (deeper) light-mode accent. tintColor
+              flattens to one tone, which is why it's dark-mode-only. */}
           <Image
             source={require('../../assets/wordmark.png')}
             resizeMode="contain"
-            style={styles.wordmark}
+            style={[styles.wordmark, isDark ? null : { tintColor: accentColor }]}
           />
 
           <View style={styles.header}>
