@@ -145,7 +145,7 @@ export default function OnboardRevealScreen() {
   // Error path: still let the user through.
   useEffect(() => {
     if (!error) return;
-    const t = setTimeout(() => router.replace('/(tabs)'), 1500);
+    const t = setTimeout(() => router.replace('/onboard-first-intro' as never), 1500);
     return () => clearTimeout(t);
   }, [error]);
 
@@ -175,7 +175,7 @@ export default function OnboardRevealScreen() {
       </View>
       {cardCount >= cards.length && (
         <>
-          <FadeInCta onPress={() => router.replace('/(tabs)')} />
+          <FadeInCta onPress={() => router.replace('/onboard-first-intro' as never)} />
           <TouchableOpacity
             onPress={() => router.replace('/transition' as never)}
             style={styles.transitionLink}
