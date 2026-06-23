@@ -399,6 +399,7 @@ function RotatingRing({
   pausedSignalId,
   dimmedTypeKey,
   highlightedTypeKey,
+  focusedSignalId,
   expandedRing,
   freshlyAddedIds,
   onSignalPress,
@@ -411,6 +412,7 @@ function RotatingRing({
   pausedSignalId: string | null;
   dimmedTypeKey: string | null;
   highlightedTypeKey: string | null;
+  focusedSignalId: string | null;
   expandedRing: RingKey | null;
   freshlyAddedIds: Set<string>;
   onSignalPress: (s: Signal) => void;
@@ -564,6 +566,7 @@ function RotatingRing({
         const y = size / 2 + ring.radius * Math.sin(angle - Math.PI / 2);
         const tk = typeKeyFor(s);
         const isHighlighted = highlightedTypeKey === tk;
+        const isFocused = focusedSignalId !== null && String(s.id) === focusedSignalId;
         const isDottedDimmed = dimmedTypeKey !== null && !isHighlighted;
         // Age pressure widens pulse rate as the signal lingers.
         // 600ms floor matches inner-ring urgent pulse — never faster
@@ -585,6 +588,7 @@ function RotatingRing({
             paused={pausedSignalId === String(s.id)}
             dim={isDottedDimmed}
             highlight={isHighlighted}
+            focused={isFocused}
             freshlyAdded={freshlyAddedIds.has(String(s.id))}
             onPress={() => onSignalPress(s)}
             crewOverride={crewOverride}
@@ -606,6 +610,7 @@ function SignalDot({
   paused,
   dim,
   highlight,
+  focused,
   freshlyAdded,
   onPress,
   crewOverride,
@@ -620,6 +625,7 @@ function SignalDot({
   paused: boolean;
   dim: boolean;
   highlight: boolean;
+  focused?: boolean;
   freshlyAdded?: boolean;
   onPress: () => void;
   crewOverride?: string;
@@ -635,14 +641,18 @@ function SignalDot({
   // contract so a future "attributed-but-unmapped" branch can diverge
   // from the default accent fallback.
   void isAttributed;
-  const dotColor = crewOverride || accentColor;
+  // A focused dot (the signal the user tapped in the brief) always glows
+  // in the theme accent, overriding any crew tint, so the eye lands on it.
+  const dotColor = focused ? accentColor : crewOverride || accentColor;
   const scale = useRef(new Animated.Value(1)).current;
   const pausedRef = useRef(paused);
   const highlightRef = useRef(highlight);
+  const focusedRef = useRef(focused);
   const isFirstPulseRef = useRef(!!freshlyAdded);
 
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { highlightRef.current = highlight; }, [highlight]);
+  useEffect(() => { focusedRef.current = focused; }, [focused]);
 
   useEffect(() => {
     let stopped = false;
@@ -661,6 +671,8 @@ function SignalDot({
       if (isFirstPulseRef.current && toValue !== 1) {
         peak = 1.85;
         isFirstPulseRef.current = false;
+      } else if (focusedRef.current) {
+        peak = 1.6;
       } else {
         peak = highlightRef.current ? 1.45 : 1.25;
       }
@@ -685,9 +697,11 @@ function SignalDot({
   }, [pulseMs, scale]);
 
   const baseOpacity = dim ? 0.2 : 1;
-  const composedScale = highlight
-    ? Animated.multiply(scale, new Animated.Value(1.2 / 1.25))
-    : scale;
+  // Focused dots get a noticeable extra bump (1.35×) on top of the pulse so
+  // they read as "expanded"; highlighted (type-filter) dots get a subtle 1.2×.
+  const staticBump = focused ? 1.35 : highlight ? 1.2 / 1.25 : 1;
+  const composedScale =
+    staticBump === 1 ? scale : Animated.multiply(scale, new Animated.Value(staticBump));
 
   return (
     // Ring-zoom: dots render directly at their (x, y), so when a ring
@@ -704,10 +718,20 @@ function SignalDot({
             // Signals 10+ days old shift to a subtle amber tint —
             // "this has been waiting" cue, without alarming the user
             // by changing the emoji or position.
-            backgroundColor: dotColor + '26',
-            borderColor: dotColor + '66',
+            backgroundColor: dotColor + (focused ? '40' : '26'),
+            borderColor: dotColor + (focused ? 'ff' : '66'),
             transform: [{ scale: composedScale }],
           },
+          focused
+            ? {
+                // Accent glow halo so the tapped signal stands out on arrival.
+                shadowColor: accentColor,
+                shadowOpacity: 0.9,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: 12,
+              }
+            : null,
         ]}>
         {ageDays >= 10 ? (
           <View
@@ -1570,6 +1594,8 @@ export default function HoverScreen() {
     return () => { cancelled = true; };
   }, []);
   const [selected, setSelected] = useState<Signal | null>(null);
+  // The signal tapped in the brief — its dot glows + expands on arrival.
+  const [focusedSignalId, setFocusedSignalId] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   // Trip-cluster expansion sheet. clusterSel holds the tapped cluster dot;
   // clusterTitle is the trip theme, fetched lazily from the thread record.
@@ -1742,7 +1768,10 @@ export default function HoverScreen() {
             if (cancelled) return;
             match = fresh.find((s) => String(s.id) === String(pendingId));
           }
-          if (match && !cancelled) setSelected(match);
+          if (match && !cancelled) {
+            setFocusedSignalId(String(match.id));
+            setSelected(match);
+          }
         } catch {
           // ignore
         }
@@ -1878,17 +1907,20 @@ export default function HoverScreen() {
 
   function handleRest(signal: Signal) {
     setSelected(null);
+    setFocusedSignalId(null);
     setResolving(false);
     startRest(signal);
   }
 
   function handleClose() {
     setSelected(null);
+    setFocusedSignalId(null);
   }
 
   function handleHold(signal: Signal) {
     const id = signal.id;
     setSelected(null);
+    setFocusedSignalId(null);
     fetch(`${API_BASE}/signals`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -2044,14 +2076,15 @@ export default function HoverScreen() {
             onPress={() => openConductorSheet('hover')}
           />
         </View>
-        {/* Help — tucked just below the Minimap, top-right. */}
+        {/* Help — the directory button, at the very top-right, sitting
+            above the Conductor minimap. */}
         <TouchableOpacity
           onPress={() => setShowHelp(true)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={{
             position: 'absolute',
-            top: insets.top + 122,
-            right: 34,
+            top: insets.top + 24,
+            right: 22,
             width: 24,
             height: 24,
             borderRadius: 12,
@@ -2141,6 +2174,7 @@ export default function HoverScreen() {
           pausedSignalId={pausedSignalId}
           dimmedTypeKey={filterTypeKey}
           highlightedTypeKey={filterTypeKey}
+          focusedSignalId={focusedSignalId}
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={handleDotPress}
@@ -2154,6 +2188,7 @@ export default function HoverScreen() {
           pausedSignalId={pausedSignalId}
           dimmedTypeKey={filterTypeKey}
           highlightedTypeKey={filterTypeKey}
+          focusedSignalId={focusedSignalId}
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={handleDotPress}
@@ -2167,6 +2202,7 @@ export default function HoverScreen() {
           pausedSignalId={pausedSignalId}
           dimmedTypeKey={filterTypeKey}
           highlightedTypeKey={filterTypeKey}
+          focusedSignalId={focusedSignalId}
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={handleDotPress}
