@@ -81,7 +81,24 @@ const INTERSTITIAL_POLL_MS = 3000;
 const PIPELINE_START_KEY = 'onboard_pipeline_started_at';
 const STEP_KEY = 'onboardingStep';
 
-type Phase = 'joining' | 'language' | 'step1' | 'step2' | 'step3' | 'step4' | 'interstitial';
+type Phase = 'joining' | 'language' | 'step1' | 'step2' | 'work' | 'step3' | 'step4' | 'interstitial';
+
+type WorkContext =
+  | 'work_from_home'
+  | 'office'
+  | 'hybrid'
+  | 'self_employed'
+  | 'retired'
+  | 'student';
+
+const WORK_OPTIONS: { value: WorkContext; label: string }[] = [
+  { value: 'work_from_home', label: 'Work from home' },
+  { value: 'office', label: 'Office-based' },
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'self_employed', label: 'Self-employed' },
+  { value: 'retired', label: 'Retired' },
+  { value: 'student', label: 'Student' },
+];
 type Language = 'en' | 'es';
 
 type Who = 'solo' | 'couple' | 'family' | 'multigenerational' | 'investment_property';
@@ -260,6 +277,13 @@ export default function OnboardingScreen() {
   const [detail, setDetail] = useState<Detail>('standard');
   const [humor, setHumor] = useState<Humor>('sometimes');
 
+  // Work context (optional). workContext holds the chosen preset (or null);
+  // workContextText is the free-text alternative; wantsWorkCalendar records
+  // intent to connect a work calendar so Settings can surface the next step.
+  const [workContext, setWorkContext] = useState<WorkContext | null>(null);
+  const [workContextText, setWorkContextText] = useState('');
+  const [wantsWorkCalendar, setWantsWorkCalendar] = useState(false);
+
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [hobbiesPicked, setHobbiesPicked] = useState<Set<string>>(new Set());
 
@@ -318,7 +342,7 @@ export default function OnboardingScreen() {
         // re-running the onboard pipeline — their household already has data.
         if (
           joinType === 'joined_existing' &&
-          (savedPhase === 'step2' || savedPhase === 'step3' || savedPhase === 'step4')
+          (savedPhase === 'step2' || savedPhase === 'work' || savedPhase === 'step3' || savedPhase === 'step4')
         ) {
           setIsJoining(true);
           setPhase(savedPhase);
@@ -329,6 +353,7 @@ export default function OnboardingScreen() {
         if (
           savedPhase === 'step1' ||
           savedPhase === 'step2' ||
+          savedPhase === 'work' ||
           savedPhase === 'step3' ||
           savedPhase === 'step4' ||
           savedPhase === 'interstitial' ||
@@ -482,6 +507,30 @@ export default function OnboardingScreen() {
         }),
       });
     } catch { /* best-effort */ }
+    setPhase('work');
+  }
+
+  // Optional work-context step. Skipping leaves everything unset and still
+  // advances. Stored under preferences so the brief can reason about the
+  // user's working day and conflict detection.
+  async function confirmWork(skipped: boolean) {
+    if (!skipped) {
+      const freeText = workContextText.trim();
+      try {
+        await fetch(`${API_BASE}/signals?type=preferences`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            preferences: {
+              workContext: workContext,
+              workContextNote: freeText || undefined,
+              wantsWorkCalendar: wantsWorkCalendar,
+            },
+          }),
+        });
+      } catch { /* best-effort */ }
+    }
     setPhase('step3');
   }
 
@@ -656,6 +705,19 @@ export default function OnboardingScreen() {
           />
         ) : null}
 
+        {phase === 'work' ? (
+          <StepWork
+            workContext={workContext} setWorkContext={setWorkContext}
+            workContextText={workContextText} setWorkContextText={setWorkContextText}
+            wantsWorkCalendar={wantsWorkCalendar} setWantsWorkCalendar={setWantsWorkCalendar}
+            onContinue={() => confirmWork(false)}
+            onSkip={() => confirmWork(true)}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
+          />
+        ) : null}
+
         {phase === 'step3' ? (
           <Step3
             picked={picked}
@@ -682,14 +744,15 @@ export default function OnboardingScreen() {
           <InterstitialBlock pipelineReady={pipelineReady} progress={progress} />
         ) : null}
 
-        {phase === 'step1' || phase === 'step2' || phase === 'step3' || phase === 'step4' ? (
+        {phase === 'step1' || phase === 'step2' || phase === 'work' || phase === 'step3' || phase === 'step4' ? (
           <StepDots
             s={stepStyles}
             active={
               phase === 'step1' ? 0
               : phase === 'step2' ? 1
-              : phase === 'step3' ? 2
-              : 3
+              : phase === 'work' ? 2
+              : phase === 'step3' ? 3
+              : 4
             }
           />
         ) : null}
@@ -1259,6 +1322,115 @@ function Step4({
   );
 }
 
+// ---------- Work context (optional) ----------
+
+function StepWork({
+  workContext, setWorkContext,
+  workContextText, setWorkContextText,
+  wantsWorkCalendar, setWantsWorkCalendar,
+  onContinue, onSkip, s, theme, accentColor,
+}: {
+  workContext: WorkContext | null;
+  setWorkContext: (w: WorkContext | null) => void;
+  workContextText: string;
+  setWorkContextText: (t: string) => void;
+  wantsWorkCalendar: boolean;
+  setWantsWorkCalendar: (v: boolean) => void;
+  onContinue: () => void;
+  onSkip: () => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
+}) {
+  return (
+    <>
+      <Text style={s.title}>What do you do for work?</Text>
+      <Text style={s.subtitle}>Optional — it helps Conductor reason about your day.</Text>
+
+      <View style={s.priorityGrid}>
+        {WORK_OPTIONS.map((o) => {
+          const active = workContext === o.value;
+          return (
+            <TouchableOpacity
+              key={o.value}
+              onPress={() => setWorkContext(active ? null : o.value)}
+              style={[s.priorityPill, active && s.priorityPillActive]}>
+              <Text style={[s.priorityLabel, active && { color: accentColor, fontWeight: '600' }]}>
+                {o.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <TextInput
+        value={workContextText}
+        onChangeText={setWorkContextText}
+        placeholder="Or describe it in your own words"
+        placeholderTextColor={theme.muted}
+        style={{
+          color: theme.text,
+          ...TOKENS.type.body,
+          minHeight: TOKENS.listItem.minHeight,
+          paddingVertical: 12,
+          paddingHorizontal: 14,
+          backgroundColor: theme.inputBackground,
+          borderRadius: 10,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: theme.border,
+          marginBottom: 24,
+        }}
+      />
+
+      {/* Work-calendar prompt — clear benefit, optional opt-in. The actual
+          connect happens later in Settings; here we just capture intent. */}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => setWantsWorkCalendar(!wantsWorkCalendar)}
+        style={{
+          padding: 16,
+          borderRadius: 12,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: wantsWorkCalendar ? accentColor : theme.border,
+          backgroundColor: theme.surface,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+        <View
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 6,
+            borderWidth: 1.5,
+            borderColor: wantsWorkCalendar ? accentColor : theme.muted,
+            backgroundColor: wantsWorkCalendar ? accentColor : 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          {wantsWorkCalendar ? (
+            <Text style={{ color: '#0f0f0f', fontSize: 13, fontWeight: '700' }}>✓</Text>
+          ) : null}
+        </View>
+        <Text style={{ flex: 1, color: theme.text, ...TOKENS.type.secondary, lineHeight: 19 }}>
+          Adding your work calendar helps Conductor detect conflicts.
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={onContinue} style={s.continueBtn}>
+        <Text style={s.continueBtnText}>Continue →</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={onSkip}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{ marginTop: 14, alignItems: 'center' }}>
+        <Text style={{ color: theme.muted, ...TOKENS.type.secondary }}>Skip for now →</Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
 // ---------- Interstitial: cycling phrases ----------
 //
 // Rebuilt to use the wait time meaningfully:
@@ -1404,10 +1576,10 @@ function InterstitialBlock({
 
 // ---------- Step indicator dots ----------
 
-function StepDots({ active, s }: { active: 0 | 1 | 2 | 3; s: StepStyles }) {
+function StepDots({ active, s }: { active: 0 | 1 | 2 | 3 | 4; s: StepStyles }) {
   return (
     <View style={s.dotsRow}>
-      {[0, 1, 2, 3].map((i) => {
+      {[0, 1, 2, 3, 4].map((i) => {
         const state = i === active ? 'active' : i < active ? 'done' : 'upcoming';
         return (
           <View
