@@ -44,6 +44,27 @@ type Reveal = {
   highlights: string[];
 };
 
+type VaultPreviewItem = {
+  id: string;
+  description?: string;
+  provider?: string | null;
+  category?: string;
+};
+
+// Coarse emoji per vault category — mirrors the vault screen's display
+// buckets closely enough for a glanceable hero preview.
+function vaultEmoji(category?: string): string {
+  const c = (category || '').toLowerCase();
+  if (c.includes('insur') || c.includes('protection')) return '🛡';
+  if (c.includes('subscription')) return '🔄';
+  if (c.includes('lease') || c.includes('registration')) return '🔑';
+  if (c.includes('warrant')) return '🔧';
+  if (c.includes('medical') || c.includes('health')) return '💊';
+  if (c.includes('financ')) return '💰';
+  if (c.includes('home')) return '🏠';
+  return '📄';
+}
+
 function formatEta(eta: string): string {
   const ms = Date.parse(eta);
   if (isNaN(ms)) return '';
@@ -62,6 +83,7 @@ export default function OnboardRevealScreen() {
   const [reveal, setReveal] = useState<Reveal | null>(null);
   const [error, setError] = useState(false);
   const [cardCount, setCardCount] = useState(0);
+  const [vaultPreview, setVaultPreview] = useState<VaultPreviewItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +113,26 @@ export default function OnboardRevealScreen() {
     poll();
     return () => { cancelled = true; };
   }, []);
+
+  // When the reveal reports vault items, pull the real records so we can
+  // lead the screen with them (the reveal payload only carries a count).
+  useEffect(() => {
+    if (!reveal || reveal.vaultItemsFound <= 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=vault&userId=${userId}&sort=urgency`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const items: VaultPreviewItem[] = Array.isArray(data?.items) ? data.items : [];
+        setVaultPreview(items.slice(0, 5));
+      } catch {
+        // best-effort — the totals card still reports the count
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [reveal]);
 
   const cards: { title: string; body: string }[] = [];
   if (reveal) {
@@ -167,6 +209,7 @@ export default function OnboardRevealScreen() {
 
   return (
     <View style={styles.container}>
+      {vaultPreview.length > 0 ? <VaultHero items={vaultPreview} /> : null}
       <Text style={styles.header}>Here's what I found</Text>
       <View style={styles.cardStack}>
         {cards.slice(0, cardCount).map((card, i) => (
@@ -187,6 +230,60 @@ export default function OnboardRevealScreen() {
         </>
       )}
     </View>
+  );
+}
+
+// Vault hero — leads the reveal when the pipeline surfaced vault items.
+// The most tangible "it already knows my life" moment, so it goes first.
+function VaultHero({ items }: { items: VaultPreviewItem[] }) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: CARD_FADE_MS,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: CARD_FADE_MS,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+  return (
+    <Animated.View style={[styles.vaultHero, { opacity, transform: [{ translateY }] }]}>
+      <Text style={styles.vaultHeroLead}>
+        The Conductor found your insurance policies, subscriptions, and documents.
+      </Text>
+      <View style={styles.vaultList}>
+        {items.map((it) => (
+          <View key={it.id} style={styles.vaultRow}>
+            <Text style={styles.vaultEmoji}>{vaultEmoji(it.category)}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.vaultTitle} numberOfLines={1}>
+                {it.description || it.provider || 'Document'}
+              </Text>
+              {it.provider && it.description ? (
+                <Text style={styles.vaultSub} numberOfLines={1}>
+                  {it.provider}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        ))}
+      </View>
+      <TouchableOpacity
+        onPress={() => router.push('/vault' as never)}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Text style={styles.vaultAddMore}>Tap to add more →</Text>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -270,6 +367,32 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontWeight: '300',
     letterSpacing: 0.3,
     marginBottom: 28,
+  },
+  vaultHero: {
+    padding: 20,
+    borderRadius: TOKENS.card.borderRadius,
+    borderWidth: 1,
+    borderColor: accentColor,
+    backgroundColor: theme.surface,
+    marginBottom: 24,
+  },
+  vaultHeroLead: {
+    color: theme.text,
+    fontSize: 16,
+    fontWeight: '400',
+    lineHeight: 23,
+    marginBottom: 16,
+  },
+  vaultList: { gap: 12, marginBottom: 14 },
+  vaultRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  vaultEmoji: { fontSize: 18, width: 24, textAlign: 'center' },
+  vaultTitle: { color: theme.text, ...TOKENS.type.body, fontWeight: '500' },
+  vaultSub: { color: theme.muted, ...TOKENS.type.secondary },
+  vaultAddMore: {
+    color: accentColor,
+    ...TOKENS.type.secondary,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   cardStack: { gap: 14 },
   card: {
