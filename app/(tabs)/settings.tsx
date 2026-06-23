@@ -100,6 +100,10 @@ type Settings = {
   // Financial intelligence — how much engagement Conductor brings to
   // money topics. Default is 'silent' (only anomalies surface).
   financialAwareness: FinancialAwareness;
+  // Gmail real-time monitoring — when on, Conductor watches the inbox
+  // and surfaces important mail within seconds rather than at the next
+  // scheduled sweep. Default on.
+  realtimeMonitoring: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -123,6 +127,7 @@ const DEFAULTS: Settings = {
   overwatchHour: 23,          // 11pm default per spec
   weekendTakeoffDelay: false,
   financialAwareness: 'silent',
+  realtimeMonitoring: true,
 };
 
 const FINANCIAL_OPTIONS: { id: FinancialAwareness; title: string; sub: string }[] = [
@@ -178,6 +183,7 @@ async function persistAndSync(settings: Settings, userId: string) {
     ['overwatchHour', String(settings.overwatchHour)],
     ['weekendTakeoffDelay', String(settings.weekendTakeoffDelay)],
     ['financialAwareness', settings.financialAwareness],
+    ['realtimeMonitoring', String(settings.realtimeMonitoring)],
     ...CATEGORIES.map(
       (c) => [c.storeKey, String(settings.categoryEnabled[c.key])] as [string, string]
     ),
@@ -205,6 +211,7 @@ async function persistAndSync(settings: Settings, userId: string) {
         overwatchHour: settings.overwatchHour,
         weekendTakeoffDelay: settings.weekendTakeoffDelay,
         financialAwareness: settings.financialAwareness,
+        realtimeMonitoring: settings.realtimeMonitoring,
       },
     }),
   }).catch(() => {});
@@ -224,6 +231,7 @@ async function loadSettings(): Promise<Settings> {
     'overwatchHour',
     'weekendTakeoffDelay',
     'financialAwareness',
+    'realtimeMonitoring',
     ...CATEGORIES.map((c) => c.storeKey),
   ];
   try {
@@ -258,6 +266,7 @@ async function loadSettings(): Promise<Settings> {
           ? v
           : DEFAULTS.financialAwareness;
       })(),
+      realtimeMonitoring: bool('realtimeMonitoring', DEFAULTS.realtimeMonitoring),
       categoryEnabled: CATEGORIES.reduce((acc, c) => {
         acc[c.key] = bool(c.storeKey, DEFAULTS.categoryEnabled[c.key]);
         return acc;
@@ -1788,6 +1797,7 @@ export default function SettingsScreen() {
   function setChildcare(v: boolean) { update({ ...settings, childcareEnabled: v }); }
   function setHorizon(v: boolean) { update({ ...settings, horizonEnabled: v }); }
   function setMidday(v: boolean) { update({ ...settings, middayEnabled: v }); }
+  function setRealtime(v: boolean) { update({ ...settings, realtimeMonitoring: v }); }
 
   function handleConnectOura() {
     Linking.openURL(`${API_BASE}/oura/auth?userId=${userId}`);
@@ -2152,6 +2162,12 @@ export default function SettingsScreen() {
               <Text style={styles.connectedItem}>Calendar ✓</Text>
             </View>
           }
+        />
+        <ToggleRow
+          label="Real-time monitoring"
+          subtext="Conductor alerts you within seconds of important emails arriving."
+          value={settings.realtimeMonitoring}
+          onChange={setRealtime}
         />
         <ChevronRow label="Compass" onPress={() => router.push('/compass')} />
         <ChevronRow
