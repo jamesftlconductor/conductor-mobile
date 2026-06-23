@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Image, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import LottieView from 'lottie-react-native';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
@@ -54,6 +55,7 @@ import { useShakeToAsk } from '@/components/useShakeToAsk';
 import { conductorHaptics } from '@/app/haptics';
 import { useTheme } from '@/app/theme';
 import { useMemo } from 'react';
+import { weatherLottieSource } from '@/utils/weatherLottie';
 // Defensive native-module require: the binary running this OTA may
 // predate the expo-speech install. A top-level `import * as Speech
 // from 'expo-speech'` would crash the bundle on that binary. Defer
@@ -1641,8 +1643,27 @@ export default function TakeoffScreen() {
 
   const bandTheme = mode.title === 'Takeoff' ? makeTakeoffTheme(theme) : makeClearanceTheme(theme);
 
+  // Weather-reactive Lottie backdrop. Falls back to null (the solid dark
+  // band background) when there's no weather data or no matching animation.
+  const weatherLottie = useMemo(() => {
+    const hour = new Date().getHours();
+    const isNight = hour < 6 || hour >= 19;
+    return weatherLottieSource(pulseData?.weather?.conditions, { isNight });
+  }, [pulseData?.weather?.conditions]);
+
   return (
     <View style={[styles.container, { backgroundColor: bandTheme.bg }]}>
+      {weatherLottie ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: 0.6 }]}>
+          <LottieView
+            source={weatherLottie}
+            autoPlay
+            loop
+            resizeMode="cover"
+            style={{ flex: 1 }}
+          />
+        </View>
+      ) : null}
       {/* Positioned to the left of the Minimap (40x40 at right: 20, top: 60).
           Minimap's left edge is 60px from screen right; HelpButton's right
           edge sits at 68px to give an 8px gap. */}
