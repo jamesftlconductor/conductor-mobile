@@ -43,7 +43,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const BG = '#0f0f0f';
 const OFF_WHITE = '#f0ede8';
 const MUTED = '#5a5855';
 const SAGE = '#86efac';
@@ -282,8 +281,6 @@ async function loadSettings(): Promise<Settings> {
 // mount and on focus so a change made in one place reflects
 // everywhere.
 function SecuritySection() {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [enabled, setEnabledLocal] = useState(false);
   const [lockAfter, setLockAfterLocal] = useState<security.LockAfterMinutes>(5);
@@ -534,7 +531,7 @@ function ToggleRow({
 // AsyncStorage on focus; falls through to the current calendar
 // month when nothing is stored yet.
 function AppIconRow() {
-  const { theme, accentColor } = useTheme();
+  const { theme } = useTheme();
   const [icon, setIcon] = useState<IconKey>('january');
   useEffect(() => {
     let cancelled = false;
@@ -795,11 +792,6 @@ function OverwatchPickerRow({
       </Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {OVERWATCH_OPTIONS.map((o, idx) => {
-          const active = o.hour === value && (
-            o.label === '11pm' ? value === 23 :
-            o.label === '11:30pm' ? value === 23 :
-            true
-          );
           // 11pm / 11:30pm share hour=23. Disambiguate by index so
           // only one of the two reads as "active" at a time. We
           // remember which label was last picked via a separate
@@ -841,8 +833,6 @@ function OverwatchPickerRow({
 
 function HouseholdNameRow() {
   const userId = useUserId();
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [name, setName] = useState<string>('');
   const [editing, setEditing] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -913,8 +903,6 @@ function HouseholdNameRow() {
 
 function LanguageRow() {
   const userId = useUserId();
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [lang, setLang] = useState<'en' | 'es'>('en');
   const [loaded, setLoaded] = useState(false);
 
@@ -988,7 +976,6 @@ type StyleDetail = 'brief' | 'standard' | 'thorough';
 
 function AppearanceBlock() {
   const { themeMode, accentKey, theme, accentColor, isDark, setThemeMode, setAccentKey } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const modes: { id: ThemeMode; label: string }[] = [
     { id: 'dark', label: 'Dark' },
     { id: 'light', label: 'Light' },
@@ -1197,7 +1184,6 @@ function WhatYouLoveBlock() {
 function VoiceStyleBlock() {
   const userId = useUserId();
   const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [tone, setTone] = useState<StyleTone>('balanced');
   const [humor, setHumor] = useState<StyleHumor>('occasionally');
   const [detail, setDetail] = useState<StyleDetail>('standard');
@@ -2009,7 +1995,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
 
-        <CollapsibleSection title="Your Brief" defaultOpen>
+        <CollapsibleSection title="Your Brief">
         <ChevronRow
           label="Takeoff"
           rightText={format12Hour(settings.takeoffTime)}
