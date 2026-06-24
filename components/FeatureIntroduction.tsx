@@ -45,7 +45,7 @@ export default function FeatureIntroduction({
           justifyContent: 'flex-start',
           alignItems: 'center',
           paddingHorizontal: 32,
-          paddingTop: 80,
+          paddingTop: 60,
           paddingBottom: 32,
         }}
         onPress={onDismiss}>
