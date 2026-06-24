@@ -1464,10 +1464,12 @@ function CrewFilterAvatar({
 }) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const scale = useRef(new Animated.Value(active ? 1.3 : 1)).current;
+  // 1.56 = the prior 1.3x enlarge, 20% larger again, so the active crew
+  // member's avatar reads as the prominent focal point of the radar.
+  const scale = useRef(new Animated.Value(active ? 1.56 : 1)).current;
   useEffect(() => {
     Animated.timing(scale, {
-      toValue: active ? 1.3 : 1,
+      toValue: active ? 1.56 : 1,
       duration: 300,
       easing: Easing.inOut(Easing.ease),
       useNativeDriver: true,
