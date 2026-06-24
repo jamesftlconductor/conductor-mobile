@@ -21,8 +21,10 @@ import {
 import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { PulsingCMark } from '@/components/PulsingCMark';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { SignalFilterPills } from '@/components/SignalFilterPills';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { metaForRing, type Signal, TYPE_META } from '@/components/signalTypes';
+import { applyFilter as applyMeCrewHouse, useSignalFilter } from '@/hooks/useSignalFilter';
 import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
 
@@ -116,6 +118,11 @@ export default function CalendarScreen() {
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [addSheetEta, setAddSheetEta] = useState<string>('');
   const [crewColorMap, setCrewColorMap] = useState<Record<string, string>>({});
+  // Me / Crew / House filter — applied to the per-day signal lists so the
+  // grid dots, counts, and the tapped-day sheet all narrow together. Vault
+  // deadlines and crew events have no owner and are left untouched, matching
+  // Horizon's behavior.
+  const { filter: meCrewHouse, setFilter: setMeCrewHouse } = useSignalFilter('all');
 
   const monthParam = `${year}-${pad2(month0 + 1)}`;
   const today = todayYmd();
@@ -187,7 +194,17 @@ export default function CalendarScreen() {
   // Pad to a multiple of 7 so the bottom row stays full-width.
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const days = data?.days || {};
+  // Narrow each day bucket's signals by the active Me/Crew/House filter.
+  // Vault + crew events pass through unchanged (they carry no owner).
+  const days = useMemo<Record<string, DayBucket>>(() => {
+    const raw = data?.days || {};
+    if (meCrewHouse === 'all') return raw;
+    const out: Record<string, DayBucket> = {};
+    for (const [key, bucket] of Object.entries(raw)) {
+      out[key] = { ...bucket, signals: applyMeCrewHouse(bucket.signals, meCrewHouse, userId) };
+    }
+    return out;
+  }, [data, meCrewHouse, userId]);
   const selectedBucket: DayBucket | null = selectedYmd
     ? days[selectedYmd] || { signals: [], vault: [], crewEvents: [] }
     : null;
@@ -225,6 +242,7 @@ export default function CalendarScreen() {
           </TouchableOpacity>
         }
       />
+      <SignalFilterPills value={meCrewHouse} onChange={setMeCrewHouse} />
       <View style={styles.monthSwitcher}>
         <TouchableOpacity
           onPress={() => shiftMonth(-1)}

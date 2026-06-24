@@ -17,8 +17,10 @@ import {
 
 import { HelpButton } from '@/components/HelpButton';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { SignalFilterPills } from '@/components/SignalFilterPills';
 import { TYPE_META } from '@/components/signalTypes';
 import { PulsingCMark } from '@/components/PulsingCMark';
+import { applyFilter as applyMeCrewHouse, useSignalFilter } from '@/hooks/useSignalFilter';
 import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
 
@@ -92,6 +94,12 @@ function JournalScreen() {
   const [days, setDays] = useState<Day[]>([]);
   const [streak, setStreak] = useState<StreakData>(null);
   const [loading, setLoading] = useState(true);
+  // Me / Crew / House filter. Journal entries carry an owning `userId`
+  // (not the crewMemberId that live signals use), so we route each entry
+  // through applyFilter as a one-off candidate keyed on userId — that keeps
+  // the categorization rules in one place: Me = my entries, Crew = another
+  // member's, House = unowned house-type entries.
+  const { filter: meCrewHouse, setFilter: setMeCrewHouse } = useSignalFilter('all');
   const [pastYears, setPastYears] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [yearText, setYearText] = useState<string | null>(null);
@@ -140,9 +148,27 @@ function JournalScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const filteredDays = useMemo<Day[]>(() => {
+    if (meCrewHouse === 'all') return days;
+    return days
+      .map((day) => ({
+        ...day,
+        entries: day.entries.filter(
+          (e) =>
+            applyMeCrewHouse(
+              [{ type: e.type ?? undefined, crewMemberId: e.userId }],
+              meCrewHouse,
+              userId,
+            ).length > 0,
+        ),
+      }))
+      .filter((day) => day.entries.length > 0);
+  }, [days, meCrewHouse, userId]);
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
     <ScreenHeader title="Memory" subtitle="What Conductor has handled" />
+    <SignalFilterPills value={meCrewHouse} onChange={setMeCrewHouse} />
     <HelpButton cardId="caught" />
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
 
@@ -167,7 +193,11 @@ function JournalScreen() {
         </Text>
       )}
 
-      {!loading && days.map((day) => (
+      {!loading && days.length > 0 && filteredDays.length === 0 && (
+        <Text style={styles.empty}>Nothing in this view.</Text>
+      )}
+
+      {!loading && filteredDays.map((day) => (
         <View key={day.date} style={styles.dayBlock}>
           <Text style={styles.dayHeader}>{formatDayHeader(day.date)}</Text>
           {day.entries.map((e, i) => {
