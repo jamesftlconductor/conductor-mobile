@@ -390,7 +390,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(breatheAnim, {
-          toValue: 0.4,
+          toValue: 0.7,
           duration: 2000,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
