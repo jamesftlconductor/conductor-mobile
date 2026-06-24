@@ -13,6 +13,7 @@ import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthCon
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
 import { WordmarkLoader } from '@/components/WordmarkLoader';
+import { WordmarkReveal } from '@/components/WordmarkReveal';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
@@ -1037,6 +1038,27 @@ export default function TakeoffScreen() {
     'ack' | 'dismissed' | null
   >(null);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  // Feedback row fades out entirely once the user signs off — the signal is
+  // received silently, nothing replaces it. Reset when a fresh brief loads.
+  const [feedbackHidden, setFeedbackHidden] = useState(false);
+  const feedbackOpacity = useRef(new Animated.Value(1)).current;
+  // Opening wordmark reveal — shown once per day on first open. Gated on a
+  // stored date key so relaunches the same day skip it.
+  const [showIntro, setShowIntro] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const d = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const seen = await AsyncStorage.getItem('hasSeenIntro');
+        if (seen !== today) {
+          setShowIntro(true);
+          AsyncStorage.setItem('hasSeenIntro', today).catch(() => {});
+        }
+      } catch { /* ignore — just skip the reveal */ }
+    })();
+  }, []);
   // Ask Conductor — single-shot Q&A. Always fresh call (server-side
   // 30min cache covers the duplicate-question case). State carries the
   // current question draft, the loading flag, the answer/error result.
@@ -1231,6 +1253,8 @@ export default function TakeoffScreen() {
     // stale content so the new brief's overflow doesn't leak from the
     // previous session.
     setFeedback(null);
+    setFeedbackHidden(false);
+    feedbackOpacity.setValue(1);
     setTheRead(null);
     setTheReadExpanded(false);
     setWeekInReview(null);
@@ -1559,9 +1583,10 @@ export default function TakeoffScreen() {
   }
 
   function handleFeedback(rating: 'up' | 'down') {
-    // Local state updates immediately so the UI feels instant. The POST is
-    // fire-and-forget — backend write failures stay silent because the user
-    // already saw their tap acknowledged.
+    // Light haptic acknowledges the tap; the POST is fire-and-forget so a
+    // backend write failure stays silent. The row then fades out entirely —
+    // The Conductor received the signal, nothing takes its place.
+    conductorHaptics.feedbackReceived();
     setFeedback(rating);
     const briefType = mode.endpoint === 'brief' ? 'takeoff' : 'clearance';
     fetch('https://conductor-ivory.vercel.app/api/feedback', {
@@ -1574,6 +1599,13 @@ export default function TakeoffScreen() {
         briefDate: new Date().toISOString(),
       }),
     }).catch(() => {});
+    Animated.timing(feedbackOpacity, {
+      toValue: 0,
+      duration: 400,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setFeedbackHidden(true);
+    });
   }
 
   function handleConnect() {
@@ -2393,12 +2425,11 @@ export default function TakeoffScreen() {
             </View>
           ) : null}
 
-          {!loading ? (
+          {!loading && !feedbackHidden ? (
             // Signature feedback — right-aligned, single-line, reads like
-            // signing off on the brief. ✓ is always white; ✗ defaults to
-            // muted and brightens when chosen. Both dim to 0.2 when their
-            // sibling is the active selection.
-            <View style={styles.feedbackSignature}>
+            // signing off on the brief. On tap it fades out entirely (see
+            // handleFeedback); nothing replaces it.
+            <Animated.View style={[styles.feedbackSignature, { opacity: feedbackOpacity }]}>
               <Text style={styles.feedbackSigPrompt}>Was this helpful?</Text>
               <TouchableOpacity
                 onPress={() => handleFeedback('up')}
@@ -2427,7 +2458,7 @@ export default function TakeoffScreen() {
                   ✗
                 </Text>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           ) : null}
 
           {!loading && transparency ? (
@@ -2584,6 +2615,10 @@ export default function TakeoffScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Opening wordmark reveal — overlays everything on the first open of
+          the day, then fades away to reveal Ground. */}
+      {showIntro ? <WordmarkReveal onDone={() => setShowIntro(false)} /> : null}
     </View>
   );
 }

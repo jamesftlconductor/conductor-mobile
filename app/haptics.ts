@@ -31,6 +31,10 @@ export const conductorHaptics = {
   swipeComplete: () =>
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}),
 
+  // Light tap acknowledging the user signed off on the brief (👍/👎).
+  feedbackReceived: () =>
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}),
+
   choreDone: () =>
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}),
 
