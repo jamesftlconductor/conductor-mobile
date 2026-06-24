@@ -1446,6 +1446,54 @@ const CREW_COLORS = [
 const crewColor = (index: number): string =>
   CREW_COLORS[Math.max(0, index ?? 0) % CREW_COLORS.length];
 
+// Crew-filter avatar — the member's photo (or initial) circle. When this
+// member is the active filter it grows to 1.3x over 300ms to spotlight the
+// selection, and eases back to 1x when the filter is cleared or switched.
+function CrewFilterAvatar({
+  active,
+  borderColor,
+  hasPhoto,
+  photoUrl,
+  initial,
+}: {
+  active: boolean;
+  borderColor: string;
+  hasPhoto: boolean;
+  photoUrl?: string | null;
+  initial: string;
+}) {
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const scale = useRef(new Animated.Value(active ? 1.3 : 1)).current;
+  useEffect(() => {
+    Animated.timing(scale, {
+      toValue: active ? 1.3 : 1,
+      duration: 300,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [active, scale]);
+  return (
+    <Animated.View
+      style={[
+        styles.crewFilterCircle,
+        { borderColor },
+        active && styles.crewFilterCircleActive,
+        { transform: [{ scale }] },
+      ]}>
+      {hasPhoto ? (
+        <Image
+          source={{ uri: photoUrl as string }}
+          style={styles.crewFilterPhoto}
+          onError={() => { /* swallow — fall through to initials on next render */ }}
+        />
+      ) : (
+        <Text style={styles.crewFilterInitials}>{initial}</Text>
+      )}
+    </Animated.View>
+  );
+}
+
 export default function HoverScreen() {
   const userId = useUserId();
   if (!userId) return null;
@@ -2068,22 +2116,13 @@ export default function HoverScreen() {
                     style={styles.crewFilterMember}
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <View
-                      style={[
-                        styles.crewFilterCircle,
-                        { borderColor: crewColor(i) },
-                        crewFilter === m.name && styles.crewFilterCircleActive,
-                      ]}>
-                      {hasPhoto ? (
-                        <Image
-                          source={{ uri: m.photoUrl as string }}
-                          style={styles.crewFilterPhoto}
-                          onError={() => { /* swallow — fall through to initials on next render */ }}
-                        />
-                      ) : (
-                        <Text style={styles.crewFilterInitials}>{initial}</Text>
-                      )}
-                    </View>
+                    <CrewFilterAvatar
+                      active={crewFilter === m.name}
+                      borderColor={crewColor(i)}
+                      hasPhoto={hasPhoto}
+                      photoUrl={m.photoUrl}
+                      initial={initial}
+                    />
                     <Text style={styles.crewFilterName} numberOfLines={1}>
                       {m.name}
                     </Text>
