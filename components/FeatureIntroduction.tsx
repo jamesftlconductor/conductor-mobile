@@ -32,14 +32,21 @@ export default function FeatureIntroduction({
       animationType="fade"
       statusBarTranslucent
       onRequestClose={onDismiss}>
-      {/* Pressable backdrop — tapping outside the card dismisses. */}
+      {/* Pressable backdrop — tapping outside the card dismisses. The card
+          is pinned near the TOP of the screen (not centered) so its "Got it"
+          button never lands over the brief's action area lower down (e.g. the
+          "Conductor took care of N things" band), where the overlap made the
+          button awkward to tap. paddingTop clears the status bar / Dynamic
+          Island on notched devices. */}
       <Pressable
         style={{
           flex: 1,
           backgroundColor: 'rgba(0,0,0,0.6)',
-          justifyContent: 'center',
+          justifyContent: 'flex-start',
           alignItems: 'center',
-          padding: 32,
+          paddingHorizontal: 32,
+          paddingTop: 80,
+          paddingBottom: 32,
         }}
         onPress={onDismiss}>
         {/* Inner Pressable absorbs the press so a tap on the card doesn't
