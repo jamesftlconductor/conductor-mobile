@@ -19,6 +19,7 @@ import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { getUserId, useUserId } from '@/hooks/useUserId';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
+import { ChevronDown } from 'lucide-react-native';
 import { InfoHint } from '@/components/InfoHint';
 import { Tooltip } from '@/components/Tooltip';
 import { useShakeToAsk } from '@/components/useShakeToAsk';
@@ -1703,6 +1704,18 @@ export default function TakeoffScreen() {
                   <PulseFlagsSection flags={pulseData.synthesisFlags} />
                 </View>
               ) : null}
+              {/* Expand affordance — bottom-right chevron signalling the card
+                  opens. Rotates to point up once expanded. Only shown when
+                  there's a data card to expand into. */}
+              {pulseData ? (
+                <View style={styles.pulseChevron} pointerEvents="none">
+                  <ChevronDown
+                    size={12}
+                    color={theme.muted}
+                    style={{ transform: [{ rotate: pulseExpanded ? '180deg' : '0deg' }] }}
+                  />
+                </View>
+              ) : null}
             </TouchableOpacity>
           ) : null}
 
@@ -2573,6 +2586,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   pulseWrap: {
     marginTop: 4,
     marginBottom: 16,
+  },
+  pulseChevron: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
   },
   pulseLabelRow: {
     flexDirection: 'row',
