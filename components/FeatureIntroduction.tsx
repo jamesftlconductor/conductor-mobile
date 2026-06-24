@@ -4,7 +4,7 @@
 // screen needs.
 
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity } from 'react-native';
+import { Modal, Text, Pressable } from 'react-native';
 
 import { useTheme } from '@/app/theme';
 
@@ -26,11 +26,14 @@ export default function FeatureIntroduction({
 }: Props) {
   const { theme, accentColor } = useTheme();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      {/* Outer TouchableOpacity is the tap-outside-to-dismiss
-          backdrop. activeOpacity:1 keeps it from visibly flashing
-          on tap; only the dismiss handler fires. */}
-      <TouchableOpacity
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onDismiss}>
+      {/* Pressable backdrop — tapping outside the card dismisses. */}
+      <Pressable
         style={{
           flex: 1,
           backgroundColor: 'rgba(0,0,0,0.6)',
@@ -38,9 +41,17 @@ export default function FeatureIntroduction({
           alignItems: 'center',
           padding: 32,
         }}
-        activeOpacity={1}
         onPress={onDismiss}>
-        <View
+        {/* Inner Pressable absorbs the press so a tap on the card doesn't
+            fall through to the backdrop AND — critically — gives the card
+            its own touch responder. The previous version nested the "Got it"
+            TouchableOpacity inside a plain <View> inside the backdrop
+            TouchableOpacity; on iOS that View never claimed the responder,
+            so the parent backdrop swallowed the press and the button wasn't
+            reliably tappable. This mirrors the working modal pattern (Pressable
+            backdrop + Pressable absorber) used elsewhere on the Ground screen. */}
+        <Pressable
+          onPress={() => {}}
           style={{
             backgroundColor: theme.surface,
             borderRadius: 16,
@@ -69,13 +80,20 @@ export default function FeatureIntroduction({
             }}>
             {description}
           </Text>
-          <TouchableOpacity onPress={onDismiss}>
+          <Pressable
+            onPress={onDismiss}
+            hitSlop={{ top: 12, bottom: 12, left: 24, right: 24 }}
+            style={({ pressed }) => ({
+              paddingVertical: 8,
+              paddingHorizontal: 16,
+              opacity: pressed ? 0.6 : 1,
+            })}>
             <Text style={{ color: accentColor, fontSize: 15, fontWeight: '600' }}>
               Got it →
             </Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
