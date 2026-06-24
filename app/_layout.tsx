@@ -484,8 +484,47 @@ function BootGuard() {
   return null;
 }
 
+// Boot splash — a neutral full-screen surface shown ONLY while the initial
+// AsyncStorage userId read is in flight (loaded === false). Rendering this
+// instead of the navigator during that window is what removes BOTH flash
+// directions: a fresh install can't paint the (tabs) group before the guard
+// decides, and a returning authenticated user can't see onboarding flash
+// during the ~50ms read. Matches the native splash background so the
+// hand-off is seamless.
+function BootSplash() {
+  return (
+    <View style={bootSplashStyles.container}>
+      <Text style={bootSplashStyles.mark}>CONDUCTOR</Text>
+    </View>
+  );
+}
+
+const bootSplashStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0f0f0f',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mark: {
+    color: '#3a3a3a',
+    fontSize: 13,
+    letterSpacing: 4,
+    fontWeight: '500',
+  },
+});
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  // Boot state drives WHAT renders, not just a post-mount side effect. Until
+  // the AsyncStorage read resolves we render nothing navigable; once it does,
+  // Stack.Protected gates the (tabs) group behind a real userId so no tab
+  // screen can mount on a fresh install. This replaces the previous
+  // effect-only redirect, which let the tabs paint first (the black-screen
+  // bug) before BootGuard's router.replace could fire.
+  const loaded = useUserIdLoaded();
+  const userId = useUserId();
+  const isAuthed = !!userId;
 
   return (
     <AppErrorBoundary Fallback={FallbackComponent}>
@@ -494,29 +533,47 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <DeepLinkHandler />
           <BootGuard />
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen name="onboard-first-intro" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen name="horizon" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="vault" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="compass" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="crew" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="programme" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="signal-filters" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="providers" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="inventory" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="communicate" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="directory" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="junior" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="privacy-dashboard" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="profile-setup" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="recurring-events" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="missed-cues" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="calendar" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="channel" options={{ headerShown: false, gestureEnabled: true }} />
-            <Stack.Screen name="icon-selector" options={{ headerShown: false, gestureEnabled: true }} />
+          {!loaded ? (
+            <BootSplash />
+          ) : (
+          <Stack screenOptions={{ headerShown: false }}>
+            {/* Unauthenticated surface. Declared first so onboarding is the
+                deterministic landing route once (tabs) is gated out — the
+                tab group never mounts on a fresh install. */}
+            <Stack.Protected guard={!isAuthed}>
+              <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+            </Stack.Protected>
+            {/* Authenticated app surface — cannot mount until a userId exists
+                in AsyncStorage. */}
+            <Stack.Protected guard={isAuthed}>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="horizon" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="vault" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="compass" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="crew" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="programme" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="signal-filters" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="providers" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="inventory" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="communicate" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="directory" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="junior" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="privacy-dashboard" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="profile-setup" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="recurring-events" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="missed-cues" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="calendar" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="channel" options={{ headerShown: false, gestureEnabled: true }} />
+              <Stack.Screen name="icon-selector" options={{ headerShown: false, gestureEnabled: true }} />
+              {/* Post-auth first-run intro. Reached only from onboard-reveal
+                  AFTER the OAuth userId is persisted, and it immediately
+                  router.replace('/(tabs)') on mount — so it lives in the
+                  authed group to keep it out of the fresh-install (!isAuthed)
+                  candidate set, where its tabs-redirect would fight the guard. */}
+              <Stack.Screen name="onboard-first-intro" options={{ headerShown: false, gestureEnabled: false }} />
+            </Stack.Protected>
           </Stack>
+          )}
           {/* Root-mounted ConductorSheet — visibility owned by
               useConductorSheet so any minimap from any screen opens
               the same instance. Lives above <Stack> so it overlays
