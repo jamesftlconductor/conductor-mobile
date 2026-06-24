@@ -361,7 +361,7 @@ export default function ProgrammeScreen() {
       days.push({ ymd: key, date: d, header: dayHeader(d, today), items });
     }
     return days;
-  }, [signals, vault, crew, calendar, accentColor]);
+  }, [signals, vault, crew, calendar, accentColor, meCrewHouse, userId]);
 
   function handleItemTap(item: ProgrammeItem) {
     // Signals navigate to Hover with the signal pre-selected — same flow
