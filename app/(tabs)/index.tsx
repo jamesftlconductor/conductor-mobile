@@ -16,45 +16,15 @@ import { PulsingCMark } from '@/components/PulsingCMark';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
-import { useDiscovered } from '@/hooks/useDiscovered';
 import { getUserId, useUserId } from '@/hooks/useUserId';
-import FeatureIntroduction from '@/components/FeatureIntroduction';
 import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
+import { InfoHint } from '@/components/InfoHint';
 import { Tooltip } from '@/components/Tooltip';
 import { useShakeToAsk } from '@/components/useShakeToAsk';
 import { conductorHaptics } from '@/app/haptics';
 import { useTheme } from '@/app/theme';
 import { weatherLottieSource } from '@/utils/weatherLottie';
-
-// Per-feature intro content. Lives next to the call site so copy
-// changes don't require touching the modal component.
-const FEATURE_INTROS: Record<string, { name: string; icon: string; description: string }> = {
-  pulse: {
-    name: 'The Pulse',
-    icon: '◉',
-    description:
-      'One sentence that synthesizes your health, the weather, and your signal load into what kind of day it actually is.',
-  },
-  signals: {
-    name: 'Signals',
-    icon: '●',
-    description:
-      "Anything your household needs to know or act on. Tap any signal to see details, context, and next steps.",
-  },
-  minimap: {
-    name: 'The Conductor',
-    icon: '⌖',
-    description:
-      'Your household in miniature. Tap from any screen to ask The Conductor anything.',
-  },
-  feedback: {
-    name: 'Brief feedback',
-    icon: '✓',
-    description:
-      "Tell The Conductor how it's doing. Your feedback shapes tomorrow's brief.",
-  },
-};
 
 // Defensive native-module require: the binary running this OTA may
 // predate the expo-speech install. A top-level `import * as Speech
@@ -936,24 +906,9 @@ export default function TakeoffScreen() {
   // unidentified users to /onboarding; this is the secondary belt for
   // the brief few frames before the redirect fires.
   if (!userId) return null;
-  // Feature-discovery dimming state. Each of these surfaces renders
-  // at 45% opacity until the user taps it once and reads the intro,
-  // then permanently lights up. introFeatureId tracks which intro
-  // modal is currently open; clearing it on dismiss flips the
-  // discovered state for that feature.
-  const [pulseDiscovered, markPulseDiscovered] = useDiscovered('pulse');
-  const [signalsDiscovered, markSignalsDiscovered] = useDiscovered('signals');
-  const [minimapDiscovered, markMinimapDiscovered] = useDiscovered('minimap');
-  const [feedbackDiscovered, markFeedbackDiscovered] = useDiscovered('feedback');
-  const [introFeatureId, setIntroFeatureId] = useState<string | null>(null);
-  function dismissIntro() {
-    const id = introFeatureId;
-    setIntroFeatureId(null);
-    if (id === 'pulse') markPulseDiscovered();
-    else if (id === 'signals') markSignalsDiscovered();
-    else if (id === 'minimap') markMinimapDiscovered();
-    else if (id === 'feedback') markFeedbackDiscovered();
-  }
+  // Everything on Ground is fully visible immediately — the old
+  // first-tap discovery dimming + intro modal were removed in favor of
+  // unobtrusive InfoHint "i" affordances next to The Pulse and the brief.
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
   const [transparency, setTransparency] = useState<string | null>(null);
@@ -1715,14 +1670,14 @@ export default function TakeoffScreen() {
             // surface the data card directly (expanded) when there's no
             // headline to collapse from.
             <TouchableOpacity
-              onPress={() => {
-                if (!pulseDiscovered) { setIntroFeatureId('pulse'); return; }
-                togglePulse();
-              }}
+              onPress={togglePulse}
               activeOpacity={0.6}
               hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
-              style={[styles.pulseWrap, { opacity: pulseDiscovered ? 1 : 0.45 }]}>
-              <Text style={styles.pulseLabel}>THE PULSE</Text>
+              style={styles.pulseWrap}>
+              <View style={styles.pulseLabelRow}>
+                <Text style={styles.pulseLabel}>THE PULSE</Text>
+                <InfoHint message="One sentence synthesizing your health, weather, and signal load." />
+              </View>
               {pulse ? <Text style={styles.pulseText}>{pulse}</Text> : null}
               {showPulseTip ? (
                 <View style={styles.tooltipInline} pointerEvents="box-none">
@@ -1891,11 +1846,13 @@ export default function TakeoffScreen() {
             </View>
           ) : (
             <View style={styles.briefContainer}>
+              <View style={styles.briefInfoRow}>
+                <InfoHint message="Your household's morning brief. Tap any signal to act." />
+              </View>
               <Text
                 style={[
                   styles.brief,
                   { color: bandTheme.brief },
-                  !signalsDiscovered && { opacity: 0.45 },
                 ]}>
                 {(segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment]).map((seg, i) => {
                   if (seg.type === 'signal') {
@@ -1909,12 +1866,8 @@ export default function TakeoffScreen() {
                     return (
                       <Text
                         key={i}
-                        onPress={() => {
-                          if (!signalsDiscovered) { setIntroFeatureId('signals'); return; }
-                          handleSignalTap(seg.signalId);
-                        }}
+                        onPress={() => handleSignalTap(seg.signalId)}
                         onLongPress={() => {
-                          if (!signalsDiscovered) { setIntroFeatureId('signals'); return; }
                           setQuickActionTarget({
                             signalId: seg.signalId,
                             phrase: seg.content || '',
@@ -2389,17 +2342,10 @@ export default function TakeoffScreen() {
             // signing off on the brief. ✓ is always white; ✗ defaults to
             // muted and brightens when chosen. Both dim to 0.2 when their
             // sibling is the active selection.
-            <View
-              style={[
-                styles.feedbackSignature,
-                !feedbackDiscovered && { opacity: 0.45 },
-              ]}>
+            <View style={styles.feedbackSignature}>
               <Text style={styles.feedbackSigPrompt}>Was this helpful?</Text>
               <TouchableOpacity
-                onPress={() => {
-                  if (!feedbackDiscovered) { setIntroFeatureId('feedback'); return; }
-                  handleFeedback('up');
-                }}
+                onPress={() => handleFeedback('up')}
                 activeOpacity={0.7}
                 hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
                 <Text
@@ -2411,10 +2357,7 @@ export default function TakeoffScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => {
-                  if (!feedbackDiscovered) { setIntroFeatureId('feedback'); return; }
-                  handleFeedback('down');
-                }}
+                onPress={() => handleFeedback('down')}
                 activeOpacity={0.7}
                 hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
                 <Text
@@ -2445,24 +2388,11 @@ export default function TakeoffScreen() {
       {/* Floating Minimap — rendered as a root sibling (NOT inside the
           ScrollView) so it paints above the brief content and reliably
           receives taps. As a scroll child its absolute box was overlapped
-          by later content Views which swallowed the tap. Discovery dimming:
-          when undiscovered, an outer Pressable catches the tap and opens
-          the intro; the Minimap inside is pointerEvents:none so its own
-          onPress doesn't fire. */}
-      {minimapDiscovered ? (
-        <Minimap
-          urgentCount={urgentCount}
-          onPress={() => openConductorSheet('ground')}
-        />
-      ) : (
-        <Pressable
-          onPress={() => setIntroFeatureId('minimap')}
-          style={styles.minimapDiscoveryWrap}>
-          <View pointerEvents="none">
-            <Minimap urgentCount={urgentCount} floating={false} onPress={() => {}} />
-          </View>
-        </Pressable>
-      )}
+          by later content Views which swallowed the tap. */}
+      <Minimap
+        urgentCount={urgentCount}
+        onPress={() => openConductorSheet('ground')}
+      />
 
       <YesterdayModal
         visible={showYesterday}
@@ -2494,14 +2424,6 @@ export default function TakeoffScreen() {
           Optimistic UI: chip styling flips immediately, API call fires
           in the background, errors silently revert via the next brief
           fetch. */}
-      <FeatureIntroduction
-        visible={introFeatureId != null}
-        featureId={introFeatureId || ''}
-        name={(introFeatureId && FEATURE_INTROS[introFeatureId]?.name) || ''}
-        icon={(introFeatureId && FEATURE_INTROS[introFeatureId]?.icon) || ''}
-        description={(introFeatureId && FEATURE_INTROS[introFeatureId]?.description) || ''}
-        onDismiss={dismissIntro}
-      />
       <Modal
         visible={quickActionTarget != null}
         animationType="fade"
@@ -2623,13 +2545,6 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   // Floating-minimap discovery wrapper — pins the undiscovered (dimmed)
   // minimap at the same top-right spot the floating Minimap uses, so the
   // intro-opening Pressable sits exactly over the widget.
-  minimapDiscoveryWrap: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
-    zIndex: 10,
-    opacity: 0.45,
-  },
   // Resolution-moment toast — absolutely-positioned brass pill near
   // the top of the screen. Renders for 2s on Done tap, fades out
   // automatically when restedToast flips back to false.
@@ -2658,12 +2573,17 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginTop: 4,
     marginBottom: 16,
   },
+  pulseLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
   pulseLabel: {
     color: theme.muted,
     fontSize: 9,
     letterSpacing: 2,
     textTransform: 'uppercase',
-    marginBottom: 4,
   },
   pulseText: {
     color: '#d6d3cd',
@@ -2835,6 +2755,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   briefContainer: {
     flex: 1,
+  },
+  // Small leading row that holds the unobtrusive "i" info affordance
+  // above the brief text without pushing the brief itself around.
+  briefInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   loadingContainer: {
     marginTop: 40,

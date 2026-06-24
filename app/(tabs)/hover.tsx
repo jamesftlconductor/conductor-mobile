@@ -2009,25 +2009,22 @@ export default function HoverScreen() {
             onPress={() => openConductorSheet('hover')}
           />
         </View>
-        {/* Help — the directory button, at the very top-right, sitting
-            above the Conductor minimap. */}
+        {/* Help — the directory affordance, top-right above the Conductor
+            minimap. Styled as the same unobtrusive italic "i" used on Ground
+            (InfoHint) so "i = info" reads consistently across the app. */}
         <TouchableOpacity
           onPress={() => setShowHelp(true)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           style={{
             position: 'absolute',
             top: insets.top + 24,
-            right: 22,
-            width: 24,
-            height: 24,
-            borderRadius: 12,
-            backgroundColor: 'rgba(255,255,255,0.15)',
+            right: 26,
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 50,
           }}
           activeOpacity={0.6}>
-          <Text style={{ color: '#a8a5a0', fontSize: 12, fontWeight: '500' }}>?</Text>
+          <Text style={{ color: theme.muted, fontSize: 12, fontStyle: 'italic', fontWeight: '600' }}>i</Text>
         </TouchableOpacity>
         <HoverHelpModal
           visible={showHelp || showReveal}
