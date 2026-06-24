@@ -948,6 +948,10 @@ export default function TakeoffScreen() {
   const [pulse, setPulse] = useState<string | null>(null);
   const [pulseFlags, setPulseFlags] = useState<string[]>([]);
   const [pulseData, setPulseData] = useState<PulseData | null>(null);
+  // Household interview — one profile-building question surfaced under The
+  // Pulse when the radar is thin (brief.householdInterview).
+  const [householdInterview, setHouseholdInterview] =
+    useState<{ question: string; context?: string } | null>(null);
   const [pulseExpanded, setPulseExpanded] = useState(false);
   // Handoff — coordination prompt surfaced when one member is
   // blocked and another can cover. `acked` flips to true after the
@@ -1263,6 +1267,7 @@ export default function TakeoffScreen() {
     setPulseFlags([]);
     setPulseData(null);
     setPulseExpanded(false);
+    setHouseholdInterview(null);
     // Ask Conductor — full reset on brief regenerate. Carrying an answer
     // across briefs would imply continuity that isn't there yet.
     setAskQuestion('');
@@ -1356,6 +1361,11 @@ export default function TakeoffScreen() {
       setPulseData(data.pulseData && typeof data.pulseData === 'object'
         ? (data.pulseData as PulseData)
         : null);
+      setHouseholdInterview(
+        data.householdInterview && typeof data.householdInterview.question === 'string'
+          ? data.householdInterview
+          : null
+      );
       setHandoff(
         data.handoff && typeof data.handoff === 'object' && data.handoff.signalId && data.handoff.message
           ? { signalId: String(data.handoff.signalId), message: String(data.handoff.message) }
@@ -1792,6 +1802,26 @@ export default function TakeoffScreen() {
                     style={{ transform: [{ rotate: pulseExpanded ? '180deg' : '0deg' }] }}
                   />
                 </View>
+              ) : null}
+            </TouchableOpacity>
+          ) : null}
+
+          {householdInterview ? (
+            // Household interview — when the radar is thin the brief surfaces
+            // one profile-building question. Tapping opens The Conductor
+            // pre-loaded with the question; the answer becomes a signal/vault
+            // item via /api/ask's interview handler.
+            <TouchableOpacity
+              onPress={() =>
+                openConductorSheet('ground', { interviewQuestion: householdInterview.question })
+              }
+              activeOpacity={0.6}
+              style={styles.interviewPrompt}>
+              <Text style={styles.interviewPromptText}>The Conductor has a question →</Text>
+              {householdInterview.context ? (
+                <Text style={styles.interviewPromptContext} numberOfLines={2}>
+                  {householdInterview.context}
+                </Text>
               ) : null}
             </TouchableOpacity>
           ) : null}
@@ -2686,6 +2716,28 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontSize: 13,
     fontStyle: 'italic',
     lineHeight: 19,
+  },
+  // Household-interview prompt — a quiet accent CTA under The Pulse.
+  interviewPrompt: {
+    marginTop: -4,
+    marginBottom: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: accentColor,
+    backgroundColor: 'rgba(184,150,12,0.06)',
+  },
+  interviewPromptText: {
+    color: accentColor,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  interviewPromptContext: {
+    color: theme.muted,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 3,
   },
   // Expanded card sits inline below the pulse sentence. Brass-edged top
   // border separates it from the editorial line; each section stacks

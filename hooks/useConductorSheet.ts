@@ -20,9 +20,13 @@ import { debugLog } from '@/utils/debugLog';
 type SheetState = {
   visible: boolean;
   context: string;
+  // When set, the sheet opens as an answer to a household-interview question:
+  // it shows the question and passes it to /api/ask so the answer becomes a
+  // signal/vault item rather than a normal Q&A.
+  interviewQuestion: string | null;
 };
 
-let state: SheetState = { visible: false, context: 'unknown' };
+let state: SheetState = { visible: false, context: 'unknown', interviewQuestion: null };
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -43,9 +47,12 @@ function getSnapshot(): SheetState {
   return state;
 }
 
-export function openConductorSheet(context: string = 'unknown') {
+export function openConductorSheet(
+  context: string = 'unknown',
+  opts: { interviewQuestion?: string | null } = {},
+) {
   debugLog('Hook', `openConductorSheet(${context}) — listeners=${listeners.size}`);
-  state = { visible: true, context };
+  state = { visible: true, context, interviewQuestion: opts.interviewQuestion ?? null };
   emit();
   debugLog('Hook', `after emit — state.visible=${state.visible}`);
 }
@@ -53,8 +60,9 @@ export function openConductorSheet(context: string = 'unknown') {
 export function closeConductorSheet() {
   // Keep the last context around — closing then re-opening from the
   // same screen shouldn't flicker the breadcrumb back to 'unknown'.
+  // Drop any interview question so the next open is a normal Q&A.
   debugLog('Hook', 'closeConductorSheet()');
-  state = { visible: false, context: state.context };
+  state = { visible: false, context: state.context, interviewQuestion: null };
   emit();
 }
 

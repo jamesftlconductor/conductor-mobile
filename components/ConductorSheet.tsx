@@ -179,7 +179,7 @@ export function ConductorSheet() {
   if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const { visible, context } = useConductorSheetState();
+  const { visible, context, interviewQuestion } = useConductorSheetState();
 
   // Per-open state — fully reset whenever the sheet closes so each
   // open is a fresh session. History is intentionally session-scoped
@@ -191,6 +191,10 @@ export function ConductorSheet() {
   const inputRef = useRef<TextInput | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const submittingRef = useRef(false);
+  // Holds the household-interview question while the sheet is open in
+  // interview mode. Consumed by the first submit so that one answer is
+  // routed to the interview handler; cleared on close.
+  const interviewQRef = useRef<string | null>(null);
 
   // Combined search — live signal-description matches + screen/feature
   // destinations, computed from the same input as Ask. Tapping a result
@@ -260,9 +264,20 @@ export function ConductorSheet() {
       setActions(null);
       setLoading(false);
       submittingRef.current = false;
+      interviewQRef.current = null;
       Speech.stop();
     }
   }, [visible, context]);
+
+  // Household-interview open — seed the question as a Conductor bubble so the
+  // user can see what they're answering, and arm interviewQRef so the first
+  // answer routes to /api/ask's interview handler (which creates the item).
+  useEffect(() => {
+    if (visible && interviewQuestion) {
+      interviewQRef.current = interviewQuestion;
+      setMessages([{ role: 'conductor', id: msgCounter++, text: interviewQuestion, showLabel: true }]);
+    }
+  }, [visible, interviewQuestion]);
 
   // Auto-focus the input when the sheet opens — the type bar is now the
   // dominant, primary element, so the keyboard should be ready to go. The
@@ -306,6 +321,10 @@ export function ConductorSheet() {
     // 2. Fire the network call and resolve the answer.
     let answer: string;
     let data: AskResponse = {};
+    // Only the FIRST answer in an interview-opened sheet routes to the
+    // interview handler; consume the ref so follow-ups are normal Q&A.
+    const iq = interviewQRef.current;
+    interviewQRef.current = null;
     try {
       const res = await fetch(`${API_BASE}/ask`, {
         method: 'POST',
@@ -314,6 +333,7 @@ export function ConductorSheet() {
           userId: userId,
           question: q,
           screenContext: context,
+          ...(iq ? { interviewQuestion: iq } : {}),
         }),
       });
       data = res.ok ? await res.json() : {};
