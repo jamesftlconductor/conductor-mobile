@@ -215,6 +215,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     swatchLogo: {
       width: 34,
       height: 34,
+      // Subtle edge so the tinted C stays legible even on low-contrast
+      // months (e.g. January silver on near-white).
+      shadowColor: '#000',
+      shadowOpacity: 0.3,
+      shadowRadius: 2,
+      shadowOffset: { width: 0, height: 1 },
     },
     cellLabel: {
       color: theme.text,
