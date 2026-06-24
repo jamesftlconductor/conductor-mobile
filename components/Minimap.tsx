@@ -379,6 +379,34 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
     return () => loop.stop();
   }, [pulseSpeed, pulseAnim]);
 
+  // Always-on "breathing" pulse for the whole widget. The minimap read
+  // too faint at rest, so the disc gently oscillates 0.5 → 1.0 → 0.5 on a
+  // 4-second cycle (2s each way) — a very slow, calm breath that lifts it
+  // to full visibility without ever feeling like an alert. Distinct from
+  // the urgent inner-ring pulse above, which is faster and only fires when
+  // there are signals to act on.
+  const breatheAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breatheAnim, {
+          toValue: 0.5,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(breatheAnim, {
+          toValue: 1.0,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [breatheAnim]);
+
   // First-render discovery: scale-bounce 3 times, then surface a
   // tooltip ("Tap to ask The Conductor anything") for up to 4 seconds.
   // Persisted via AsyncStorage so it only fires once per install.
@@ -492,6 +520,8 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
           // tapScale + discoveryScale compose so the press-bounce and
           // the first-render discovery bounce don't fight each other.
           { transform: [{ scale: Animated.multiply(tapScale, discoveryScale) }] },
+          // Slow 4s breathing pulse so the disc never sits at a faint rest.
+          { opacity: breatheAnim },
         ]}>
         <MinimapRing ring={RINGS.outer} signals={grouped.outer} arcColor={arcColor} />
         <MinimapRing ring={RINGS.middle} signals={grouped.middle} arcColor={arcColor} />
