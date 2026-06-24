@@ -19,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { PulsingCMark } from '@/components/PulsingCMark';
 import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from '@/app/theme';
 import { TOKENS } from '@/utils/designTokens';
@@ -209,6 +210,11 @@ export default function OnboardRevealScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Brand C mark crowning the reveal, centered near the top. Pulses and
+          carries the chosen logoColor (PulsingCMark tints itself). */}
+      <View style={styles.revealLogo}>
+        <PulsingCMark size={56} />
+      </View>
       {vaultPreview.length > 0 ? <VaultHero items={vaultPreview} /> : null}
       <Text style={styles.header}>Here's what I found</Text>
       <View style={styles.cardStack}>
@@ -358,6 +364,10 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 28,
     paddingTop: 100,
     paddingBottom: 60,
+  },
+  revealLogo: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
   header: {
     // Intentionally light/large hero type — not the standard

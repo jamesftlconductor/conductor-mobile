@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, type ImageStyle, type StyleProp } from 'react-native';
 
+import { useTheme } from '@/app/theme';
+
 // Pulsing C mark — the brand-forward replacement for ActivityIndicator
 // across loading states. The C icon breathes its opacity 0.4 → 1 → 0.4
 // on a 1.4s cycle (useNativeDriver, so it keeps animating even while JS
@@ -14,6 +16,7 @@ export function PulsingCMark({
   size?: number;
   style?: StyleProp<ImageStyle>;
 }) {
+  const { logoColor } = useTheme();
   const pulse = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
@@ -41,7 +44,7 @@ export function PulsingCMark({
     <Animated.Image
       source={require('../assets/c-mark.png')}
       resizeMode="contain"
-      style={[{ width: size, height: size, opacity: pulse }, style]}
+      style={[{ width: size, height: size, opacity: pulse, tintColor: logoColor }, style]}
     />
   );
 }

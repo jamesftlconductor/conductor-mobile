@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { useTheme } from '@/app/theme';
+
 const BG = '#070707';
 const MUTED = '#5a5855';
 const SUBTLE = 'rgba(240, 237, 232, 0.18)';
@@ -21,6 +23,7 @@ const PHRASES = [
 // to the overnight idle screen. c-mark.png is the gold C with its navy field
 // keyed to transparency, so it floats cleanly on the dark background.
 function PulsingLogo({ size }: { size: number }) {
+  const { logoColor } = useTheme();
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -55,6 +58,7 @@ function PulsingLogo({ size }: { size: number }) {
         width: size,
         height: size,
         opacity,
+        tintColor: logoColor,
         transform: [{ scale }],
       }}
     />
