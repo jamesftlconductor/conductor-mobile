@@ -49,7 +49,6 @@ class AppErrorBoundary extends React.Component<
   componentDidCatch(error: any, info: any) {
     // Surfaces in dev logs and EAS log streams. Production builds can
     // still recover via the Fallback's reset action.
-    // eslint-disable-next-line no-console
     console.error('[AppErrorBoundary]', error?.message || error, info?.componentStack);
   }
   reset = () => this.setState({ error: null });

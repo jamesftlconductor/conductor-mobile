@@ -59,9 +59,7 @@ export default function MissedCuesScreen() {
   if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const BRASS = accentColor;
   const MUTED = theme.muted;
-  const OFF_WHITE = theme.text;
   const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -172,7 +170,6 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   const BG = theme.background;
   const OFF_WHITE = theme.text;
   const MUTED = theme.muted;
-  const BRASS = accentColor;
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   scroll: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 60 },

@@ -24,7 +24,6 @@ const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const BG = '#1a1a1a';
 const OFF_WHITE = '#f0ede8';
 const MUTED = '#5a5855';
-const BRASS = '#b8960c';
 const SOFT_BORDER = 'rgba(255,255,255,0.06)';
 
 export type ScanType =

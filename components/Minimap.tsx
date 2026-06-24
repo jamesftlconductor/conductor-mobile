@@ -247,7 +247,7 @@ const DISCOVERY_AUTOHIDE_MS = 4000;
 export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp }: MinimapProps = {}) {
   const userId = useUserId();
   if (!userId) return null;
-  const { theme, accentColor, isDark } = useTheme();
+  const { theme, isDark } = useTheme();
   // Arc color flips with the theme so the rings read in light mode (where
   // the old hardcoded off-white was invisible). The radar disc keeps its
   // dark navy in dark mode but lightens to the theme surface in light mode

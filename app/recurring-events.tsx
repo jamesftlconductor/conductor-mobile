@@ -4,8 +4,6 @@
 // each row has an active toggle. Bottom sheet to add custom events;
 // swipe to delete.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
 import { useUserId } from '@/hooks/useUserId';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -201,7 +199,6 @@ function EventRow({
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const BRASS = accentColor;
-  const MUTED = theme.muted;
   return (
     <View style={[styles.eventRow, !ev.active && { opacity: 0.55 }]}>
       <View style={{ flex: 1 }}>

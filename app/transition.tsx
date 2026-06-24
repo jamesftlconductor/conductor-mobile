@@ -62,9 +62,7 @@ export default function TransitionScreen() {
   if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const BRASS = accentColor;
   const MUTED = theme.muted;
-  const OFF_WHITE = theme.text;
   const [step, setStep] = useState<Step>('pick');
   const [type, setType] = useState<TransitionType | null>(null);
   const [submitting, setSubmitting] = useState(false);

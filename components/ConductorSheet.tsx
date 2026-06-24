@@ -20,7 +20,6 @@ import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
   Easing,
@@ -163,7 +162,7 @@ type ActionPayload =
   | { type: 'signal_created'; signal: { id: number; description: string; eta?: string | null } }
   | { type: 'setting_changed'; settingKey: string; newValue: any; label: string; detail: string }
   | { type: 'signal_resolved'; signal: { id: number; description: string } }
-  | { type: 'resolve_disambiguate'; target: string; candidates: Array<{ id: number; description: string }> }
+  | { type: 'resolve_disambiguate'; target: string; candidates: { id: number; description: string }[] }
   | { type: 'resolve_not_found'; target: string };
 
 type AskResponse = {

@@ -30,7 +30,6 @@ import {
 
 const BG = 'rgba(15, 15, 15, 0.92)';
 const OFF_WHITE = '#f0ede8';
-const MUTED = '#a8a5a0';
 const BRASS = '#b8960c';
 
 type Props = {

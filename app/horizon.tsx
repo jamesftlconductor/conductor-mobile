@@ -5,7 +5,7 @@ import { SignalFilterPills } from '@/components/SignalFilterPills';
 import { useSignalFilter, applyFilter as applyMeCrewHouse } from '@/hooks/useSignalFilter';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { PulsingCMark } from '@/components/PulsingCMark';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Alert,
@@ -184,7 +184,6 @@ function buildItems(args: {
     if (state && state !== 'incoming' && state !== 'active') continue;
     const rawMs = s.eta ? ymdToMs(s.eta) : 0;
     const hasUsableDate = rawMs >= fourteen;
-    const noUsableDate = !s.eta || rawMs === 0 || (rawMs > 0 && rawMs < fourteen && rawMs < today.getTime() - 30 * DAY_MS);
     // Dated items in the near window (<14d) belong on Hover/Programme,
     // not Horizon — skip those. Items with parseable past dates >30d
     // ago are presumed stale and also skipped.

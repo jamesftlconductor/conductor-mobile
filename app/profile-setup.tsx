@@ -3,7 +3,6 @@
 // /api/signals?type=profile, then either router.replace to the next
 // onboarding step or router.back() if invoked from Settings.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useUserId } from '@/hooks/useUserId';

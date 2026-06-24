@@ -4,7 +4,6 @@
 // moments get a brass left border + badge; auto-resolutions get a
 // small "auto" tag.
 
-import { router } from 'expo-router';
 import { SecureScreen } from '@/components/SecureScreen';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -90,7 +89,6 @@ function JournalScreen() {
   if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const MUTED = theme.muted;
   const [days, setDays] = useState<Day[]>([]);
   const [streak, setStreak] = useState<StreakData>(null);
   const [loading, setLoading] = useState(true);

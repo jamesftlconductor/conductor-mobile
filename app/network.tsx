@@ -71,7 +71,6 @@ export default function NetworkScreen() {
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const BRASS = accentColor;
   const MUTED = theme.muted;
-  const OFF_WHITE = theme.text;
   // shareItemId param — set when the user enters from the Vault
   // "Share with Network →" link. When present, renders a banner at
   // the top inviting them to pick a connection + permission.

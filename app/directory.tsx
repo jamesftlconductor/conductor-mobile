@@ -294,9 +294,6 @@ function CardCatchphrase({ featureId }: { featureId: string }) {
 export default function DirectoryScreen() {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const BRASS = accentColor;
-  const MUTED = theme.muted;
-  const OFF_WHITE = theme.text;
   const params = useLocalSearchParams<{ card?: string; screen?: string }>();
   const { width } = useWindowDimensions();
   const cardWidth = width - 40; // 20px peek on each side
@@ -318,7 +315,6 @@ export default function DirectoryScreen() {
   const SECTION_PILLS = language === 'es' ? SECTION_PILLS_ES : SECTION_PILLS_EN;
   const titleLabel = language === 'es' ? 'Directorio' : 'Directory';
   const subtitleLabel = language === 'es' ? 'Tu guía de Conductor' : 'Your guide to Conductor';
-  const returnLabel = language === 'es' ? '← Volver' : '← Return';
   const counterOf = language === 'es' ? 'de' : 'of';
   const openWord = language === 'es' ? 'Abrir' : 'Open';
 

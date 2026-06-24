@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import LottieView from 'lottie-react-native';
@@ -19,6 +19,13 @@ import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { useDiscovered } from '@/hooks/useDiscovered';
 import { getUserId, useUserId } from '@/hooks/useUserId';
 import FeatureIntroduction from '@/components/FeatureIntroduction';
+import OverwatchView from '@/components/OverwatchView';
+import YesterdayModal from '@/components/YesterdayModal';
+import { Tooltip } from '@/components/Tooltip';
+import { useShakeToAsk } from '@/components/useShakeToAsk';
+import { conductorHaptics } from '@/app/haptics';
+import { useTheme } from '@/app/theme';
+import { weatherLottieSource } from '@/utils/weatherLottie';
 
 // Per-feature intro content. Lives next to the call site so copy
 // changes don't require touching the modal component.
@@ -48,14 +55,7 @@ const FEATURE_INTROS: Record<string, { name: string; icon: string; description: 
       "Tell The Conductor how it's doing. Your feedback shapes tomorrow's brief.",
   },
 };
-import OverwatchView from '@/components/OverwatchView';
-import YesterdayModal from '@/components/YesterdayModal';
-import { Tooltip } from '@/components/Tooltip';
-import { useShakeToAsk } from '@/components/useShakeToAsk';
-import { conductorHaptics } from '@/app/haptics';
-import { useTheme } from '@/app/theme';
-import { useMemo } from 'react';
-import { weatherLottieSource } from '@/utils/weatherLottie';
+
 // Defensive native-module require: the binary running this OTA may
 // predate the expo-speech install. A top-level `import * as Speech
 // from 'expo-speech'` would crash the bundle on that binary. Defer
@@ -432,7 +432,7 @@ async function fetchWithTimeout(url: string, timeoutMs: number) {
 async function fetchBriefWithRetry(url: string) {
   try {
     return await fetchWithTimeout(url, 30000);
-  } catch (err) {
+  } catch {
     await new Promise(r => setTimeout(r, 2000));
     return await fetchWithTimeout(url, 30000);
   }
@@ -1250,7 +1250,7 @@ export default function TakeoffScreen() {
       if (!Array.isArray(data.signals)) throw new Error('Invalid response: missing signals array');
       setConnected(true);
       generateBrief();
-    } catch (err) {
+    } catch {
       setConnected(false);
       setLoading(false);
     }
@@ -1427,7 +1427,7 @@ export default function TakeoffScreen() {
           ? (data.weeklyAchievements as WeeklyAchievementsPayload)
           : null,
       );
-    } catch (err) {
+    } catch {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
       setSegments([{ type: 'text', content: fallback }]);

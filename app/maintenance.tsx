@@ -15,7 +15,7 @@
 // Each item card has a "Add to radar →" link that POSTs the
 // addToRadar action, optimistically swapping the link to "Added ✓".
 
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -102,7 +102,6 @@ export default function MaintenanceScreen() {
   if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const BRASS = accentColor;
   const MUTED = theme.muted;
   const params = useLocalSearchParams<{ generate?: string }>();
   const shouldGenerate = params?.generate === 'true';

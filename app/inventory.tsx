@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { SecureScreen } from '@/components/SecureScreen';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -118,7 +117,6 @@ function InventoryScreen() {
   if (!userId) return null;
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  const MUTED = theme.muted;
   const [inventory, setInventory] = useState<Inventory>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);

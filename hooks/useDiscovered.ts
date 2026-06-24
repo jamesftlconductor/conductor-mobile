@@ -85,7 +85,6 @@ export function useDiscovered(featureId: string): [boolean, () => void] {
       cache.set(featureId, true);
       emit(featureId, true); // updates this instance + every other live one
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.warn('[useDiscovered] write failed', featureId, e);
     }
   };

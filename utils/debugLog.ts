@@ -35,7 +35,6 @@ export function debugLog(tag: string, msg: string) {
   entries = [entry, ...entries].slice(0, MAX_ENTRIES);
   emit();
   // Also forward to console so EAS / Metro logs see it too.
-  // eslint-disable-next-line no-console
   console.log(`[${tag}] ${msg}`);
 }
 

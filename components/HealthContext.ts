@@ -114,11 +114,11 @@ export async function fetchHealthSnapshot(): Promise<HealthSnapshot | null> {
     let sleepDurationMs = 0;
     let inBedMs = 0;
     if (sleepRes.status === 'fulfilled') {
-      for (const s of sleepRes.value as ReadonlyArray<{
+      for (const s of sleepRes.value as readonly {
         value: number;
         startDate: string | Date;
         endDate: string | Date;
-      }>) {
+      }[]) {
         const startMs = new Date(s.startDate).getTime();
         const endMs = new Date(s.endDate).getTime();
         const ms = Math.max(0, endMs - startMs);
@@ -147,7 +147,7 @@ export async function fetchHealthSnapshot(): Promise<HealthSnapshot | null> {
 
     let hrvBaseline7d: number | null = null;
     if (hrv7dRes.status === 'fulfilled') {
-      const samples = hrv7dRes.value as ReadonlyArray<{ quantity: number }>;
+      const samples = hrv7dRes.value as readonly { quantity: number }[];
       if (samples.length > 0) {
         const sum = samples.reduce((acc, s) => acc + (s.quantity || 0), 0);
         hrvBaseline7d = +(sum / samples.length).toFixed(1);

@@ -4,7 +4,7 @@
 //
 // Pills auto-tint with the current accent color when active.
 
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 import { useTheme } from '@/app/theme';
 import type { SignalFilter } from '@/hooks/useSignalFilter';

@@ -42,8 +42,6 @@ async function pickImageBase64(): Promise<string | null> {
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
-const BG = '#0f0f0f';
-const OFF_WHITE = '#f0ede8';
 const MUTED = '#5a5855';
 const BRASS = '#b8960c';
 

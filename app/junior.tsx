@@ -10,8 +10,6 @@
 // configured JUNIOR_USER_ID env baked in or the current user id from
 // storage).
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
 import { useUserId } from '@/hooks/useUserId';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -64,7 +62,7 @@ type JuniorData = {
   allowanceWeekly: number | null;
   badges: Badge[];
   badgesAvailable: Badge[];
-  attributedSignals: Array<{ description: string }>;
+  attributedSignals: { description: string }[];
 };
 
 const CATEGORY_PROMPTS: Record<string, string> = {

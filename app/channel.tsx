@@ -15,7 +15,7 @@
 // shows up.
 
 import { router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -247,8 +247,6 @@ export default function ChannelScreen() {
     </View>
   );
 }
-
-import { useMemo } from 'react';
 
 type ThemeColors = {
   background: string;
