@@ -89,6 +89,32 @@ export default function CommunicateScreen() {
   const [showMatches, setShowMatches] = useState(false);
   const matchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Crew quick-select — household members fetched once on mount. Tapping a
+  // chip pre-fills the recipient name (+ email when the member record has
+  // one) so the user doesn't have to retype people they message often.
+  const [crew, setCrew] = useState<{ name: string; email: string | null }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=crew&userId=${userId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const list: { name: string; email: string | null }[] = Array.isArray(data?.crew)
+          ? data.crew
+              .map((m: any) => ({
+                name: String(m?.fullName || m?.name || m?.firstName || '').trim(),
+                email: typeof m?.email === 'string' && m.email ? m.email : null,
+              }))
+              .filter((m: { name: string }) => m.name.length > 0)
+          : [];
+        setCrew(list);
+      } catch { /* best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
   const queryMatches = useCallback(async (q: string) => {
     if (!q || q.trim().length < 2) {
       setMatches([]);
@@ -103,7 +129,7 @@ export default function CommunicateScreen() {
       const data = await res.json();
       if (Array.isArray(data?.matches)) setMatches(data.matches);
     } catch { /* best-effort */ }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (matchTimer.current) clearTimeout(matchTimer.current);
@@ -267,6 +293,26 @@ export default function CommunicateScreen() {
                 style={styles.input}
               />
             </Field>
+
+            {crew.length > 0 ? (
+              <Field label="From your Crew">
+                <View style={styles.crewRow}>
+                  {crew.map((c, i) => (
+                    <TouchableOpacity
+                      key={`${c.name}-${i}`}
+                      onPress={() => {
+                        setRecipientName(c.name);
+                        if (c.email) setRecipientEmail(c.email);
+                        setShowMatches(false);
+                        setMatches([]);
+                      }}
+                      style={styles.crewChip}>
+                      <Text style={styles.crewChipText}>{c.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </Field>
+            ) : null}
 
             <Field label="Type">
               <View style={styles.typeRow}>
@@ -483,6 +529,19 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   matchName: { color: OFF_WHITE, ...TOKENS.type.secondary },
   matchMeta: { color: FAINT, ...TOKENS.type.secondary, fontSize: 11, marginTop: 2 },
+
+  crewRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  crewChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    minHeight: 40,
+    justifyContent: 'center',
+    backgroundColor: theme.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.border,
+  },
+  crewChipText: { color: OFF_WHITE, ...TOKENS.type.secondary, fontWeight: '500' },
 
   typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   typePill: {
