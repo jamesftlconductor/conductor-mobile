@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Line } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Line, Stop } from 'react-native-svg';
 
 import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
@@ -31,7 +31,6 @@ import { Minimap } from '@/components/Minimap';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
-  LEGEND_ORDER,
   metaForRing,
   Signal,
   TYPE_META,
@@ -46,7 +45,6 @@ import { useUserId } from '@/hooks/useUserId';
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const PENDING_SIGNAL_KEY = 'conductor:pendingSignalId';
 
-const BG = '#0f0f0f';
 const OFF_WHITE = '#f0ede8';
 
 type RingKey = 'inner' | 'middle' | 'outer';
@@ -75,7 +73,6 @@ const EXPANDED_RADIUS = 155;
 // 140–200 outer). Keep these in sync with the radii in RINGS.
 const RING_HIT_BOUNDARIES = { innerOuter: 90, middleOuter: 140, outerOuter: 200 };
 const EXPANDED_HIT_TOLERANCE = 30;
-const HOUR_MS = 60 * 60 * 1000;
 
 function parseEta(eta?: string | null) {
   if (!eta) return NaN;
@@ -245,32 +242,133 @@ type ResolveAnim = {
   emojiOpacity: Animated.Value;
 };
 
-function DashedRing({ radius, opacity }: { radius: number; opacity: number }) {
-  // Rings read as a quiet, theme-aware scaffold rather than a bright brass
-  // accent. theme.text is used as the base hue (it flips with the theme so
-  // the rings stay visible in light mode) and the graduated per-ring
-  // strokeOpacity (outer 0.15 → inner 0.4) supplies the subtlety — basing
-  // off theme.border instead would compound its built-in ~0.08 alpha to
-  // near-invisible. 0.5px stroke keeps them thin and refined.
-  const { theme } = useTheme();
+// Solid astrolabe-style ring with a light gradient sweep. The base circle is
+// a quiet, uniform theme-aware stroke (it flips with the theme so the rings
+// stay visible in light mode); on top sits a brighter accent arc that fades
+// to transparent within the first third of the circumference. Because the
+// parent RotatingRing layer spins, that arc reads as a directional sheen —
+// the ring feels alive even with no signals on it. Graduated per-ring stroke
+// opacity (outer 0.15 → inner 0.4) keeps the hierarchy subtle, never harsh.
+function SolidRing({ ring }: { ring: RingDef }) {
+  const { theme, accentColor } = useTheme();
+  const radius = ring.radius;
   const size = radius * 2 + 4;
   const c = size / 2;
-  const circumference = 2 * Math.PI * radius;
-  const dashCount = Math.max(24, Math.round(radius * 0.8));
-  const dashLen = circumference / dashCount / 2;
+  // Unique per-ring id so the three sibling SVGs' gradient defs never collide.
+  const gid = `ringSheen-${ring.key}`;
   return (
     <Svg width={size} height={size}>
+      <Defs>
+        <LinearGradient id={gid} x1="0.5" y1="0" x2="0.5" y2="1">
+          <Stop offset="0" stopColor={accentColor} stopOpacity={0.9} />
+          <Stop offset="0.32" stopColor={accentColor} stopOpacity={0} />
+          <Stop offset="1" stopColor={accentColor} stopOpacity={0} />
+        </LinearGradient>
+      </Defs>
       <Circle
         cx={c}
         cy={c}
         r={radius}
         stroke={theme.text}
-        strokeOpacity={opacity}
-        strokeWidth={0.5}
+        strokeOpacity={ring.strokeOpacity}
+        strokeWidth={1}
         fill="none"
-        strokeDasharray={`${dashLen},${dashLen}`}
+      />
+      <Circle
+        cx={c}
+        cy={c}
+        r={radius}
+        stroke={`url(#${gid})`}
+        strokeWidth={1.4}
+        fill="none"
       />
     </Svg>
+  );
+}
+
+// Center core of the radar — a glowing, pulsing dot in the accent color that
+// anchors the rings. It breathes on a gentle, steady rhythm when the radar is
+// quiet and quickens when there are urgent signals, so the center reads as the
+// "heartbeat" of the household. A soft halo behind the dot supplies the glow;
+// resolvePulse layers the resolve-absorb bump on top of the steady breath.
+function CenterCore({
+  cx,
+  cy,
+  accentColor,
+  urgent,
+  resolvePulse,
+}: {
+  cx: number;
+  cy: number;
+  accentColor: string;
+  urgent: boolean;
+  resolvePulse: Animated.Value;
+}) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const halo = useRef(new Animated.Value(0.2)).current;
+
+  useEffect(() => {
+    // Gentle ~2.4s breath at rest; brisk ~0.8s when urgent signals exist.
+    const half = (urgent ? 800 : 2400) / 2;
+    const peak = urgent ? 1.5 : 1.3;
+    const haloPeak = urgent ? 0.55 : 0.4;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(pulse, { toValue: peak, duration: half, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(halo, { toValue: haloPeak, duration: half, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(pulse, { toValue: 1, duration: half, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(halo, { toValue: 0.15, duration: half, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [urgent, pulse, halo]);
+
+  const HALO = 36;
+  const DOT = 13;
+  const scale = Animated.multiply(pulse, resolvePulse);
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: cx - HALO / 2,
+        top: cy - HALO / 2,
+        width: HALO,
+        height: HALO,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: HALO,
+          height: HALO,
+          borderRadius: HALO / 2,
+          backgroundColor: accentColor,
+          opacity: halo,
+          transform: [{ scale }],
+        }}
+      />
+      <Animated.View
+        style={{
+          width: DOT,
+          height: DOT,
+          borderRadius: DOT / 2,
+          backgroundColor: accentColor,
+          transform: [{ scale }],
+          shadowColor: accentColor,
+          shadowOpacity: 0.9,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 0 },
+          elevation: 8,
+        }}
+      />
+    </View>
   );
 }
 
@@ -481,6 +579,15 @@ function RotatingRing({
     }).start();
   }, [isExpanded, isDimmed, ring.radius, scaleAnim, opacityAnim]);
 
+  // Sweep speed tracks how loaded the ring is: more signals → faster orbit,
+  // so the gradient on a busy ring visibly conveys more urgency. The inner
+  // ring is fastest at baseline (15s) and the outer slowest (60s); a populated
+  // ring only compresses further (down to half its base period). Recomputed
+  // per render but compared by value, so the rotation effect only restarts
+  // when the bucket actually changes — and it resumes from the live angle.
+  const urgencyFactor = Math.min(0.5, signals.length * 0.12);
+  const effectiveRotationMs = Math.round(ring.rotationMs * (1 - urgencyFactor));
+
   useEffect(() => {
     let stopped = false;
 
@@ -495,7 +602,7 @@ function RotatingRing({
       }
       const startVal = (rotation as any)._value ?? 0;
       const remainingFrac = 1 - (startVal % 1);
-      const duration = ring.rotationMs * remainingFrac;
+      const duration = effectiveRotationMs * remainingFrac;
       const anim = Animated.timing(rotation, {
         toValue: Math.floor(startVal) + 1,
         duration,
@@ -518,7 +625,7 @@ function RotatingRing({
       stopped = true;
       currentAnimRef.current?.stop();
     };
-  }, [ring.rotationMs, rotation]);
+  }, [effectiveRotationMs, rotation]);
 
   const spin = rotation.interpolate({
     inputRange: [0, 1],
@@ -543,7 +650,7 @@ function RotatingRing({
         opacity: opacityAnim,
         transform: [{ rotate: spin }, { scale: scaleAnim }],
       }}>
-      <DashedRing radius={ring.radius} opacity={ring.strokeOpacity} />
+      <SolidRing ring={ring} />
 
       {signals.map((s) => {
         const meta = metaForRing(s, ring.key);
@@ -762,51 +869,7 @@ if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
 }
 
-const WHEEL_ITEM = 60;
-
-const REPEAT_COUNT = 500;
-
-// One cycle of the wheel = all signal-type filters, then a slim visual
-// divider, then the navigation shortcuts. Repeated REPEAT_COUNT times to
-// give the FlatList an infinite-feeling scroll in either direction.
-type WheelItem =
-  | { kind: 'type'; key: string }
-  | { kind: 'divider' }
-  | {
-      kind: 'nav';
-      key: string;
-      label: string;
-      emoji: string;
-      route?: string;
-      action?: 'yesterday' | 'addSignal';
-    };
-
-const NAV_ITEMS: WheelItem[] = [
-  { kind: 'nav', key: 'home', label: 'Ground', emoji: '🏠', route: '/(tabs)/' },
-  { kind: 'nav', key: 'yesterday', label: 'Yesterday', emoji: '🌅', action: 'yesterday' },
-  // Vault route is a placeholder — the screen file doesn't exist yet, tap
-  // will trigger an expo-router 404 until app/vault.tsx is created.
-  { kind: 'nav', key: 'vault', label: 'Vault', emoji: '🗂', route: '/vault' },
-  { kind: 'nav', key: 'cues', label: 'Cues', emoji: '⚠️', route: '/missed-cues' },
-  { kind: 'nav', key: 'horizon', label: 'Horizon', emoji: '🔭', route: '/horizon' },
-  { kind: 'nav', key: 'programme', label: 'Programme', emoji: '📅', route: '/programme' },
-  { kind: 'nav', key: 'calendar', label: 'Calendar', emoji: '📆', route: '/calendar' },
-  { kind: 'nav', key: 'compass', label: 'Compass', emoji: '🧭', route: '/compass' },
-  { kind: 'nav', key: 'crew', label: 'Crew', emoji: '👨‍👩‍👧', route: '/crew' },
-  { kind: 'nav', key: 'settings', label: 'Settings', emoji: '⚙️', route: '/(tabs)/settings' },
-  // Add Signal lives in the wheel after the route shortcuts. "+" is plain
-  // ASCII (not an emoji glyph) so it accepts color tinting — the renderer
-  // brass-tints just this glyph to match the navLabel below.
-  { kind: 'nav', key: 'addSignal', label: 'Signal', emoji: '+', action: 'addSignal' },
-];
-
-const WHEEL_BASE: WheelItem[] = [
-  ...LEGEND_ORDER.map<WheelItem>((k) => ({ kind: 'type', key: k })),
-  { kind: 'divider' },
-  ...NAV_ITEMS,
-];
-
-// CollapsibleNavBar — replaces the legacy InfiniteLedger wheel.
+// CollapsibleNavBar — the bottom navigation strip.
 // Collapsed: a thin 36px strip at the bottom with a center grab
 // handle and an urgent-count badge when > 0. Expanded: ~240px tall:
 // scrollable signals list on top, hairline divider, customizable
@@ -1308,135 +1371,6 @@ function CollapsibleNavBar({
           ) : null}
         </View>
       </GestureDetector>
-    </Animated.View>
-  );
-}
-
-function InfiniteLedger({
-  bottomInset,
-  width,
-  activeTypeKey,
-  opacity,
-  onTapType,
-  onYesterday,
-  onAddSignal,
-}: {
-  bottomInset: number;
-  width: number;
-  activeTypeKey: string | null;
-  opacity: Animated.AnimatedInterpolation<number> | Animated.Value;
-  onTapType: (typeKey: string) => void;
-  onYesterday: () => void;
-  onAddSignal: () => void;
-}) {
-  const { theme, accentColor } = useTheme();
-  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
-  // 500x repeated data; start at the center. Practically infinite in either
-  // direction, so no boundary detection / jump needed.
-  const repeated = useMemo(() => {
-    const out: WheelItem[] = new Array(WHEEL_BASE.length * REPEAT_COUNT);
-    for (let i = 0; i < REPEAT_COUNT; i++) {
-      for (let j = 0; j < WHEEL_BASE.length; j++) {
-        out[i * WHEEL_BASE.length + j] = WHEEL_BASE[j];
-      }
-    }
-    return out;
-  }, []);
-  const listRef = useRef<FlatList<WheelItem>>(null);
-  const centerIndex = Math.floor(REPEAT_COUNT / 2) * WHEEL_BASE.length;
-  const sidePad = Math.max(0, width / 2 - WHEEL_ITEM / 2);
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({
-        offset: centerIndex * WHEEL_ITEM,
-        animated: false,
-      });
-    });
-  }, [centerIndex]);
-
-  return (
-    <Animated.View style={[styles.legendWrap, { paddingBottom: 12 + bottomInset, opacity }]}>
-      <View pointerEvents="none" style={[styles.wheelIndicator, { left: width / 2 - WHEEL_ITEM / 2 }]} />
-      <View pointerEvents="none" style={[styles.wheelIndicator, { left: width / 2 + WHEEL_ITEM / 2 }]} />
-      <FlatList
-        ref={listRef}
-        horizontal
-        data={repeated}
-        keyExtractor={(item, i) => `${item.kind}-${'key' in item ? item.key : 'div'}-${i}`}
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={WHEEL_ITEM}
-        decelerationRate="fast"
-        initialScrollIndex={centerIndex}
-        initialNumToRender={20}
-        windowSize={5}
-        maxToRenderPerBatch={20}
-        getItemLayout={(_, i) => ({ length: WHEEL_ITEM, offset: WHEEL_ITEM * i, index: i })}
-        contentContainerStyle={{ paddingHorizontal: sidePad }}
-        renderItem={({ item }) => {
-          if (item.kind === 'divider') {
-            return (
-              <View pointerEvents="none" style={styles.wheelItem}>
-                <View style={styles.wheelDivider} />
-              </View>
-            );
-          }
-          if (item.kind === 'nav') {
-            // Brass-tint just the "+" glyph for the addSignal item — every
-            // other nav uses an emoji glyph that ignores color tinting, so
-            // navLabel below carries the brass for them. "+" is plain ASCII
-            // and accepts color, so it gets the explicit override here.
-            const isAddSignal = item.action === 'addSignal';
-            return (
-              <TouchableOpacity
-                onPress={() => {
-                  if (item.action === 'yesterday') onYesterday();
-                  else if (item.action === 'addSignal') onAddSignal();
-                  else if (item.route) router.push(item.route as never);
-                }}
-                activeOpacity={0.6}
-                style={styles.wheelItem}>
-                <Text style={[styles.wheelEmoji, isAddSignal && { color: BRASS }]}>
-                  {item.emoji}
-                </Text>
-                <Text style={[styles.wheelLabel, styles.navLabel]}>
-                  {item.label.toLowerCase()}
-                </Text>
-              </TouchableOpacity>
-            );
-          }
-          // type filter
-          const meta = TYPE_META[item.key];
-          const isActive = activeTypeKey === item.key;
-          return (
-            <TouchableOpacity
-              onPress={() => onTapType(item.key)}
-              activeOpacity={0.6}
-              style={[styles.wheelItem, isActive && styles.wheelItemActive]}>
-              <Text style={styles.wheelEmoji}>{meta.emoji}</Text>
-              <Text style={[styles.wheelLabel, { color: meta.color }]}>
-                {meta.label.toLowerCase()}
-              </Text>
-            </TouchableOpacity>
-          );
-        }}
-      />
-      <View style={styles.deepLinkRow}>
-        <TouchableOpacity
-          style={styles.deepLink}
-          onPress={() => router.push('/missed-cues')}
-          activeOpacity={0.6}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Text style={styles.missedCuesLinkText}>Missed Cues</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deepLink}
-          onPress={() => router.push('/horizon')}
-          activeOpacity={0.6}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Text style={styles.missedCuesLinkText}>The Horizon</Text>
-        </TouchableOpacity>
-      </View>
     </Animated.View>
   );
 }
@@ -1965,10 +1899,6 @@ export default function HoverScreen() {
     }, 3000);
   }
 
-  function handleLegendTap(typeKey: string) {
-    setFilterTypeKey((prev) => (prev === typeKey ? null : typeKey));
-  }
-
   const pausedSignalId = selected ? String(selected.id) : null;
 
   const filteredList = useMemo(() => {
@@ -2058,7 +1988,10 @@ export default function HoverScreen() {
           <Image
             source={require('../../assets/c-mark.png')}
             resizeMode="contain"
-            style={{ width: 48, height: 48, opacity: viewMode === 'personal' ? 1 : 0.5 }}
+            // Always fully visible at the same 48px footprint as the Minimap
+            // disc on the opposite end of the top line — no longer dims in
+            // family view.
+            style={{ width: 48, height: 48 }}
           />
         </TouchableOpacity>
         {/* Minimap top-right — the tap surface for ConductorSheet, the
@@ -2209,14 +2142,13 @@ export default function HoverScreen() {
           crewColorMap={crewColorMap}
         />
 
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.centerC,
-            { left: cx - 11, top: cy - 12, transform: [{ scale: centerPulse }] },
-          ]}>
-          <Text style={styles.centerCText}>C</Text>
-        </Animated.View>
+        <CenterCore
+          cx={cx}
+          cy={cy}
+          accentColor={accentColor}
+          urgent={urgentCount > 0}
+          resolvePulse={centerPulse}
+        />
 
         {/* Fixed (non-rotating) ring labels at 12 o'clock in the gaps between rings.
             The active ring's label brightens (90% opacity, 10px) per the spec. */}
@@ -2376,7 +2308,6 @@ type ThemeColors = { background: string; surface: string; text: string; muted: s
 function makeStyles(theme: ThemeColors, accentColor: string) {
   const BRASS = accentColor;
   const BG = theme.background;
-  const OFF_WHITE = theme.text;
   return StyleSheet.create({
   container: {
     flex: 1,
@@ -2446,17 +2377,6 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontSize: 9,
     marginTop: 4,
     textAlign: 'center',
-  },
-  centerC: {
-    position: 'absolute',
-    width: 22,
-    alignItems: 'center',
-  },
-  centerCText: {
-    color: OFF_WHITE,
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
   betweenRingLabel: {
     position: 'absolute',
@@ -2544,7 +2464,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     backgroundColor: BG,
     paddingTop: 12,
   },
-  // Collapsible nav bar (replaces InfiniteLedger).
+  // Collapsible nav bar.
   // Outer wrapper owns positioning + opacity (native driver via the
   // legendOpacity prop). Inner bar owns the height Animated.Value
   // (JS driver — height can't be native). Keeping these on separate
