@@ -12,7 +12,7 @@ import LottieView from 'lottie-react-native';
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
-import { PulsingCMark } from '@/components/PulsingCMark';
+import { WordmarkLoader } from '@/components/WordmarkLoader';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
@@ -371,7 +371,7 @@ type EveningCard =
   | { type: 'observation'; text: string }
   | { type: 'joke_offer'; offer: string };
 
-function getBriefMode(hour: number, overwatchHour: number = 23) {
+function getBriefMode(hour: number, overwatchHour: number = 23, middayEnabled: boolean = false) {
   // overwatchHour === 0 means "midnight" — the user wants Overwatch
   // to begin at the rollover into the next day. The raw comparison
   // `hour >= 0` would be true for every hour, so normalize to 24
@@ -382,9 +382,14 @@ function getBriefMode(hour: number, overwatchHour: number = 23) {
   // evening period between Clearance and Overwatch; it carries the
   // evening (Clearance) brief forward under a calmer name.
   if (hour >= effective - 1) return { title: 'Dusk', endpoint: 'clearance' as string | null };
-  // Clearance — the evening close, the hour before Dusk.
+  // Clearance — the evening close. clearanceHour === overwatchHour - 2.
   if (hour >= effective - 2) return { title: 'Clearance', endpoint: 'clearance' as string | null };
-  // 7am up to the evening close is Takeoff.
+  // Midday — afternoon check-in between noon and the evening close, served by
+  // /api/midday. Opt-in only: when middayEnabled is false the band stays
+  // Takeoff so users who haven't enabled it see no change. The Clearance/Dusk/
+  // Overwatch returns above already guarantee hour < clearanceHour here.
+  if (middayEnabled && hour >= 12) return { title: 'Midday', endpoint: 'midday' as string | null };
+  // 7am up to the midday/evening boundary is Takeoff.
   return { title: 'Takeoff', endpoint: 'brief' as string | null };
 }
 
@@ -1073,12 +1078,16 @@ export default function TakeoffScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem('overwatchHour');
-        const n = parseInt(raw || '', 10);
-        if (!isNaN(n) && n >= 0 && n <= 23) {
-          setOverwatchHour(n);
-          setMode(getBriefMode(new Date().getHours(), n));
-        }
+        const [rawHour, rawMidday] = await Promise.all([
+          AsyncStorage.getItem('overwatchHour'),
+          AsyncStorage.getItem('middayEnabled'),
+        ]);
+        const n = parseInt(rawHour || '', 10);
+        const validHour = !isNaN(n) && n >= 0 && n <= 23;
+        const md = rawMidday === 'true';
+        if (validHour) setOverwatchHour(n);
+        setMiddayEnabled(md);
+        setMode(getBriefMode(new Date().getHours(), validHour ? n : 23, md));
       } catch { /* ignore */ }
     })();
   }, []);
@@ -1122,6 +1131,9 @@ export default function TakeoffScreen() {
   const [userName, setUserName] = useState('there');
   const [date, setDate] = useState('');
   const [overwatchHour, setOverwatchHour] = useState(23);
+  // Opt-in midday check-in (Settings → middayEnabled). Loaded from AsyncStorage
+  // on mount; gates whether the noon→clearance window serves /api/midday.
+  const [middayEnabled, setMiddayEnabled] = useState(false);
   const [mode, setMode] = useState(getBriefMode(new Date().getHours(), 23));
   const [showYesterday, setShowYesterday] = useState(false);
   const navigation = useNavigation();
@@ -1149,7 +1161,7 @@ export default function TakeoffScreen() {
     else if (hour < 17) setGreeting('Good afternoon');
     else setGreeting('Good evening');
 
-    setMode(getBriefMode(hour, overwatchHour));
+    setMode(getBriefMode(hour, overwatchHour, middayEnabled));
 
     setDate(now.toLocaleDateString('en-US', {
       weekday: 'long',
@@ -1233,7 +1245,14 @@ export default function TakeoffScreen() {
     setAskLoading(false);
     setAskAnswer(null);
     setAskError(false);
-    const { endpoint } = getBriefMode(new Date().getHours(), overwatchHour);
+    // Read the midday opt-in fresh (the state may not have loaded yet) so the
+    // noon→clearance window routes to /api/midday on the very first load when
+    // enabled. Keep `mode` aligned with what we actually fetch so the header
+    // label matches the content shown.
+    const middayPref = (await AsyncStorage.getItem('middayEnabled')) === 'true';
+    const briefMode = getBriefMode(new Date().getHours(), overwatchHour, middayPref);
+    setMode(briefMode);
+    let endpoint = briefMode.endpoint;
     if (!endpoint) {
       // Overwatch mode — no brief to fetch. Just exit loading so the
       // OverwatchView renders.
@@ -1241,8 +1260,34 @@ export default function TakeoffScreen() {
       return;
     }
     try {
-      const res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/${endpoint}?userId=${userId}`);
-      const data = await res.json();
+      let res: Response | undefined;
+      let data: any;
+      if (endpoint === 'midday') {
+        // /api/midday returns { midday } (not { brief }) and is lighter — no
+        // segments/transparency/theRead. Map it onto `brief` so the rest of
+        // this handler is unchanged. If the check-in is empty or the call
+        // fails, fall back to the morning Takeoff brief so the screen is
+        // never blank (and re-label the header accordingly).
+        let middayOk = false;
+        try {
+          res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/midday?userId=${userId}`);
+          data = await res.json();
+          const middayText = typeof data?.midday === 'string' ? data.midday.trim() : '';
+          if (middayText) {
+            data = { ...data, brief: data.midday };
+            middayOk = true;
+          }
+        } catch { /* fall through to the morning brief */ }
+        if (!middayOk) {
+          endpoint = 'brief';
+          setMode(getBriefMode(new Date().getHours(), overwatchHour, false));
+          res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/brief?userId=${userId}`);
+          data = await res.json();
+        }
+      } else {
+        res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/${endpoint}?userId=${userId}`);
+        data = await res.json();
+      }
       if (typeof data.user === 'string' && data.user.length > 0) {
         setUserName(data.user);
       }
@@ -1854,10 +1899,7 @@ export default function TakeoffScreen() {
           </TouchableOpacity>
 
           {loading ? (
-            <View style={styles.loadingContainer}>
-              <PulsingCMark size={32} />
-              <Text style={styles.loadingText}>Generating your brief...</Text>
-            </View>
+            <WordmarkLoader />
           ) : (
             <View style={styles.briefContainer}>
               <View style={styles.briefInfoRow}>
@@ -2781,16 +2823,6 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
-  },
-  loadingContainer: {
-    marginTop: 40,
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#8a8780',
-    fontSize: 14,
-    letterSpacing: 0.3,
-    marginTop: 16,
   },
   brief: {
     color: theme.text,
