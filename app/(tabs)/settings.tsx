@@ -975,6 +975,126 @@ type StyleTone = 'direct' | 'balanced' | 'warm';
 type StyleHumor = 'yes' | 'occasionally' | 'no';
 type StyleDetail = 'brief' | 'standard' | 'thorough';
 
+// Build the "what The Conductor considered" lines. Prefers a backend-provided
+// synthesisInputs object on the brief response (future-proof); falls back to
+// deriving readable lines from the pulseData the brief already returns plus the
+// user's stored voice preference.
+function buildSynthesisLines(brief: any, prefs: any): string[] {
+  const si = brief?.synthesisInputs;
+  if (si && typeof si === 'object') {
+    const out = [si.health, si.weather, si.signals, si.calendar, si.voice, si.priorities]
+      .filter((v) => typeof v === 'string' && v.trim().length > 0)
+      .map((v) => String(v));
+    if (out.length > 0) return out;
+  }
+
+  const out: string[] = [];
+  const pd = brief?.pulseData;
+  const health = pd?.health;
+  if (
+    health?.hrv &&
+    typeof health.hrv.current === 'number' &&
+    typeof health.hrv.baseline7d === 'number'
+  ) {
+    const { current, baseline7d } = health.hrv;
+    const delta = current - baseline7d;
+    const rel = delta < -3 ? 'slightly below' : delta > 3 ? 'above' : 'near';
+    out.push(`Your HRV was ${rel} baseline (${Math.round(current)} vs ${Math.round(baseline7d)})`);
+  } else if (typeof health?.sleep === 'number') {
+    out.push(`You slept ${health.sleep.toFixed(1)} hours`);
+  }
+
+  const w = pd?.weather;
+  if (w) {
+    if (typeof w.heatIndex === 'number' && typeof w.humidity === 'number') {
+      out.push(`Heat index ${Math.round(w.heatIndex)}°F, humidity ${Math.round(w.humidity)}%`);
+    } else if (w.conditions) {
+      out.push(
+        `${w.conditions}${typeof w.tempF === 'number' ? `, ${Math.round(w.tempF)}°F` : ''}`,
+      );
+    }
+  }
+
+  if (pd) {
+    const load = typeof pd.signalLoad === 'string' ? pd.signalLoad : null;
+    const urgent = typeof pd.urgentCount === 'number' ? pd.urgentCount : 0;
+    if (load) out.push(`Signal load ${load}${urgent > 0 ? `, ${urgent} urgent` : ''}`);
+  }
+
+  const tone = prefs?.communicationTone;
+  const detail = prefs?.communicationDetail;
+  if (tone || detail) {
+    out.push(`Your ${tone || 'balanced'} + ${detail || 'standard'} voice preference`);
+  }
+
+  return out;
+}
+
+// Settings → Your Brief transparency row. Expands to show the synthesis
+// inputs behind the most recent brief.
+function HowConductorThinksRow() {
+  const userId = useUserId();
+  const { theme, accentColor } = useTheme();
+  const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [lines, setLines] = useState<string[]>([]);
+
+  async function load() {
+    if (loaded || !userId) return;
+    setLoading(true);
+    try {
+      const [briefRes, prefRes] = await Promise.all([
+        fetch(`${API_BASE}/brief?userId=${userId}`),
+        fetch(`${API_BASE}/signals?type=preferences&userId=${userId}`),
+      ]);
+      const brief = await briefRes.json().catch(() => ({}));
+      const prefData = await prefRes.json().catch(() => ({}));
+      setLines(buildSynthesisLines(brief, prefData?.preferences || {}));
+    } catch {
+      setLines([]);
+    } finally {
+      setLoading(false);
+      setLoaded(true);
+    }
+  }
+
+  function toggle() {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    const next = !open;
+    setOpen(next);
+    if (next && !loaded) load();
+  }
+
+  return (
+    <View>
+      <TouchableOpacity onPress={toggle} activeOpacity={0.6} style={styles.howThinksHeader}>
+        <Text style={styles.howThinksTitle}>How The Conductor thought this morning</Text>
+        <Text style={[styles.howThinksArrow, { color: accentColor }]}>{open ? '⌄' : '→'}</Text>
+      </TouchableOpacity>
+      {open ? (
+        <View style={styles.howThinksBody}>
+          {loading ? (
+            <Text style={styles.howThinksMuted}>Reading this morning&apos;s synthesis…</Text>
+          ) : lines.length === 0 ? (
+            <Text style={styles.howThinksMuted}>
+              No synthesis available yet — check back after your next brief.
+            </Text>
+          ) : (
+            <>
+              <Text style={styles.howThinksIntro}>This morning The Conductor considered:</Text>
+              {lines.map((l, i) => (
+                <Text key={i} style={styles.howThinksLine}>→ {l}</Text>
+              ))}
+            </>
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function AppearanceBlock() {
   const { themeMode, accentKey, theme, accentColor, logoKey, logoColor, isDark, setThemeMode, setAccentKey, setLogoKey } = useTheme();
   const modes: { id: ThemeMode; label: string }[] = [
@@ -2044,6 +2164,7 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Your House</Text>
 
         <CollapsibleSection title="Your Brief">
+        <HowConductorThinksRow />
         <ChevronRow
           label="Takeoff"
           rightText={format12Hour(settings.takeoffTime)}
@@ -2605,6 +2726,22 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: SOFT_BORDER,
   },
+  howThinksHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+  },
+  howThinksTitle: { color: OFF_WHITE, fontSize: 14, flex: 1, paddingRight: 12 },
+  howThinksArrow: { fontSize: 16, fontWeight: '600' },
+  howThinksBody: {
+    paddingHorizontal: 4,
+    paddingBottom: 14,
+  },
+  howThinksMuted: { color: MUTED, fontSize: 13, fontStyle: 'italic', lineHeight: 19 },
+  howThinksIntro: { color: OFF_WHITE, fontSize: 13, marginBottom: 10, lineHeight: 19 },
+  howThinksLine: { color: MUTED, fontSize: 13, lineHeight: 22, paddingLeft: 4 },
   sectionHeader: {
     color: MUTED,
     fontSize: 11,
