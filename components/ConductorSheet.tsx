@@ -790,7 +790,9 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       backgroundColor: theme.surface,
       borderTopLeftRadius: 16,
       borderTopRightRadius: 16,
-      paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+      // Clear the iPhone home-indicator pill so the input bar / chips aren't
+      // cut off at the bottom of the sheet (34 = home-indicator safe area).
+      paddingBottom: Platform.OS === 'ios' ? 34 : 12,
     },
     // Three-slot header: title (intrinsic width) | context pill
     // (flex-shrinkable) | Done (intrinsic width, always visible).
