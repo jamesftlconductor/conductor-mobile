@@ -2490,7 +2490,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     position: 'relative',
   },
   collapsibleHandle: {
-    color: theme.muted,
+    color: accentColor,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 2,
