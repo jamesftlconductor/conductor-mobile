@@ -24,23 +24,49 @@ export const MONTH_NAMES = [
 export type MonthIcon = (typeof MONTH_ICONS)[number];
 export type IconKey = MonthIcon | 'founding';
 
-// Background colors mirror assets/icons/ICON_SPECS.md so the
-// placeholder swatches in the selector + suggestion sheet read
-// correctly even before final PNG assets land.
+// Final approved monthly icon colors — each month's app-icon background plus
+// the logo (C-mark) tint that sits on it. The selector grid + suggestion sheet
+// render these as live previews even before the final PNG assets land; the
+// OS-level icon swap still requires a native build (see acceptIconChange).
+export const MONTH_ICON_COLORS: Record<MonthIcon, { background: string; logoColor: string }> = {
+  january:   { background: '#F8F8F8', logoColor: '#C0C0C0' }, // white / silver
+  february:  { background: '#FFE4E8', logoColor: '#CC0000' }, // light pink / cherry red
+  march:     { background: '#1A5C2A', logoColor: '#4CBB17' }, // forest / kelly green
+  april:     { background: '#7B9BB8', logoColor: '#FFD700' }, // blue-grey / lightning yellow
+  may:       { background: '#F2D7F5', logoColor: '#7CB99A' }, // lavender / sage
+  june:      { background: '#FFFAF0', logoColor: '#DAA520' }, // warm white / deep gold
+  july:      { background: '#0A1F5C', logoColor: '#CC0000' }, // navy / red
+  august:    { background: '#E8572A', logoColor: '#00CED1' }, // coral / electric teal
+  september: { background: '#2D5A27', logoColor: '#F5F5DC' }, // field green / cream
+  october:   { background: '#2D1B69', logoColor: '#FF6B00' }, // deep purple / orange
+  november:  { background: '#8B4513', logoColor: '#DAA520' }, // terracotta / amber
+  december:  { background: '#CC0000', logoColor: '#2D8B2D' }, // red / green
+};
+
+// Founding edition isn't a month — give it the house brand pairing.
+export const FOUNDING_ICON_COLORS = { background: '#0f0f0f', logoColor: '#b8960c' };
+
+// Resolve the {background, logoColor} pair for any icon key.
+export function iconColors(key: IconKey): { background: string; logoColor: string } {
+  return key === 'founding' ? FOUNDING_ICON_COLORS : MONTH_ICON_COLORS[key];
+}
+
+// Background-only map kept for existing consumers (swatch backgrounds, the
+// suggestion sheet). Derived from MONTH_ICON_COLORS so there's one source of truth.
 export const ICON_COLORS: Record<IconKey, string> = {
-  january:   '#0D1B2A',
-  february:  '#2D1B2E',
-  march:     '#0D2137',
-  april:     '#1A2E1A',
-  may:       '#1A4A4A',
-  june:      '#1C1C1C',
-  july:      '#8B2500',
-  august:    '#0A1628',
-  september: '#2D1F00',
-  october:   '#0A1628',
-  november:  '#2D1800',
-  december:  '#1A3D2B',
-  founding:  '#0f0f0f',
+  january:   MONTH_ICON_COLORS.january.background,
+  february:  MONTH_ICON_COLORS.february.background,
+  march:     MONTH_ICON_COLORS.march.background,
+  april:     MONTH_ICON_COLORS.april.background,
+  may:       MONTH_ICON_COLORS.may.background,
+  june:      MONTH_ICON_COLORS.june.background,
+  july:      MONTH_ICON_COLORS.july.background,
+  august:    MONTH_ICON_COLORS.august.background,
+  september: MONTH_ICON_COLORS.september.background,
+  october:   MONTH_ICON_COLORS.october.background,
+  november:  MONTH_ICON_COLORS.november.background,
+  december:  MONTH_ICON_COLORS.december.background,
+  founding:  FOUNDING_ICON_COLORS.background,
 };
 
 // Short tag that surfaces alongside the icon — used by both the

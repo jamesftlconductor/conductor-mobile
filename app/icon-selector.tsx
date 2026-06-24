@@ -11,7 +11,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 
 import { useTheme } from '@/app/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -21,6 +21,7 @@ import {
   acceptIconChange,
   getAutoUpdateEnabled,
   ICON_COLORS,
+  iconColors,
   ICON_TAGLINES,
   MONTH_ICONS,
   MONTH_NAMES,
@@ -121,8 +122,14 @@ export default function IconSelectorScreen() {
                     styles.swatch,
                     { backgroundColor: ICON_COLORS[key] },
                     active && { borderWidth: 2, borderColor: accentColor },
-                  ]}
-                />
+                  ]}>
+                  <Image
+                    source={require('../assets/c-mark.png')}
+                    resizeMode="contain"
+                    tintColor={iconColors(key).logoColor}
+                    style={styles.swatchLogo}
+                  />
+                </View>
                 <Text style={styles.cellLabel}>{name}</Text>
                 {key === 'founding' ? (
                   <Text style={styles.foundingLabel}>⚡ Founding</Text>
@@ -202,6 +209,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       height: 56,
       borderRadius: 14,
       marginBottom: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    swatchLogo: {
+      width: 34,
+      height: 34,
     },
     cellLabel: {
       color: theme.text,

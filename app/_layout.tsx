@@ -3,7 +3,7 @@ import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useState } from 'react';
-import { Linking, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Linking, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
@@ -18,6 +18,7 @@ import {
   declineIconChange,
   getAutoUpdateEnabled,
   ICON_COLORS,
+  iconColors,
   ICON_TAGLINES,
   MONTH_ICONS,
   MONTH_NAMES,
@@ -325,8 +326,14 @@ function IconSuggestionSheet() {
           style={[
             iconSuggestStyles.swatch,
             { backgroundColor: swatchColor },
-          ]}
-        />
+          ]}>
+          <Image
+            source={require('../assets/c-mark.png')}
+            resizeMode="contain"
+            tintColor={iconColors(suggested).logoColor}
+            style={iconSuggestStyles.swatchLogo}
+          />
+        </View>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={iconSuggestStyles.title}>
             {monthName} has arrived.
@@ -382,6 +389,12 @@ const iconSuggestStyles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchLogo: {
+    width: 22,
+    height: 22,
   },
   title: {
     color: '#f5f0eb',

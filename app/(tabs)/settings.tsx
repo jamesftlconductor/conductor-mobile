@@ -8,6 +8,7 @@ import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useCatchphrase } from '@/hooks/useCatchphrase';
 import {
   ICON_COLORS,
+  iconColors,
   ICON_TAGLINES,
   MONTH_ICONS,
   MONTH_NAMES,
@@ -570,8 +571,16 @@ function AppIconRow() {
           borderRadius: 6,
           backgroundColor: ICON_COLORS[icon],
           marginRight: 12,
-        }}
-      />
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <Image
+          source={require('../../assets/c-mark.png')}
+          resizeMode="contain"
+          tintColor={iconColors(icon).logoColor}
+          style={{ width: 15, height: 15 }}
+        />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={{ color: theme.text, fontSize: 14 }}>
           App Icon
