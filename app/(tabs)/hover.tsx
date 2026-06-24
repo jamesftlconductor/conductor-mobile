@@ -1453,7 +1453,7 @@ export default function HoverScreen() {
     const raw = userId.split('_')[0] || '';
     return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
   })();
-  const { theme, accentColor } = useTheme();
+  const { theme, accentColor, logoColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -1965,6 +1965,7 @@ export default function HoverScreen() {
           <Image
             source={require('../../assets/wordmark.png')}
             resizeMode="contain"
+            tintColor={logoColor}
             style={{ width: '100%', height: '100%' }}
           />
         </View>
@@ -1988,6 +1989,7 @@ export default function HoverScreen() {
           <Image
             source={require('../../assets/c-mark.png')}
             resizeMode="contain"
+            tintColor={logoColor}
             // Always fully visible at the same 48px footprint as the Minimap
             // disc on the opposite end of the top line — no longer dims in
             // family view.

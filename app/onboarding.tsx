@@ -932,6 +932,7 @@ function Step1({
   theme: ThemeColors;
   accentColor: string;
 }) {
+  const { logoColor } = useTheme();
   const [showModifiers, setShowModifiers] = useState(false);
   const [householdName, setHouseholdName] = useState('');
   const canContinue = who !== null && housing !== null;
@@ -946,10 +947,11 @@ function Step1({
   return (
     <>
       {/* Brand C mark crowning the first onboarding screen, above the
-          headline. 72px, centered. */}
+          headline. 72px, centered. Tinted to the chosen logoColor. */}
       <Image
         source={require('../assets/c-mark.png')}
         resizeMode="contain"
+        tintColor={logoColor}
         style={{ width: 72, height: 72, alignSelf: 'center', marginBottom: 20 }}
       />
       <Text style={s.preface}>

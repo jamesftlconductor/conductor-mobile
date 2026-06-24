@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  Image,
   LayoutAnimation,
   Linking,
   Modal,
@@ -975,7 +976,7 @@ type StyleHumor = 'yes' | 'occasionally' | 'no';
 type StyleDetail = 'brief' | 'standard' | 'thorough';
 
 function AppearanceBlock() {
-  const { themeMode, accentKey, theme, accentColor, isDark, setThemeMode, setAccentKey } = useTheme();
+  const { themeMode, accentKey, theme, accentColor, logoKey, logoColor, isDark, setThemeMode, setAccentKey, setLogoKey } = useTheme();
   const modes: { id: ThemeMode; label: string }[] = [
     { id: 'dark', label: 'Dark' },
     { id: 'light', label: 'Light' },
@@ -1066,6 +1067,53 @@ function AppearanceBlock() {
         <Text style={{ color: theme.text, fontSize: 13, lineHeight: 19 }}>
           Your <Text style={{ color: accentColor, fontWeight: '600' }}>HVAC tune-up</Text> is due before June.
         </Text>
+      </View>
+
+      {/* Logo color — picked independently of the accent. Same palette,
+          its own stored key (conductorLogo); the preview shows the
+          wordmark flat-tinted to the chosen color. */}
+      <Text style={{ color: theme.muted, fontSize: 10, letterSpacing: 1.5, marginTop: 22, marginBottom: 10, fontWeight: '600' }}>
+        LOGO COLOR
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
+        {accentList.map((a) => {
+          const active = logoKey === a.id;
+          return (
+            <TouchableOpacity
+              key={a.id}
+              onPress={() => setLogoKey(a.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: a.color,
+                borderWidth: active ? 3 : 0,
+                borderColor: theme.text,
+              }}
+            />
+          );
+        })}
+      </View>
+      <View
+        style={{
+          marginTop: 4,
+          padding: 14,
+          backgroundColor: theme.card,
+          borderLeftWidth: 2,
+          borderLeftColor: logoColor,
+          borderRadius: 6,
+          alignItems: 'center',
+        }}>
+        <Text style={{ color: theme.muted, fontSize: 9, letterSpacing: 2, marginBottom: 8, fontWeight: '600', alignSelf: 'flex-start' }}>
+          PREVIEW
+        </Text>
+        <Image
+          source={require('../../assets/wordmark.png')}
+          resizeMode="contain"
+          tintColor={logoColor}
+          style={{ width: 180, height: 66 }}
+        />
       </View>
     </View>
   );

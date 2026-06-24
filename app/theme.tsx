@@ -58,9 +58,15 @@ interface ThemeContextType {
   accentKey: AccentKey;
   theme: ThemeShape;
   accentColor: string;
+  // Logo tint — chosen independently of the accent color. Same palette
+  // (ACCENTS) but its own stored key, so the wordmark/C-mark can carry a
+  // different brand color than the UI accent.
+  logoKey: AccentKey;
+  logoColor: string;
   isDark: boolean;
   setThemeMode: (mode: ThemeMode) => void;
   setAccentKey: (key: AccentKey) => void;
+  setLogoKey: (key: AccentKey) => void;
 }
 
 const defaultContext: ThemeContextType = {
@@ -68,9 +74,12 @@ const defaultContext: ThemeContextType = {
   accentKey: 'brass',
   theme: THEMES.dark,
   accentColor: ACCENTS.brass.dark,
+  logoKey: 'brass',
+  logoColor: ACCENTS.brass.dark,
   isDark: true,
   setThemeMode: () => {},
   setAccentKey: () => {},
+  setLogoKey: () => {},
 };
 
 export const ThemeContext = createContext<ThemeContextType>(defaultContext);
@@ -79,20 +88,29 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
   const [themeMode, setThemeModeState] = useState<ThemeMode>('dark');
   const [accentKey, setAccentKeyState] = useState<AccentKey>('brass');
+  const [logoKey, setLogoKeyState] = useState<AccentKey>('brass');
 
   useEffect(() => {
     // Defensive read — wrap in try/catch so an AsyncStorage failure
     // can't crash the root layout. Defaults stay as 'dark' + 'brass'.
     (async () => {
       try {
-        const pairs = await AsyncStorage.multiGet(['conductorTheme', 'conductorAccent']);
+        const pairs = await AsyncStorage.multiGet([
+          'conductorTheme',
+          'conductorAccent',
+          'conductorLogo',
+        ]);
         const tm = pairs[0][1];
         const ak = pairs[1][1];
+        const lk = pairs[2][1];
         if (tm === 'dark' || tm === 'light' || tm === 'system') {
           setThemeModeState(tm);
         }
         if (ak && (ak in ACCENTS)) {
           setAccentKeyState(ak as AccentKey);
+        }
+        if (lk && (lk in ACCENTS)) {
+          setLogoKeyState(lk as AccentKey);
         }
       } catch { /* ignore */ }
     })();
@@ -101,6 +119,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const isDark = themeMode === 'system' ? systemScheme === 'dark' : themeMode === 'dark';
   const theme = isDark ? THEMES.dark : THEMES.light;
   const accentColor = ACCENTS[accentKey][isDark ? 'dark' : 'light'];
+  const logoColor = ACCENTS[logoKey][isDark ? 'dark' : 'light'];
 
   const setThemeMode = (mode: ThemeMode) => {
     setThemeModeState(mode);
@@ -110,10 +129,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setAccentKeyState(key);
     AsyncStorage.setItem('conductorAccent', key).catch(() => {});
   };
+  const setLogoKey = (key: AccentKey) => {
+    setLogoKeyState(key);
+    AsyncStorage.setItem('conductorLogo', key).catch(() => {});
+  };
 
   return (
     <ThemeContext.Provider
-      value={{ themeMode, accentKey, theme, accentColor, isDark, setThemeMode, setAccentKey }}>
+      value={{
+        themeMode,
+        accentKey,
+        theme,
+        accentColor,
+        logoKey,
+        logoColor,
+        isDark,
+        setThemeMode,
+        setAccentKey,
+        setLogoKey,
+      }}>
       {children}
     </ThemeContext.Provider>
   );
