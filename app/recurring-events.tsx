@@ -12,7 +12,9 @@ import { SkeletonStack } from '@/components/SkeletonRow';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -282,6 +284,9 @@ function AddEventSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <Text style={styles.sheetTitle}>New recurring event</Text>
@@ -367,6 +372,7 @@ function AddEventSheet({
           </View>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

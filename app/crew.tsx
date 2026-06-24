@@ -12,7 +12,9 @@ import { useUserId } from '@/hooks/useUserId';
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -623,6 +625,12 @@ export default function CrewScreen() {
       }
     />
     <HelpButton cardId="crew" right={50} />
+    {/* Screen-level keyboard avoidance for the inline NOTES and custody
+        "next transition" inputs that live in cards inside this ScrollView
+        (the birthday/anniversary edit modal handles its own below). */}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scroll}
@@ -733,6 +741,9 @@ export default function CrewScreen() {
         animationType="fade"
         transparent
         onRequestClose={() => setEditing(null)}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.modalBackdrop} onPress={() => setEditing(null)}>
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <Text style={styles.modalTitle}>
@@ -784,6 +795,7 @@ export default function CrewScreen() {
             </View>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <AddCrewSheet
@@ -793,6 +805,7 @@ export default function CrewScreen() {
         onAdded={() => load()}
       />
     </ScrollView>
+    </KeyboardAvoidingView>
     </View>
   );
 }

@@ -9,7 +9,9 @@ import { useTheme } from '@/app/theme';
 import { useUserId } from '@/hooks/useUserId';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -350,6 +352,9 @@ export default function NetworkScreen() {
         transparent
         onRequestClose={resetInviteModal}
       >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.modalBackdrop}>
           <SwipeDismissSheet style={styles.modalCard} onClose={resetInviteModal}>
             <Text style={styles.modalTitle}>Invite a household</Text>
@@ -414,6 +419,7 @@ export default function NetworkScreen() {
             )}
           </SwipeDismissSheet>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

@@ -22,7 +22,9 @@ import { useTheme } from '@/app/theme';
 import { TOKENS } from '@/utils/designTokens';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -347,6 +349,9 @@ export default function JuniorScreen() {
       <View style={{ height: 40 }} />
 
       <Modal visible={voiceOpen} transparent animationType="fade" onRequestClose={() => setVoiceOpen(false)}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.modalBackdrop} onPress={() => setVoiceOpen(false)}>
           <Pressable style={styles.voiceModal} onPress={() => {}}>
             {lastSent ? (
@@ -398,6 +403,7 @@ export default function JuniorScreen() {
             )}
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
       </ScrollView>
     </View>

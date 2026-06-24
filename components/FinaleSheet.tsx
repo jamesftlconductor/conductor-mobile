@@ -3,7 +3,9 @@ import {
   Alert,
   Animated,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -431,6 +433,9 @@ function SingleSheet({
       animationType="slide"
       transparent
       onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
         <SwipeDismissSheet style={styles.sheet} onClose={onClose}>
           <Pressable onPress={() => {}}>
@@ -652,6 +657,7 @@ function SingleSheet({
           </Pressable>
         </SwipeDismissSheet>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
