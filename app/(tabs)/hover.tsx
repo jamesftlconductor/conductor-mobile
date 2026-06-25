@@ -1516,7 +1516,12 @@ export default function HoverScreen() {
     (async () => {
       try {
         const seen = await AsyncStorage.getItem('tutorial_hover_rings');
-        if (!seen) setShowRingsTip(true);
+        if (!seen) {
+          setShowRingsTip(true);
+          // Mark seen on show so it never reshows across sessions/days even
+          // if the user doesn't tap "Got it".
+          AsyncStorage.setItem('tutorial_hover_rings', 'done').catch(() => {});
+        }
       } catch { /* ignore */ }
     })();
   }, []);

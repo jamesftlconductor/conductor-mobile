@@ -1312,6 +1312,22 @@ export default function TakeoffScreen() {
           setMode(getBriefMode(new Date().getHours(), overwatchHour, false));
           res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/brief?userId=${userId}`);
           data = await res.json();
+        } else if (!data.pulseData) {
+          // /api/midday is the lighter check-in and omits the Pulse synthesis.
+          // Backfill the vitals (health / weather / signal load) from /api/brief
+          // so the Midday Pulse card expands just like the morning one.
+          try {
+            const pres = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/brief?userId=${userId}`);
+            const pdata = await pres.json();
+            if (pdata && typeof pdata === 'object') {
+              data = {
+                ...data,
+                pulseData: pdata.pulseData ?? data.pulseData,
+                pulse: data.pulse ?? pdata.pulse,
+                pulseFlags: data.pulseFlags ?? pdata.pulseFlags,
+              };
+            }
+          } catch { /* leave the midday payload as-is — Pulse just won't expand */ }
         }
       } else {
         res = await fetchBriefWithRetry(`https://conductor-ivory.vercel.app/api/${endpoint}?userId=${userId}`);
@@ -1383,16 +1399,19 @@ export default function TakeoffScreen() {
         const segArr = Array.isArray(data.segments) ? data.segments : [];
         if (!seenTap && segArr.some((s: any) => s?.type === 'signal')) {
           setShowSignalTapTip(true);
+          // Mark seen the moment it's shown so it never reshows across
+          // sessions/days even if the user ignores it instead of tapping "Got it".
+          AsyncStorage.setItem('tutorial_signal_tap', 'done').catch(() => {});
         }
       } catch { /* ignore */ }
       try {
         const seenPulse = await AsyncStorage.getItem('tutorial_pulse');
         if (!seenPulse && typeof data.pulse === 'string' && data.pulse.length > 0) {
           setShowPulseTip(true);
-          setTimeout(() => {
-            setShowPulseTip(false);
-            AsyncStorage.setItem('tutorial_pulse', 'done').catch(() => {});
-          }, 4000);
+          // Persist on show (not only on the 4s auto-dismiss) so closing the
+          // app early can't leave it un-marked and reshowing tomorrow.
+          AsyncStorage.setItem('tutorial_pulse', 'done').catch(() => {});
+          setTimeout(() => setShowPulseTip(false), 4000);
         }
       } catch { /* ignore */ }
 
