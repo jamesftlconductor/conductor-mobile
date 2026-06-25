@@ -2173,7 +2173,6 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Your House</Text>
 
         <CollapsibleSection title="Your Brief">
-        <HowConductorThinksRow />
         <ChevronRow
           label="Takeoff"
           rightText={format12Hour(settings.takeoffTime)}
@@ -2517,6 +2516,7 @@ export default function SettingsScreen() {
         </CollapsibleSection>
 
         <CollapsibleSection title="Your Conductor">
+        <HowConductorThinksRow />
         <AppearanceBlock />
         <AppIconRow />
         <LanguageRow />
