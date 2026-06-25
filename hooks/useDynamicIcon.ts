@@ -125,18 +125,22 @@ export async function acceptIconChange(iconName: IconKey): Promise<void> {
     ]);
   } catch { /* ignore */ }
 
-  // Defensive native-module require — when expo-dynamic-app-icon or
-  // similar lands in a future EAS build, this branch fires the real
-  // setAlternateIconName call. Wrapped so the OTA bundle doesn't
-  // crash on devices that don't have the native module yet.
+  // Defensive native-module require — expo-dynamic-app-icon is wired into
+  // app.json's plugin config (12 month variants), but the OS-level swap only
+  // works in a binary built WITH that plugin. The require is lazy + wrapped so
+  // the OTA bundle never crashes on a binary that predates the native module.
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const dyn = require('expo-dynamic-app-icon');
-    if (dyn?.setAppIcon) {
-      await dyn.setAppIcon(iconName);
+    const setAppIcon = dyn?.setAppIcon ?? dyn?.default?.setAppIcon;
+    if (typeof setAppIcon === 'function') {
+      // Variant names match the plugin config keys (the 12 months). 'founding'
+      // has no variant, so reset to the default icon. setAppIcon is synchronous
+      // in v1.x and returns the applied name (or false on failure).
+      setAppIcon(iconName === 'founding' ? 'DEFAULT' : iconName);
     }
   } catch {
-    // Module not installed — preference is stored, OS icon stays put.
+    // Native module not in this binary — preference is stored, OS icon stays put.
   }
 }
 

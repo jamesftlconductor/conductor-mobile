@@ -17,15 +17,33 @@
           {
             "identifier": "SIGNAL_FOLLOWUP",
             "actions": [
-              { "identifier": "REST", "title": "Done ✓", "options": [] },
-              { "identifier": "HOLD", "title": "Still open", "options": [] }
+              {
+                "identifier": "REST",
+                "title": "Done ✓",
+                "options": []
+              },
+              {
+                "identifier": "HOLD",
+                "title": "Still open",
+                "options": []
+              }
             ]
           },
           {
             "identifier": "PACKAGE_TRACKING",
             "actions": [
-              { "identifier": "REST", "title": "Got it ✓", "options": [] },
-              { "identifier": "TRACK", "title": "Track", "options": ["foreground"] }
+              {
+                "identifier": "REST",
+                "title": "Got it ✓",
+                "options": []
+              },
+              {
+                "identifier": "TRACK",
+                "title": "Track",
+                "options": [
+                  "foreground"
+                ]
+              }
             ]
           }
         ]
@@ -73,6 +91,23 @@
         {
           "photosPermission": "Conductor uses your photo library to add photos to crew member profiles."
         }
+      ],
+      [
+        "expo-dynamic-app-icon",
+        {
+          "january":   { "image": "./assets/icons/icon-january.png",   "prerendered": true },
+          "february":  { "image": "./assets/icons/icon-february.png",  "prerendered": true },
+          "march":     { "image": "./assets/icons/icon-march.png",     "prerendered": true },
+          "april":     { "image": "./assets/icons/icon-april.png",     "prerendered": true },
+          "may":       { "image": "./assets/icons/icon-may.png",       "prerendered": true },
+          "june":      { "image": "./assets/icons/icon-june.png",      "prerendered": true },
+          "july":      { "image": "./assets/icons/icon-july.png",      "prerendered": true },
+          "august":    { "image": "./assets/icons/icon-august.png",    "prerendered": true },
+          "september": { "image": "./assets/icons/icon-september.png", "prerendered": true },
+          "october":   { "image": "./assets/icons/icon-october.png",   "prerendered": true },
+          "november":  { "image": "./assets/icons/icon-november.png",  "prerendered": true },
+          "december":  { "image": "./assets/icons/icon-december.png",  "prerendered": true }
+        }
       ]
     ],
     "experiments": {
@@ -85,19 +120,45 @@
         "projectId": "04f4211f-0b25-420c-b079-4e7e394dfb76"
       },
       "alternateIcons": {
-        "january":   { "image": "./assets/icons/icon-january.png" },
-        "february":  { "image": "./assets/icons/icon-february.png" },
-        "march":     { "image": "./assets/icons/icon-march.png" },
-        "april":     { "image": "./assets/icons/icon-april.png" },
-        "may":       { "image": "./assets/icons/icon-may.png" },
-        "june":      { "image": "./assets/icons/icon-june.png" },
-        "july":      { "image": "./assets/icons/icon-july.png" },
-        "august":    { "image": "./assets/icons/icon-august.png" },
-        "september": { "image": "./assets/icons/icon-september.png" },
-        "october":   { "image": "./assets/icons/icon-october.png" },
-        "november":  { "image": "./assets/icons/icon-november.png" },
-        "december":  { "image": "./assets/icons/icon-december.png" },
-        "founding":  { "image": "./assets/icons/icon-founding.png" }
+        "january": {
+          "image": "./assets/icons/icon-january.png"
+        },
+        "february": {
+          "image": "./assets/icons/icon-february.png"
+        },
+        "march": {
+          "image": "./assets/icons/icon-march.png"
+        },
+        "april": {
+          "image": "./assets/icons/icon-april.png"
+        },
+        "may": {
+          "image": "./assets/icons/icon-may.png"
+        },
+        "june": {
+          "image": "./assets/icons/icon-june.png"
+        },
+        "july": {
+          "image": "./assets/icons/icon-july.png"
+        },
+        "august": {
+          "image": "./assets/icons/icon-august.png"
+        },
+        "september": {
+          "image": "./assets/icons/icon-september.png"
+        },
+        "october": {
+          "image": "./assets/icons/icon-october.png"
+        },
+        "november": {
+          "image": "./assets/icons/icon-november.png"
+        },
+        "december": {
+          "image": "./assets/icons/icon-december.png"
+        },
+        "founding": {
+          "image": "./assets/icons/icon-founding.png"
+        }
       }
     },
     "runtimeVersion": {
