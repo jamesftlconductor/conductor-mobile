@@ -55,6 +55,44 @@ export default function ProfileSetupScreen() {
     setUserId(activeUserId || '');
   }, [activeUserId]);
 
+  // Pre-fill from the saved profile so return visits show the chosen values
+  // instead of blank prompts (the screen previously never loaded saved state).
+  // Best-effort — a failed/empty fetch just leaves the form empty.
+  useEffect(() => {
+    if (!activeUserId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/signals?type=profile&userId=${encodeURIComponent(activeUserId)}`,
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        const profile = json?.profile;
+        if (cancelled || !profile) return;
+        // Restore the exact card via householdShape; fall back to reverse-
+        // mapping the legacy `type` for profiles saved before householdShape.
+        const shape: HouseholdType | null =
+          (profile.householdShape as HouseholdType) ||
+          TYPE_CARDS.find((c) => c.mappedType === profile.type)?.id ||
+          null;
+        if (shape) setPickedType(shape);
+        if (
+          profile.ownOrRent === 'own' ||
+          profile.ownOrRent === 'rent' ||
+          profile.ownOrRent === 'split'
+        ) {
+          setOwnOrRent(profile.ownOrRent);
+        }
+      } catch {
+        /* keep the form blank on failure */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUserId]);
+
   // Renting card pre-selects rent for the second question — it's
   // already implied by the choice, but we surface the second question
   // anyway so a renter who's a roommate can still split.
@@ -76,6 +114,7 @@ export default function ProfileSetupScreen() {
         body: JSON.stringify({
           userId,
           type: card?.mappedType || 'other',
+          householdShape: pickedType,
           ownOrRent: ownOrRent === 'split' ? 'rent' : ownOrRent,
         }),
       });
