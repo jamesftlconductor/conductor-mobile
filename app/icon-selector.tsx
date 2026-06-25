@@ -11,7 +11,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 
 import { useTheme } from '@/app/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -41,6 +41,9 @@ export default function IconSelectorScreen() {
   const [currentIcon, setCurrentIcon] = useState<IconKey>('january');
   const [isFounding, setIsFounding] = useState(false);
   const [savedToast, setSavedToast] = useState<string | null>(null);
+  // Tapping a grid icon opens a full-screen enlarged preview before
+  // committing; "Set as icon" applies it, tapping outside dismisses.
+  const [preview, setPreview] = useState<IconKey | null>(null);
 
   const load = useCallback(async () => {
     const enabled = await getAutoUpdateEnabled();
@@ -113,7 +116,7 @@ export default function IconSelectorScreen() {
             return (
               <TouchableOpacity
                 key={key}
-                onPress={() => pick(key)}
+                onPress={() => setPreview(key)}
                 activeOpacity={0.7}
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                 style={styles.cell}>
@@ -156,6 +159,44 @@ export default function IconSelectorScreen() {
           <Text style={styles.toastText}>{savedToast}</Text>
         </View>
       ) : null}
+
+      {/* Full-screen enlarged preview — the icon fills most of the screen in
+          its background color with the logoColor C-mark; "Set as icon" commits,
+          a tap on the backdrop dismisses. */}
+      <Modal
+        visible={preview != null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setPreview(null)}>
+        <Pressable style={styles.previewBackdrop} onPress={() => setPreview(null)}>
+          {preview ? (
+            <>
+              <Pressable
+                style={[styles.previewCard, { backgroundColor: ICON_COLORS[preview] }]}
+                onPress={() => {}}>
+                <Image
+                  source={require('../assets/c-mark.png')}
+                  resizeMode="contain"
+                  tintColor={iconColors(preview).logoColor}
+                  style={styles.previewLogo}
+                />
+              </Pressable>
+              <Text style={styles.previewName}>
+                {preview === 'founding'
+                  ? 'Founding'
+                  : MONTH_NAMES[MONTH_ICONS.indexOf(preview as any)]}
+              </Text>
+              <TouchableOpacity
+                style={styles.previewSetBtn}
+                onPress={() => { const k = preview; setPreview(null); pick(k); }}
+                activeOpacity={0.85}>
+                <Text style={styles.previewSetBtnText}>Set as icon</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -221,6 +262,43 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       shadowOpacity: 0.3,
       shadowRadius: 2,
       shadowOffset: { width: 0, height: 1 },
+    },
+    previewBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.78)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 32,
+    },
+    previewCard: {
+      width: '82%',
+      aspectRatio: 1,
+      borderRadius: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    previewLogo: {
+      width: '58%',
+      height: '58%',
+    },
+    previewName: {
+      color: '#f5f0eb',
+      fontSize: 18,
+      marginTop: 22,
+      letterSpacing: 0.3,
+    },
+    previewSetBtn: {
+      marginTop: 18,
+      backgroundColor: accentColor,
+      paddingVertical: 14,
+      paddingHorizontal: 36,
+      borderRadius: 24,
+    },
+    previewSetBtnText: {
+      color: '#0f0f0f',
+      fontSize: 15,
+      fontWeight: '600',
+      letterSpacing: 0.5,
     },
     cellLabel: {
       color: theme.text,
