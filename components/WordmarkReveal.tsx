@@ -1,5 +1,5 @@
 // Opening wordmark reveal — a full-screen dark intro shown on the first open
-// of the day. The wordmark fades in over ~1s, holds for 1.5s, then the whole
+// of the day. The wordmark fades in over ~1s, holds for 3s, then the whole
 // screen fades away to reveal Ground. Gated by the caller on a stored
 // per-day flag so it doesn't fire on every launch.
 
@@ -24,8 +24,8 @@ export function WordmarkReveal({ onDone }: { onDone: () => void }) {
         easing: Easing.out(Easing.ease),
         useNativeDriver: true,
       }),
-      // Hold (1.5s).
-      Animated.delay(1500),
+      // Hold (3s).
+      Animated.delay(3000),
       // Fade the whole reveal out, transitioning smoothly to Ground.
       Animated.timing(screenOpacity, {
         toValue: 0,
