@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { RadioTower, Settings as SettingsIcon } from 'lucide-react-native';
+import { Activity, RadioTower, Settings as SettingsIcon } from 'lucide-react-native';
 import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
@@ -29,6 +29,13 @@ export default function TabLayout() {
         options={{
           title: 'Hover',
           tabBarIcon: ({ color }) => <RadioTower size={26} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="vitals"
+        options={{
+          title: 'Vitals',
+          tabBarIcon: ({ color }) => <Activity size={26} color={color} />,
         }}
       />
       <Tabs.Screen
