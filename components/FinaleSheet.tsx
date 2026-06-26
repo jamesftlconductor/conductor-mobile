@@ -26,6 +26,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { metaFor, Signal, TYPE_META } from './signalTypes';
+import { SignalIcon } from './SignalIcon';
 import { CameraScanner } from './CameraScanner';
 import { SMSComposerSheet } from './SMSComposerSheet';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
@@ -141,7 +142,9 @@ function CategorySheet(props: CategoryProps) {
                 </>
               ) : categoryMeta ? (
                 <>
-                  <Text style={styles.filterTitleEmoji}>{categoryMeta.emoji}</Text>
+                  <View style={{ marginRight: 2 }}>
+                    <SignalIcon type={categoryTypeKey} size={18} />
+                  </View>
                   <Text style={[styles.filterTitle, { color: categoryMeta.color }]}>
                     {categoryMeta.label}
                   </Text>
@@ -161,7 +164,6 @@ function CategorySheet(props: CategoryProps) {
               <Text style={styles.filterEmpty}>This category is quiet.</Text>
             ) : (
               signals.map((s) => {
-                const meta = metaFor(s);
                 const bodyContent = (
                   <>
                     <Text style={styles.filterItemDescription} numberOfLines={2}>
@@ -178,7 +180,9 @@ function CategorySheet(props: CategoryProps) {
                 );
                 return (
                   <View key={String(s.id)} style={styles.filterItem}>
-                    <Text style={styles.filterItemEmoji}>{meta.emoji}</Text>
+                    <View style={[styles.filterItemEmoji, { alignItems: 'center', justifyContent: 'center' }]}>
+                      <SignalIcon type={s.type} size={20} />
+                    </View>
                     {onSelect ? (
                       <TouchableOpacity
                         style={styles.filterItemBody}

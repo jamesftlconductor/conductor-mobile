@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Defs, LinearGradient, Line, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Line, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
@@ -412,29 +412,17 @@ function RadarImageOverlays({ cx, cy }: { cx: number; cy: number }) {
   );
 }
 
-// Current-time clock state for the wand: angle (12 o'clock = 0°, 3 = 90°, …)
-// plus the 12-hour hour number shown riding the wand tip.
-function clockState(): { angle: number; hour: number } {
-  const now = new Date();
-  const h = now.getHours() % 12;
-  const minutes = now.getMinutes();
-  return { angle: ((h * 60 + minutes) / 720) * 360, hour: h === 0 ? 12 : h };
-}
-
 // The C mark is the living heart of the radar. Centered on (cx,cy) — the same
 // point the rings orbit — it pulses as one organism: a strong golden glow
-// radiating outward (scale 0.75→1.35, opacity 0.4→1.0, 2s), a nebula radial
-// gradient breathing out from it (opacity 0.08→0.20, same cycle), and a baton
-// that points to the current time like a clock hand (updates each minute). The
-// glow doubles as the tap target for The Conductor chat.
+// radiating outward (scale 0.75→1.35, opacity 0.4→1.0, 2s) and a nebula radial
+// gradient breathing out from it (opacity 0.08→0.20, same cycle). The glow
+// doubles as the tap target for The Conductor chat.
 function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number; onCenterPress: () => void }) {
   const { width: SW, height: SH } = useWindowDimensions();
-  const { accentColor } = useTheme();
   const bgPulse = useRef(new Animated.Value(0.85)).current;
   const cScale = useRef(new Animated.Value(0.75)).current;
   const cGlow = useRef(new Animated.Value(0.4)).current;
   const nebula = useRef(new Animated.Value(0.08)).current;
-  const [clock, setClock] = useState(() => clockState());
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -464,12 +452,6 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
     return () => loop.stop();
   }, [cScale, cGlow, nebula]);
 
-  // Wand tracks the current time; refresh every minute.
-  useEffect(() => {
-    const id = setInterval(() => setClock(clockState()), 60000);
-    return () => clearInterval(id);
-  }, []);
-
   const nebulaR = Math.max(SW, SH) * 0.7;
 
   return (
@@ -492,17 +474,6 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
           <Rect x={0} y={0} width={SW} height={SH} fill="url(#hoverNebula)" />
         </Svg>
       </Animated.View>
-
-      {/* Wand — the C mark's baton as a rotating clock hand pivoting at the
-          center: direction only, no number. Refreshes every minute. */}
-      <View
-        pointerEvents="none"
-        style={{ position: 'absolute', left: cx, top: cy, zIndex: 31, transform: [{ rotate: `${clock.angle}deg` }] }}>
-        {/* Tapered wand — 2px at the pivot, 1px at the tip. */}
-        <Svg width={4} height={55} style={{ position: 'absolute', left: -2, top: -55 }}>
-          <Polygon points="1,55 3,55 2.5,0 1.5,0" fill={accentColor} />
-        </Svg>
-      </View>
 
       {/* Center C — strong radiating golden glow; the tap target for chat. */}
       <Pressable
@@ -1894,9 +1865,12 @@ export default function HoverScreen() {
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
+        // Only actual household crew — members/extended/children/pets. Anything
+        // else (e.g. synced Google Contacts) is excluded from the dropdown.
+        const ALLOWED_MEMBER_TYPES = ['member', 'extended', 'child', 'pet'];
         const list = Array.isArray(data?.crew)
           ? data.crew
-              .filter((m: any) => m && m.name)
+              .filter((m: any) => m && m.name && ALLOWED_MEMBER_TYPES.includes(m.memberType))
               .map((m: any) => ({ name: m.name, photoUrl: m.photoUrl }))
           : [];
         setCrewList(list);
@@ -1967,11 +1941,21 @@ export default function HoverScreen() {
     expandedRingRef.current = expandedRing;
   }, [expandedRing]);
 
-  const cx = width / 2;
-  // Exact center of the cover-cropped astrolabe image. ALL center elements —
-  // the C-mark glow, the pulse, the wand, and the orbiting rings — share this
-  // one point.
-  const cy = height / 2;
+  // Exact center of the C mark, computed from the artwork. conductor-radar.png
+  // is 1086×1448; the C/ring center sits at (48.8%, 49.2%) of the image
+  // (measured as the brightness-weighted centroid of the concentric rings). The
+  // image is drawn resizeMode="cover", so we apply the same cover scale + crop
+  // to map that image-fraction point to on-screen pixels. Every center element
+  // (C-mark glow, pulse, orbiting rings) shares this exact (cx, cy).
+  const RADAR_IMG_W = 1086;
+  const RADAR_IMG_H = 1448;
+  const C_FX = 0.488;
+  const C_FY = 0.492;
+  const coverScale = Math.max(width / RADAR_IMG_W, height / RADAR_IMG_H);
+  const dispW = RADAR_IMG_W * coverScale;
+  const dispH = RADAR_IMG_H * coverScale;
+  const cx = Math.round((width - dispW) / 2 + C_FX * dispW);
+  const cy = Math.round((height - dispH) / 2 + C_FY * dispH);
 
   // Direction-hint visibility — each faint compass hint fades permanently once
   // the user has swiped that direction (persisted per-direction in AsyncStorage).

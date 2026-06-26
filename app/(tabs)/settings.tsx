@@ -2319,7 +2319,7 @@ export default function SettingsScreen() {
       {/* Subtle weather backdrop at 0.15 — mirrors Ground's condition (read
           from AsyncStorage), static, sits behind the transparent ScrollView so
           content stays fully readable. */}
-      <WeatherBackground animated={false} opacity={0.15} />
+      <WeatherBackground animated={false} opacity={0.38} />
       {/* Minimap top-right — matches the universal "tap to ask
           Conductor" affordance every screen has. Settings doesn't
           use ScreenHeader (custom layout) so we place this manually. */}
@@ -2543,6 +2543,11 @@ export default function SettingsScreen() {
         </CollapsibleSection>
 
         <CollapsibleSection title="The Score" subtitle="everything The Conductor reads from" forceOpen={hub === 'score'}>
+        <ChevronRow
+          label="Weather Skins"
+          subtext="Preview all 10 weather backgrounds"
+          onPress={() => router.push('/weather-skins' as never)}
+        />
         <CollapsibleSection title="What Conductor Sees">
         <Row
           label="Connected accounts"

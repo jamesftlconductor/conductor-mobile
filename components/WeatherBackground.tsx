@@ -17,7 +17,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Defs, Line, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -144,48 +144,62 @@ function ColorPulse({ rgb, from, to, ms }: { rgb: string; from: number; to: numb
   return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: rgb, opacity: op }]} />;
 }
 
-// One layer of thin diagonal rain streaks. Vertical dashed lines (period 40px)
-// translate down 40px on a linear loop so they tile seamlessly; the parent
-// rotation tilts them into diagonal rain.
-const RAIN_XS = Array.from({ length: Math.ceil((W + 120) / 22) + 1 }, (_, i) => i * 22);
-function RainLayer({ ms, angle, delay, opacity }: { ms: number; angle: number; delay: number; opacity: number }) {
-  const ty = useRef(new Animated.Value(0)).current;
+// ── Organic rain ────────────────────────────────────────────────────────
+// Many individual streaks, each with its own angle, length, opacity, speed and
+// column — derived deterministically from the index (fractional parts of
+// irrational multipliers) so they spread evenly across the width and stay
+// stable across re-renders (no Math.random in render). Each streak falls on its
+// own native-driven loop, staggered by an initial delay, and resets off-screen
+// above so the loop is seamless.
+type Drop = { x: number; len: number; angle: number; opacity: number; ms: number; delay: number };
+const frac = (n: number) => n - Math.floor(n);
+function makeDrops(count: number, angleMin: number, angleMax: number, msMin: number, msMax: number): Drop[] {
+  return Array.from({ length: count }, (_, i) => {
+    const r = (k: number) => frac((i + 1) * k);
+    return {
+      x: Math.round(r(0.61803398875) * (W + 40)) - 20,
+      len: Math.round(20 + r(0.7548776662) * 40), // 20–60px
+      opacity: 0.04 + r(0.32472334) * 0.1, // 0.04–0.14
+      angle: angleMin + r(0.12345678) * (angleMax - angleMin),
+      ms: Math.round(msMin + r(0.98765432) * (msMax - msMin)),
+      delay: Math.round(r(0.54360287) * msMax),
+    };
+  });
+}
+// Heavy rain: 24 streaks, 12–22°, 0.6–1.0s. Thunderstorm: denser + faster.
+// Hurricane: most streaks, steeper 25–35°, fastest.
+const RAIN_HEAVY = makeDrops(24, 12, 22, 600, 1000);
+const RAIN_THUNDER = makeDrops(32, 12, 22, 400, 700);
+const RAIN_HURRICANE = makeDrops(40, 25, 35, 300, 500);
+
+function RainDrop({ x, len, angle, opacity, ms, delay }: Drop) {
+  const t = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    let stopped = false;
-    let anim: Animated.CompositeAnimation | null = null;
-    const run = () => {
-      ty.setValue(0);
-      anim = Animated.timing(ty, { toValue: 40, duration: ms, easing: Easing.linear, useNativeDriver: true });
-      anim.start(({ finished }) => {
-        if (finished && !stopped) run();
-      });
-    };
-    const t = setTimeout(run, delay);
+    const loop = Animated.loop(
+      Animated.timing(t, { toValue: 1, duration: ms, easing: Easing.linear, useNativeDriver: true }),
+    );
+    const start = setTimeout(() => loop.start(), delay);
     return () => {
-      stopped = true;
-      clearTimeout(t);
-      anim?.stop();
+      clearTimeout(start);
+      loop.stop();
     };
-  }, [ms, delay, ty]);
+  }, [t, ms, delay]);
+  // Falls from just above the top to just below the bottom, then the loop
+  // resets it off-screen (no visible pop).
+  const translateY = t.interpolate({ inputRange: [0, 1], outputRange: [-(len + 20), H + 20] });
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${angle}deg` }] }]}>
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity, transform: [{ translateY: ty }] }]}>
-        <Svg width={W + 120} height={H + 120} style={{ marginLeft: -60, marginTop: -60 }}>
-          {RAIN_XS.map((x) => (
-            <Line key={x} x1={x} y1={0} x2={x} y2={H + 120} stroke="#ffffff" strokeWidth={1} strokeDasharray="16 24" />
-          ))}
-        </Svg>
-      </Animated.View>
-    </View>
+    <Animated.View pointerEvents="none" style={{ position: 'absolute', left: x, top: 0, transform: [{ translateY }] }}>
+      <View style={{ width: 1.2, height: len, borderRadius: 1, backgroundColor: '#ffffff', opacity, transform: [{ rotate: `${angle}deg` }] }} />
+    </Animated.View>
   );
 }
 
-function Rain({ ms, angle }: { ms: number; angle: number }) {
+function Rain({ drops }: { drops: Drop[] }) {
   return (
     <>
-      <RainLayer ms={ms} angle={angle} delay={0} opacity={0.1} />
-      <RainLayer ms={ms} angle={angle} delay={300} opacity={0.08} />
-      <RainLayer ms={ms} angle={angle} delay={600} opacity={0.06} />
+      {drops.map((d, i) => (
+        <RainDrop key={i} {...d} />
+      ))}
     </>
   );
 }
@@ -341,18 +355,18 @@ function WeatherOverlays({ kind }: { kind: WeatherKind }) {
     case 'sunset':
       return <ColorPulse rgb="rgb(255,160,50)" from={0.04} to={0.1} ms={6000} />;
     case 'heavy-rain':
-      return <Rain ms={800} angle={-12} />;
+      return <Rain drops={RAIN_HEAVY} />;
     case 'thunderstorm':
       return (
         <>
-          <Rain ms={500} angle={-12} />
+          <Rain drops={RAIN_THUNDER} />
           <Lightning />
         </>
       );
     case 'hurricane':
       return (
         <>
-          <Rain ms={400} angle={-25} />
+          <Rain drops={RAIN_HURRICANE} />
           <ColorPulse rgb="rgb(0,0,0)" from={0} to={0.15} ms={3000} />
           <Spiral />
         </>

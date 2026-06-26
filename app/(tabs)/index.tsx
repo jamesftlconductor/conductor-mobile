@@ -15,6 +15,7 @@ import { WordmarkReveal } from '@/components/WordmarkReveal';
 import { tipSeen, markTipShown } from '@/utils/oneTimeTips';
 import { makeTabSwipe } from '@/utils/tabSwipe';
 import { WeatherBackground } from '@/components/WeatherBackground';
+import { GlassCard } from '@/components/GlassCard';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { Minimap } from '@/components/Minimap';
@@ -1725,6 +1726,49 @@ export default function TakeoffScreen() {
             style={[styles.wordmark, { tintColor: logoColor }]}
           />
 
+          {/* Handoff ack row — surfaced ABOVE the glass card (not inside) so a
+              member-coordination prompt stands out over the weather. */}
+          {!loading && handoff ? (
+            <View style={styles.handoffWrap}>
+              {handoffAcked ? (
+                <Text style={styles.handoffAckedText}>Acknowledged</Text>
+              ) : (
+                <TouchableOpacity
+                  onPress={async () => {
+                    setHandoffAcked(true);
+                    try {
+                      await fetch(
+                        'https://conductor-ivory.vercel.app/api/signals?type=handoff',
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            signalId: handoff.signalId,
+                            acknowledgedBy: userId,
+                            userId,
+                          }),
+                        }
+                      );
+                    } catch {
+                      // Best-effort — the next brief will still suppress
+                      // it if the write reached Redis; if not, the user
+                      // can tap again on the next brief.
+                    }
+                    setTimeout(() => setHandoff(null), 3000);
+                  }}
+                  activeOpacity={0.6}
+                  style={styles.handoffBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.handoffBtnText}>{userName || 'You'} has this ✓</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null}
+
+          {/* Glass card — lifts the greeting, mode label, brief hero, "took
+              care of" line and The Pulse off the weather photo. The Minimap
+              and the handoff note stay outside it. */}
+          <GlassCard style={styles.groundGlass}>
           {/* Greeting + mode label sit as quiet context directly above the
               brief hero (not at the top). */}
           <View style={styles.header}>
@@ -1804,47 +1848,6 @@ export default function TakeoffScreen() {
               ) : null}
             </View>
           )}
-
-          {!loading && handoff ? (
-            // Handoff ack row — small brass button right-aligned
-            // below the brief prose. Tap POSTs to the ack endpoint
-            // and flips the row to a muted "Acknowledged" label that
-            // unmounts after 3s.
-            <View style={styles.handoffWrap}>
-              {handoffAcked ? (
-                <Text style={styles.handoffAckedText}>Acknowledged</Text>
-              ) : (
-                <TouchableOpacity
-                  onPress={async () => {
-                    setHandoffAcked(true);
-                    try {
-                      await fetch(
-                        'https://conductor-ivory.vercel.app/api/signals?type=handoff',
-                        {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            signalId: handoff.signalId,
-                            acknowledgedBy: userId,
-                            userId,
-                          }),
-                        }
-                      );
-                    } catch {
-                      // Best-effort — the next brief will still suppress
-                      // it if the write reached Redis; if not, the user
-                      // can tap again on the next brief.
-                    }
-                    setTimeout(() => setHandoff(null), 3000);
-                  }}
-                  activeOpacity={0.6}
-                  style={styles.handoffBtn}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={styles.handoffBtnText}>{userName || 'You'} has this ✓</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : null}
 
           {!loading && (() => {
             // Took Care Of band — items Conductor auto-resolved or
@@ -2340,6 +2343,7 @@ export default function TakeoffScreen() {
               ) : null}
             </TouchableOpacity>
           ) : null}
+          </GlassCard>
 
           {householdInterview ? (
             // Household interview — when the radar is thin the brief surfaces
@@ -2747,6 +2751,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     padding: 32,
     paddingTop: 48,
     minHeight: '100%',
+  },
+  // Ground glass card — pulled out to sit 16px from each screen edge (content
+  // padding is 32, so −16 nets to 16), letting the weather photo show around it.
+  groundGlass: {
+    marginHorizontal: -16,
+    marginTop: 4,
+    marginBottom: 12,
   },
   // Brand wordmark banner — the first thing you see, large + centered at the
   // top. 220px wide; height is the wordmark's true proportion (554×202 →
