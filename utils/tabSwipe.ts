@@ -1,29 +1,13 @@
-// Horizontal swipe navigation across the bottom tabs:
-//   Ground (0) → Hover (1) → Vitals (2) → Settings (3)
-// Swipe left → next tab, swipe right → previous tab. activeOffsetX defers to
-// horizontal intent only and failOffsetY lets vertical scrolling win, so the
-// gesture coexists with each screen's ScrollView. Plain function (not a hook)
-// so callers can build it after early returns, matching the existing inline
-// Gesture.Pan() pattern.
+// Tab swipe navigation is now handled by a root-level PanResponder in
+// app/(tabs)/_layout.tsx (the gesture-handler attempt here never worked
+// reliably and competed with the screens' ScrollViews). makeTabSwipe is kept
+// as a DISABLED gesture so the existing GestureDetector wrappers in the tab
+// screens stay valid but never claim a touch — leaving horizontal swipes for
+// the PanResponder. The currentIndex param is ignored.
 
-import { router } from 'expo-router';
 import { Gesture } from 'react-native-gesture-handler';
 
-const TAB_ROUTES = ['/(tabs)', '/(tabs)/hover', '/(tabs)/vitals', '/(tabs)/settings'];
-
-export function makeTabSwipe(currentIndex: number) {
-  return Gesture.Pan()
-    .activeOffsetX([-30, 30])
-    .failOffsetY([-20, 20])
-    .runOnJS(true)
-    .onEnd((e) => {
-      if (Math.abs(e.translationY) > 80) return;
-      if (e.translationX < -60) {
-        const next = TAB_ROUTES[currentIndex + 1];
-        if (next) router.navigate(next as never);
-      } else if (e.translationX > 60) {
-        const prev = TAB_ROUTES[currentIndex - 1];
-        if (prev) router.navigate(prev as never);
-      }
-    });
+export function makeTabSwipe(_currentIndex: number) {
+  // Disabled — does not activate, so the root PanResponder owns tab swipes.
+  return Gesture.Pan().enabled(false);
 }
