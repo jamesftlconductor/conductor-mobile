@@ -481,6 +481,58 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
   );
 }
 
+// One faint rotating overlay ring (astrolabe glint) drawn over the image's
+// baked ring. A mostly-transparent full circle plus a brighter ~22% arc; the
+// whole layer spins so the arc reads as a moving glint. Box is centered on
+// (cx,cy) so the rotation happens in place. pointerEvents none.
+function SpinRing({ cx, cy, radius, durationMs, clockwise }: { cx: number; cy: number; radius: number; durationMs: number; clockwise: boolean }) {
+  const rot = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(rot, { toValue: 1, duration: durationMs, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [rot, durationMs]);
+  const spin = rot.interpolate({ inputRange: [0, 1], outputRange: clockwise ? ['0deg', '360deg'] : ['0deg', '-360deg'] });
+  const sw = 2;
+  const box = radius * 2 + sw * 2;
+  const c = box / 2;
+  const circ = 2 * Math.PI * radius;
+  const glint = circ * 0.22;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{ position: 'absolute', left: cx - c, top: cy - c, width: box, height: box, transform: [{ rotate: spin }] }}>
+      <Svg width={box} height={box}>
+        <Circle cx={c} cy={c} r={radius} stroke={RING_HIGHLIGHT} strokeOpacity={0.15} strokeWidth={1.5} fill="none" />
+        <Circle
+          cx={c}
+          cy={c}
+          r={radius}
+          stroke={RING_HIGHLIGHT}
+          strokeOpacity={0.5}
+          strokeWidth={sw}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${glint} ${circ - glint}`}
+        />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+// Inner CW 30s, middle CCW 45s, outer CW 60s — matches the dot ring radii.
+function RotatingOverlayRings({ cx, cy }: { cx: number; cy: number }) {
+  return (
+    <>
+      <SpinRing cx={cx} cy={cy} radius={65} durationMs={30000} clockwise />
+      <SpinRing cx={cx} cy={cy} radius={115} durationMs={45000} clockwise={false} />
+      <SpinRing cx={cx} cy={cy} radius={165} durationMs={60000} clockwise />
+    </>
+  );
+}
+
 // Center core of the radar — a glowing, pulsing dot in the accent color that
 // anchors the rings. It breathes on a gentle, steady rhythm when the radar is
 // quiet and quickens when there are urgent signals, so the center reads as the
@@ -1836,6 +1888,29 @@ export default function HoverScreen() {
   const cx = width / 2;
   const cy = height / 2 - 50;
 
+  // Direction-hint visibility — each faint compass hint fades permanently once
+  // the user has swiped that direction (persisted per-direction in AsyncStorage).
+  const [hintsSeen, setHintsSeen] = useState<{ up: boolean; down: boolean; left: boolean; right: boolean }>({
+    up: false, down: false, left: false, right: false,
+  });
+  useEffect(() => {
+    (async () => {
+      try {
+        const [u, d, l, r] = await Promise.all([
+          AsyncStorage.getItem('hoverHint:up'),
+          AsyncStorage.getItem('hoverHint:down'),
+          AsyncStorage.getItem('hoverHint:left'),
+          AsyncStorage.getItem('hoverHint:right'),
+        ]);
+        setHintsSeen({ up: u === '1', down: d === '1', left: l === '1', right: r === '1' });
+      } catch { /* leave all hints visible */ }
+    })();
+  }, []);
+  const markSwiped = useCallback((dir: 'up' | 'down' | 'left' | 'right') => {
+    setHintsSeen((prev) => (prev[dir] ? prev : { ...prev, [dir]: true }));
+    AsyncStorage.setItem(`hoverHint:${dir}`, '1').catch(() => {});
+  }, []);
+
   // Header + legend opacity animations driven by expandedRing. Both fade
   // when any ring is expanded — header to 0 (out of the way), legend to
   // 0.3 (still visible but recedes).
@@ -2165,6 +2240,11 @@ export default function HoverScreen() {
       const dx = event.x - cx;
       const dy = event.y - cy;
       const distance = Math.sqrt(dx * dx + dy * dy);
+      // Long-press the very center (the C) → The Baton hub.
+      if (distance < 34) {
+        router.push('/(tabs)/settings?hub=baton' as never);
+        return;
+      }
       if (distance >= RING_HIT_BOUNDARIES.outerOuter) return;
       let target: RingKey;
       if (distance < RING_HIT_BOUNDARIES.innerOuter) target = 'inner';
@@ -2189,7 +2269,43 @@ export default function HoverScreen() {
       if (!insideExpandedRing) setExpandedRing(null);
     });
 
-  const composedGesture = Gesture.Race(swipeGesture, longPressGesture, tapGesture);
+  // Center-origin directional swipes. Only swipes that BEGIN within the center
+  // 60% of the screen navigate directionally; edge-origin swipes call
+  // state.fail() so the root tab-switch PanResponder (app/(tabs)/_layout.tsx)
+  // still handles them. manualActivation lets us activate/fail by touch origin.
+  const swipeOriginRef = useRef<{ x: number; y: number; center: boolean } | null>(null);
+  const centerSwipe = Gesture.Pan()
+    .manualActivation(true)
+    .runOnJS(true)
+    .onTouchesDown((e) => {
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const center = t.x > width * 0.2 && t.x < width * 0.8 && t.y > height * 0.2 && t.y < height * 0.8;
+      swipeOriginRef.current = { x: t.x, y: t.y, center };
+    })
+    .onTouchesMove((e, state) => {
+      const o = swipeOriginRef.current;
+      const t = e.changedTouches[0];
+      if (!o || !t) return;
+      if (!o.center) { state.fail(); return; }
+      if (Math.abs(t.x - o.x) > 18 || Math.abs(t.y - o.y) > 18) state.activate();
+    })
+    .onEnd((e) => {
+      const o = swipeOriginRef.current;
+      if (!o || !o.center) return;
+      const dx = e.translationX;
+      const dy = e.translationY;
+      if (Math.abs(dx) < 50 && Math.abs(dy) < 50) return;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0) { markSwiped('left'); router.push('/(tabs)/settings?hub=score' as never); }
+        else { markSwiped('right'); router.push('/(tabs)/settings?hub=orchestra' as never); }
+      } else {
+        if (dy < 0) { markSwiped('up'); router.push('/horizon' as never); }
+        else { markSwiped('down'); router.push('/journal' as never); }
+      }
+    });
+
+  const composedGesture = Gesture.Race(centerSwipe, swipeGesture, longPressGesture, tapGesture);
 
   return (
     <GestureDetector gesture={composedGesture}>
@@ -2197,6 +2313,31 @@ export default function HoverScreen() {
         {/* Radar artwork as the screen background — the rings, vapor, center C
             and labels are the image itself. Dots + animated overlays sit on top. */}
         <HoverImageBackdrop cx={cx} cy={cy} onCenterPress={() => openConductorSheet('hover')} />
+        {/* Faint rotating overlay rings (astrolabe glint) on top of the image. */}
+        <RotatingOverlayRings cx={cx} cy={cy} />
+
+        {/* Subtle directional-navigation hints at the compass points. Each fades
+            permanently once the user has swiped that direction (#4). */}
+        {!hintsSeen.up ? (
+          <View pointerEvents="none" style={[styles.dirHintH, { top: insets.top + 72 }]}>
+            <Text style={[styles.dirHintText, { color: theme.muted }]}>HORIZON ↑</Text>
+          </View>
+        ) : null}
+        {!hintsSeen.down ? (
+          <View pointerEvents="none" style={[styles.dirHintH, { bottom: insets.bottom + 96 }]}>
+            <Text style={[styles.dirHintText, { color: theme.muted }]}>JOURNAL ↓</Text>
+          </View>
+        ) : null}
+        {!hintsSeen.left ? (
+          <View pointerEvents="none" style={[styles.dirHintV, { left: 14, top: cy - 6 }]}>
+            <Text style={[styles.dirHintText, { color: theme.muted }]}>← SCORE</Text>
+          </View>
+        ) : null}
+        {!hintsSeen.right ? (
+          <View pointerEvents="none" style={[styles.dirHintV, { right: 14, top: cy - 6 }]}>
+            <Text style={[styles.dirHintText, { color: theme.muted }]}>ORCHESTRA →</Text>
+          </View>
+        ) : null}
         {/* Brand wordmark banner — centered at the very top, above the
             radar. 140px wide, proportional (square source) height. Sits
             behind the interactive Minimap/help affordances (zIndex 50)
@@ -2513,6 +2654,24 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     // ImageBackground is the only radar background now; black behind it so no
     // old radar color shows around the image.
     backgroundColor: '#000000',
+  },
+  // Faint directional-navigation hints at the compass points (#4).
+  dirHintH: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  dirHintV: {
+    position: 'absolute',
+    zIndex: 5,
+  },
+  dirHintText: {
+    fontSize: 9,
+    letterSpacing: 1.5,
+    opacity: 0.3,
+    fontWeight: '600',
   },
   // Brand wordmark banner — centered at the top of Hover. 140px wide;
   // height is the wordmark's true proportion (cropped source is

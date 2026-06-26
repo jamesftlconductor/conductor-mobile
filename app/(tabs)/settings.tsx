@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as security from '@/app/security';
 import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { Minimap } from '@/components/Minimap';
@@ -445,16 +445,23 @@ function CollapsibleSection({
   title,
   subtitle,
   defaultOpen = false,
+  forceOpen,
   children,
 }: {
   title: string;
   subtitle?: string;
   defaultOpen?: boolean;
+  // Deep-link signal: when this flips true (e.g. navigated to with ?hub=...),
+  // the section auto-expands. Does not force-close.
+  forceOpen?: boolean;
   children: React.ReactNode;
 }) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
   // Hubs carry a subtitle; nested child sections don't. Indent the children
   // (with a left rail) so they read as nested inside their hub, never as
   // top-level siblings.
@@ -1749,6 +1756,9 @@ async function handleInviteMember(userId: string) {
 }
 
 export default function SettingsScreen() {
+  // Deep-link hub param (?hub=baton|orchestra|score) auto-expands a hub when
+  // navigated to from the Hover directional swipes / long-press.
+  const { hub } = useLocalSearchParams<{ hub?: string }>();
   const userId = useUserId();
   const { theme: t_theme, accentColor: t_accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(t_theme, t_accentColor), [t_theme, t_accentColor]);
@@ -2184,7 +2194,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
 
-        <CollapsibleSection title="The Baton" subtitle="how The Conductor works for you">
+        <CollapsibleSection title="The Baton" subtitle="how The Conductor works for you" forceOpen={hub === 'baton'}>
         <CollapsibleSection title="Your Brief">
         <ChevronRow
           label="Takeoff"
@@ -2289,7 +2299,7 @@ export default function SettingsScreen() {
         </CollapsibleSection>
         </CollapsibleSection>
 
-        <CollapsibleSection title="The Orchestra" subtitle="the people and places it watches">
+        <CollapsibleSection title="The Orchestra" subtitle="the people and places it watches" forceOpen={hub === 'orchestra'}>
         <CollapsibleSection title="Your Household">
         <HouseholdNameRow />
         <Row label="RangerOaks925" subtext="Your household" />
@@ -2386,7 +2396,7 @@ export default function SettingsScreen() {
         </CollapsibleSection>
         </CollapsibleSection>
 
-        <CollapsibleSection title="The Score" subtitle="everything The Conductor reads from">
+        <CollapsibleSection title="The Score" subtitle="everything The Conductor reads from" forceOpen={hub === 'score'}>
         <CollapsibleSection title="What Conductor Sees">
         <Row
           label="Connected accounts"
