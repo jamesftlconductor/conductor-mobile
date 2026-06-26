@@ -14,8 +14,7 @@ import { WordmarkLoader } from '@/components/WordmarkLoader';
 import { WordmarkReveal } from '@/components/WordmarkReveal';
 import { tipSeen, markTipShown } from '@/utils/oneTimeTips';
 import { makeTabSwipe } from '@/utils/tabSwipe';
-import LottieView from 'lottie-react-native';
-import { weatherLottieSource } from '@/utils/weatherLottie';
+import { WeatherBackground } from '@/components/WeatherBackground';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { Minimap } from '@/components/Minimap';
@@ -1673,15 +1672,17 @@ export default function TakeoffScreen() {
   // Swipe left → go to Hover
   const swipeGesture = makeTabSwipe(0);
 
-  // Weather-reactive Lottie backdrop, rendered at FULL opacity so the dark
-  // band background can't bleed through and grey it out (that 0.6-opacity
-  // bleed was the "grey film"). The transparent ScrollView content sits on
-  // top, so the animation reads cleanly behind the brief.
-  const weatherLottie = useMemo(() => {
-    const hour = new Date().getHours();
-    const isNight = hour < 6 || hour >= 19;
-    return weatherLottieSource(pulseData?.weather?.conditions, { isNight });
-  }, [pulseData?.weather?.conditions]);
+  // Weather-reactive photo backdrop (WeatherBackground), rendered at FULL
+  // opacity behind the transparent ScrollView so the brief reads cleanly on
+  // top. The skyBg container tone shows only until the image paints (no grey
+  // film). The transparent ScrollView content sits on top.
+  const weatherCondition = pulseData?.weather?.conditions;
+  // Cache the latest condition so the Settings backdrop can mirror it.
+  useEffect(() => {
+    if (typeof weatherCondition === 'string' && weatherCondition) {
+      AsyncStorage.setItem('lastWeatherCondition', weatherCondition).catch(() => {});
+    }
+  }, [weatherCondition]);
 
   // Sky backdrop behind the weather Lottie. The previous flat near-black
   // theme background (#0f0f0f) is what read as a "grey film": it showed
@@ -1696,11 +1697,8 @@ export default function TakeoffScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? skyBg : bandTheme.bg }]}>
-      {weatherLottie ? (
-        <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
-          <LottieView source={weatherLottie} autoPlay loop resizeMode="cover" style={{ flex: 1 }} />
-        </View>
-      ) : null}
+      <WeatherBackground condition={weatherCondition} hour={new Date().getHours()} animated />
+
       {/* Positioned to the left of the Minimap (40x40 at right: 20, top: 60).
           Minimap's left edge is 60px from screen right; HelpButton's right
           edge sits at 68px to give an 8px gap. */}

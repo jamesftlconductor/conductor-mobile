@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as security from '@/app/security';
 import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { Minimap } from '@/components/Minimap';
+import { WeatherBackground } from '@/components/WeatherBackground';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useCatchphrase } from '@/hooks/useCatchphrase';
 import {
@@ -2315,6 +2316,10 @@ export default function SettingsScreen() {
   return (
     <GestureDetector gesture={makeTabSwipe(3)}>
     <View style={styles.container}>
+      {/* Subtle weather backdrop at 0.15 — mirrors Ground's condition (read
+          from AsyncStorage), static, sits behind the transparent ScrollView so
+          content stays fully readable. */}
+      <WeatherBackground animated={false} opacity={0.15} />
       {/* Minimap top-right — matches the universal "tap to ask
           Conductor" affordance every screen has. Settings doesn't
           use ScreenHeader (custom layout) so we place this manually. */}
@@ -2326,7 +2331,7 @@ export default function SettingsScreen() {
         />
       </View>
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: 'transparent' }]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
