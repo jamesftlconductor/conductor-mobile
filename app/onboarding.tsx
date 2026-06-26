@@ -80,7 +80,21 @@ const INTERSTITIAL_POLL_MS = 3000;
 const PIPELINE_START_KEY = 'onboard_pipeline_started_at';
 const STEP_KEY = 'onboardingStep';
 
-type Phase = 'joining' | 'language' | 'step1' | 'step2' | 'work' | 'step3' | 'step4' | 'interstitial';
+type Phase = 'intro' | 'joining' | 'language' | 'step1' | 'step2' | 'household' | 'work' | 'step3' | 'step4' | 'interstitial';
+
+// Household situation builder option sets (new step after communication prefs).
+const HOUSEHOLD_SITUATIONS = [
+  { id: 'just_me', emoji: '🧍', label: 'Just me' },
+  { id: 'couple', emoji: '💞', label: 'Couple' },
+  { id: 'family_kids', emoji: '👨‍👩‍👧', label: 'Family with kids' },
+  { id: 'roommates', emoji: '🧑‍🤝‍🧑', label: 'Roommates' },
+];
+const HOUSING_TYPES = [
+  { id: 'own_house', emoji: '🏠', label: 'Own a house' },
+  { id: 'own_condo', emoji: '🏢', label: 'Own a condo/apt' },
+  { id: 'rent_house', emoji: '🏡', label: 'Rent a house' },
+  { id: 'rent_apt', emoji: '🏬', label: 'Rent an apt' },
+];
 
 type WorkContext =
   | 'work_from_home'
@@ -286,6 +300,10 @@ export default function OnboardingScreen() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [hobbiesPicked, setHobbiesPicked] = useState<Set<string>>(new Set());
 
+  // Household situation builder (new step after communication prefs).
+  const [householdSituation, setHouseholdSituation] = useState<string | null>(null);
+  const [housingType, setHousingType] = useState<string | null>(null);
+
   const [pipelineReady, setPipelineReady] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
   const progressMounted = useRef(false);
@@ -348,19 +366,22 @@ export default function OnboardingScreen() {
           return;
         }
 
-        // Resume mid-flow if a saved phase exists, else start at language.
+        // Resume mid-flow if a saved phase exists, else start at the
+        // Conductor introduction (the new first step for fresh households).
         if (
+          savedPhase === 'intro' ||
+          savedPhase === 'language' ||
           savedPhase === 'step1' ||
           savedPhase === 'step2' ||
+          savedPhase === 'household' ||
           savedPhase === 'work' ||
           savedPhase === 'step3' ||
           savedPhase === 'step4' ||
-          savedPhase === 'interstitial' ||
-          savedPhase === 'language'
+          savedPhase === 'interstitial'
         ) {
           setPhase(savedPhase);
         } else {
-          setPhase('language');
+          setPhase('intro');
         }
         startPipeline();
         if (!progressMounted.current) {
@@ -506,6 +527,26 @@ export default function OnboardingScreen() {
         }),
       });
     } catch { /* best-effort */ }
+    setPhase('household');
+  }
+
+  // Household situation builder — who's in the household + housing type.
+  // Stored as preferences so the brief + pipeline can reason about the
+  // household shape. Advances to the (optional) work-context step.
+  async function confirmHousehold() {
+    try {
+      await fetch(`${API_BASE}/signals?type=preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId,
+          preferences: {
+            householdSituation: householdSituation,
+            housingType: housingType,
+          },
+        }),
+      });
+    } catch { /* best-effort */ }
     setPhase('work');
   }
 
@@ -643,12 +684,23 @@ export default function OnboardingScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.progressTrack}>
-        <Animated.View style={[styles.progressFill, { width: widthInterpolated }]} />
-      </View>
+      {phase !== 'intro' ? (
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, { width: widthInterpolated }]} />
+        </View>
+      ) : null}
       {pipelineReady ? <Text style={styles.readyChip}>Ready ✓</Text> : null}
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {phase === 'intro' ? (
+          <ConductorIntro
+            onContinue={() => setPhase('language')}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
+          />
+        ) : null}
+
         {phase === 'joining' ? (
           <JoiningStep
             preview={joinPreview}
@@ -704,6 +756,17 @@ export default function OnboardingScreen() {
           />
         ) : null}
 
+        {phase === 'household' ? (
+          <HouseholdSituationStep
+            situation={householdSituation} setSituation={setHouseholdSituation}
+            housing={housingType} setHousing={setHousingType}
+            onContinue={confirmHousehold}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
+          />
+        ) : null}
+
         {phase === 'work' ? (
           <StepWork
             workContext={workContext} setWorkContext={setWorkContext}
@@ -743,15 +806,16 @@ export default function OnboardingScreen() {
           <InterstitialBlock pipelineReady={pipelineReady} progress={progress} />
         ) : null}
 
-        {phase === 'step1' || phase === 'step2' || phase === 'work' || phase === 'step3' || phase === 'step4' ? (
+        {phase === 'step1' || phase === 'step2' || phase === 'household' || phase === 'work' || phase === 'step3' || phase === 'step4' ? (
           <StepDots
             s={stepStyles}
             active={
               phase === 'step1' ? 0
               : phase === 'step2' ? 1
-              : phase === 'work' ? 2
-              : phase === 'step3' ? 3
-              : 4
+              : phase === 'household' ? 2
+              : phase === 'work' ? 3
+              : phase === 'step3' ? 4
+              : 5
             }
           />
         ) : null}
@@ -908,6 +972,152 @@ function LanguageStep({
           );
         })}
       </View>
+    </>
+  );
+}
+
+// ---------- Conductor introduction (first step, runs while pipeline starts) ----------
+
+function ConductorIntro({
+  onContinue, theme, accentColor,
+}: {
+  onContinue: () => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
+}) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', paddingTop: 56 }}>
+      <Image
+        source={require('../assets/wordmark.png')}
+        resizeMode="contain"
+        style={{ width: 200, height: 74, marginBottom: 52 }}
+      />
+      <Text
+        style={{
+          color: theme.text,
+          fontSize: 19,
+          lineHeight: 29,
+          fontWeight: '300',
+          textAlign: 'center',
+          paddingHorizontal: 6,
+        }}>
+        I&apos;m The Conductor. I keep your household running quietly in the background.
+      </Text>
+      <Text
+        style={{
+          color: theme.muted,
+          fontSize: 15,
+          lineHeight: 24,
+          textAlign: 'center',
+          marginTop: 20,
+          paddingHorizontal: 6,
+        }}>
+        While I scan your inbox and calendar, let me ask you a few things.
+      </Text>
+      <TouchableOpacity
+        onPress={onContinue}
+        activeOpacity={0.85}
+        style={{
+          marginTop: 48,
+          backgroundColor: accentColor,
+          paddingVertical: 14,
+          paddingHorizontal: 32,
+          borderRadius: 24,
+        }}>
+        <Text style={{ color: '#0f0f0f', fontSize: 15, fontWeight: '600', letterSpacing: 0.5 }}>
+          Let&apos;s get started →
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ---------- Household situation builder (after communication preferences) ----------
+
+function HouseholdSituationStep({
+  situation, setSituation, housing, setHousing, onContinue, s, theme, accentColor,
+}: {
+  situation: string | null;
+  setSituation: (v: string) => void;
+  housing: string | null;
+  setHousing: (v: string) => void;
+  onContinue: () => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
+}) {
+  const canContinue = situation !== null && housing !== null;
+  const renderCards = (
+    options: { id: string; emoji: string; label: string }[],
+    selected: string | null,
+    onSelect: (id: string) => void,
+  ) => (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: TOKENS.space.item }}>
+      {options.map((o) => {
+        const active = selected === o.id;
+        return (
+          <TouchableOpacity
+            key={o.id}
+            onPress={() => onSelect(o.id)}
+            activeOpacity={0.7}
+            style={[
+              {
+                flexBasis: '47%',
+                flexGrow: 1,
+                alignItems: 'center',
+                paddingVertical: 20,
+                paddingHorizontal: 12,
+                borderRadius: TOKENS.card.borderRadius,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
+              },
+              active && { borderColor: accentColor, backgroundColor: accentRgba(accentColor, 0.08) },
+            ]}>
+            <Text style={{ fontSize: 28, marginBottom: 8 }}>{o.emoji}</Text>
+            <Text
+              style={{
+                color: theme.text,
+                fontSize: 14,
+                fontWeight: active ? '600' : '400',
+                textAlign: 'center',
+              }}>
+              {o.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+  return (
+    <>
+      <Text style={[s.title, { marginTop: 20 }]}>Who&apos;s in your household?</Text>
+      <View style={{ marginTop: 14, marginBottom: 28 }}>
+        {renderCards(HOUSEHOLD_SITUATIONS, situation, setSituation)}
+      </View>
+      <Text style={s.title}>Where do you live?</Text>
+      <View style={{ marginTop: 14 }}>
+        {renderCards(HOUSING_TYPES, housing, setHousing)}
+      </View>
+      <TouchableOpacity
+        onPress={onContinue}
+        disabled={!canContinue}
+        activeOpacity={0.85}
+        style={[
+          {
+            marginTop: 32,
+            backgroundColor: accentColor,
+            paddingVertical: 14,
+            borderRadius: 24,
+            alignItems: 'center',
+          },
+          !canContinue && { opacity: 0.4 },
+        ]}>
+        <Text style={{ color: '#0f0f0f', fontSize: 15, fontWeight: '600', letterSpacing: 0.5 }}>
+          Continue →
+        </Text>
+      </TouchableOpacity>
     </>
   );
 }
@@ -1577,10 +1787,10 @@ function InterstitialBlock({
 
 // ---------- Step indicator dots ----------
 
-function StepDots({ active, s }: { active: 0 | 1 | 2 | 3 | 4; s: StepStyles }) {
+function StepDots({ active, s }: { active: 0 | 1 | 2 | 3 | 4 | 5; s: StepStyles }) {
   return (
     <View style={s.dotsRow}>
-      {[0, 1, 2, 3, 4].map((i) => {
+      {[0, 1, 2, 3, 4, 5].map((i) => {
         const state = i === active ? 'active' : i < active ? 'done' : 'upcoming';
         return (
           <View

@@ -63,7 +63,8 @@ export default function OnboardFirstIntroScreen() {
     } catch {
       // best-effort — still proceed
     }
-    router.replace('/(tabs)');
+    // Directory introduction is the final onboarding step before Ground.
+    router.replace('/onboard-directory' as never);
   }
 
   function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {

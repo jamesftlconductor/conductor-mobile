@@ -9,6 +9,7 @@
 // message and proceeds to (tabs) — onboarding should never be
 // blocked on the reveal payload.
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -85,6 +86,15 @@ export default function OnboardRevealScreen() {
   const [error, setError] = useState(false);
   const [cardCount, setCardCount] = useState(0);
   const [vaultPreview, setVaultPreview] = useState<VaultPreviewItem[]>([]);
+  // Verification step — shown after the reveal cards. Confirms the top things
+  // Conductor found before proceeding.
+  const [verifying, setVerifying] = useState(false);
+  const [householdName, setHouseholdName] = useState<string | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem('householdName')
+      .then((n) => { if (typeof n === 'string' && n.trim()) setHouseholdName(n.trim()); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +218,42 @@ export default function OnboardRevealScreen() {
     );
   }
 
+  if (verifying) {
+    const verifyItems: { label: string; value: string }[] = [];
+    verifyItems.push({ label: 'Household', value: householdName || 'Your household' });
+    for (const v of vaultPreview.slice(0, 3)) {
+      verifyItems.push({ label: 'Vault item', value: v.description || v.provider || 'Saved item' });
+    }
+    for (const d of (reveal?.upcomingDeadlines || []).slice(0, 3)) {
+      verifyItems.push({ label: 'Signal', value: `${d.description} — ${formatEta(d.eta)}` });
+    }
+    return (
+      <View style={styles.container}>
+        <View style={styles.revealLogo}>
+          <PulsingCMark size={48} />
+        </View>
+        <Text style={styles.header}>Does this look right?</Text>
+        <View style={styles.cardStack}>
+          {verifyItems.map((it, i) => (
+            <View key={i} style={styles.verifyRow}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={styles.verifyLabel}>{it.label}</Text>
+                <Text style={styles.verifyValue} numberOfLines={2}>{it.value}</Text>
+              </View>
+              <Text style={styles.verifyCheck}>✓</Text>
+            </View>
+          ))}
+        </View>
+        <TouchableOpacity
+          onPress={() => router.replace('/onboard-first-intro' as never)}
+          activeOpacity={0.85}
+          style={styles.verifyCta}>
+          <Text style={styles.ctaText}>Looks good →</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Brand C mark crowning the reveal, centered near the top. Pulses and
@@ -224,7 +270,7 @@ export default function OnboardRevealScreen() {
       </View>
       {cardCount >= cards.length && (
         <>
-          <FadeInCta onPress={() => router.replace('/onboard-first-intro' as never)} />
+          <FadeInCta onPress={() => setVerifying(true)} />
           <TouchableOpacity
             onPress={() => router.replace('/transition' as never)}
             style={styles.transitionLink}
@@ -451,5 +497,32 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     letterSpacing: 0.2,
   },
   ctaText: { color: '#0f0f0f', ...TOKENS.type.body, fontWeight: '600', letterSpacing: 0.5 },
+  verifyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: TOKENS.card.borderRadius,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
+  },
+  verifyLabel: {
+    color: theme.muted,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  verifyValue: { color: theme.text, fontSize: 14, lineHeight: 19 },
+  verifyCheck: { color: accentColor, fontSize: 18, fontWeight: '700' },
+  verifyCta: {
+    marginTop: 22,
+    alignSelf: 'center',
+    backgroundColor: accentColor,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 24,
+  },
   });
 }
