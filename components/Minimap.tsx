@@ -2,8 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
+
+// The radar artwork is the disc background; dots + a center pulse layer on top.
+const RADAR_IMG = require('../assets/conductor-radar.png');
+const RING_ORDER: RingKey[] = ['outer', 'middle', 'inner'];
 
 import { useTheme } from '@/app/theme';
 import { useHouseholdState } from '@/hooks/useHouseholdState';
@@ -431,33 +435,24 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
     return () => loop.stop();
   }, [breatheAnim]);
 
-  // Resting-state vapor — a soft accent radial glow behind the rings that
-  // breathes its opacity 0.6 → 1.0 → 0.6 on a 4s cycle, fully independent of
-  // the ring pulse and the disc breathe above, so the minimap feels alive even
-  // when nothing is happening. The gradient's center opacity itself lifts from
-  // 0.10 to 0.18 when there are urgent signals (set on the Stop below).
-  const vaporId = useRef(`minimapVapor-${++vaporInstanceCounter}`).current;
-  const vaporAnim = useRef(new Animated.Value(0.5)).current;
+  // Center C pulse — a soft golden glow over the radar artwork's center mark,
+  // breathing scale 0.85 → 1.15 and opacity 0.6 → 1.0 on a 2s cycle. The rings
+  // and vapor now come from the image, so this is the minimap's living accent.
+  const centerScale = useRef(new Animated.Value(0.85)).current;
+  const centerGlow = useRef(new Animated.Value(0.6)).current;
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(vaporAnim, {
-          toValue: 1.0,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(vaporAnim, {
-          toValue: 0.5,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    );
+    const up = Animated.parallel([
+      Animated.timing(centerScale, { toValue: 1.15, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(centerGlow, { toValue: 1.0, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]);
+    const down = Animated.parallel([
+      Animated.timing(centerScale, { toValue: 0.85, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(centerGlow, { toValue: 0.6, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]);
+    const loop = Animated.loop(Animated.sequence([up, down]));
     loop.start();
     return () => loop.stop();
-  }, [vaporAnim]);
+  }, [centerScale, centerGlow]);
 
   // First-render discovery: scale-bounce 3 times, then surface a
   // tooltip ("Tap to ask The Conductor anything") for up to 4 seconds.
@@ -576,27 +571,42 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
           // Slow 4s breathing pulse so the disc never sits at a faint rest.
           { opacity: breatheAnim },
         ]}>
-        {/* Resting-state vapor — accent radial glow behind everything, its
-            opacity breathing 0.6 → 1.0 (vaporAnim) independent of the rings.
-            Center opacity lifts 0.10 → 0.18 when urgent signals exist. */}
-        <Animated.View pointerEvents="none" style={[styles.ringLayer, { opacity: vaporAnim }]}>
-          <Svg width={size} height={size}>
-            <Defs>
-              <RadialGradient id={vaporId} cx="50%" cy="50%" r="50%">
-                <Stop offset="0" stopColor={accentColor} stopOpacity={urgentCount > 0 ? 0.6 : 0.5} />
-                <Stop offset="1" stopColor={accentColor} stopOpacity={0} />
-              </RadialGradient>
-            </Defs>
-            <Circle cx={center} cy={center} r={center} fill={`url(#${vaporId})`} />
-          </Svg>
-        </Animated.View>
-        <MinimapRing ring={RINGS.outer} signals={grouped.outer} arcColor={arcColor} size={size} />
-        <MinimapRing ring={RINGS.middle} signals={grouped.middle} arcColor={arcColor} size={size} />
+        {/* Radar artwork — the rings, vapor and center C are the image itself. */}
+        <Image
+          source={RADAR_IMG}
+          resizeMode="cover"
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+        />
+        {/* Golden center-C pulse glow over the image's center mark. */}
         <Animated.View
           pointerEvents="none"
-          style={[styles.ringLayer, urgentCount > 0 && { opacity: pulseAnim }]}>
-          <MinimapRing ring={RINGS.inner} signals={grouped.inner} arcColor={accentColor} size={size} />
-        </Animated.View>
+          style={[
+            styles.centerGlow,
+            {
+              left: center - size * 0.18,
+              top: center - size * 0.18,
+              width: size * 0.36,
+              height: size * 0.36,
+              borderRadius: size * 0.18,
+              opacity: centerGlow,
+              transform: [{ scale: centerScale }],
+            },
+          ]}
+        />
+        {/* Live signal dots, positioned on the image's rings by urgency. */}
+        <Svg width={size} height={size} style={StyleSheet.absoluteFill} pointerEvents="none">
+          {RING_ORDER.flatMap((rk) =>
+            grouped[rk].map((s) => {
+              const radius = RINGS[rk].radius * (size / SIZE);
+              const angle = (angleDegForSignal(s.id) * Math.PI) / 180;
+              const x = center + radius * Math.cos(angle - Math.PI / 2);
+              const y = center + radius * Math.sin(angle - Math.PI / 2);
+              return (
+                <Circle key={`${rk}-${String(s.id)}`} cx={x} cy={y} r={size >= 64 ? 4 : 2.5} fill={colorFor(s)} />
+              );
+            }),
+          )}
+        </Svg>
       </Animated.View>
       {urgentCount > 0 ? (
         <View
@@ -650,6 +660,11 @@ const styles = StyleSheet.create({
     borderRadius: SIZE / 2,
     backgroundColor: NAVY,
     overflow: 'hidden',
+  },
+  // Pulsing golden glow over the radar artwork's center C mark.
+  centerGlow: {
+    position: 'absolute',
+    backgroundColor: 'rgba(240, 208, 96, 0.4)',
   },
   // Fills the (variable-size) disc so each ring's Svg is centered on it.
   ringLayer: {
