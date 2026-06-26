@@ -1699,6 +1699,7 @@ export default function TakeoffScreen() {
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
             </Text>
             <Text style={styles.title}>{mode.title}</Text>
+            <View style={styles.modeLabelLine} />
           </View>
 
           <Text style={styles.inFlowDate}>{date}</Text>
@@ -2852,11 +2853,19 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   // (TAKEOFF / CLEARANCE / MIDDAY / DUSK), not a headline. The brief itself
   // is the headline now.
   title: {
-    color: theme.muted,
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 2,
+    color: accentColor,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 3,
     textTransform: 'uppercase',
+  },
+  // Thin brass underline beneath the mode label — makes it read as a branded
+  // mode indicator rather than a plain label.
+  modeLabelLine: {
+    width: 32,
+    height: 0.5,
+    backgroundColor: accentColor,
+    marginTop: 5,
   },
   divider: {
     height: 1,

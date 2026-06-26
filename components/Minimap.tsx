@@ -32,9 +32,9 @@ type RingDef = {
 };
 
 const RINGS: Record<RingKey, RingDef> = {
-  outer:  { key: 'outer',  radius: 19, rotationMs: 60000, strokeOpacity: 0.10, pulseMs: 2500 },
-  middle: { key: 'middle', radius: 13, rotationMs: 30000, strokeOpacity: 0.15, pulseMs: 1500 },
-  inner:  { key: 'inner',  radius: 7,  rotationMs: 15000, strokeOpacity: 0.20, pulseMs: 600  },
+  outer:  { key: 'outer',  radius: 19, rotationMs: 60000, strokeOpacity: 0.5,  pulseMs: 2500 },
+  middle: { key: 'middle', radius: 13, rotationMs: 30000, strokeOpacity: 0.65, pulseMs: 1500 },
+  inner:  { key: 'inner',  radius: 7,  rotationMs: 15000, strokeOpacity: 0.8,  pulseMs: 600  },
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -156,7 +156,7 @@ function MinimapRing({
           r={ring.radius}
           stroke={arcColor}
           strokeOpacity={ring.strokeOpacity}
-          strokeWidth={0.6}
+          strokeWidth={1.2}
           fill="none"
         />
       </Svg>
@@ -258,7 +258,9 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
   // dark navy in dark mode but lightens to the theme surface in light mode
   // so the dark arcs contrast against it.
   const arcColor = isDark ? OFF_WHITE : theme.text;
-  const discBg = isDark ? NAVY : theme.surface;
+  // Disc background: theme.surface at 0.9 opacity (8-digit hex) so the minimap
+  // always reads as a faint disc against any backdrop (weather Lottie, etc.).
+  const discBg = theme.surface + 'e6';
   // Weather-vane state drives the border color + pulse cadence. The
   // urgentCount that came in via prop (legacy callers) is overridden
   // by the hook's count so every minimap reads from the same source.
@@ -418,7 +420,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
   // when nothing is happening. The gradient's center opacity itself lifts from
   // 0.10 to 0.18 when there are urgent signals (set on the Stop below).
   const vaporId = useRef(`minimapVapor-${++vaporInstanceCounter}`).current;
-  const vaporAnim = useRef(new Animated.Value(0.6)).current;
+  const vaporAnim = useRef(new Animated.Value(0.5)).current;
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -429,7 +431,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
           useNativeDriver: true,
         }),
         Animated.timing(vaporAnim, {
-          toValue: 0.6,
+          toValue: 0.5,
           duration: 2000,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
@@ -563,7 +565,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
           <Svg width={SIZE} height={SIZE}>
             <Defs>
               <RadialGradient id={vaporId} cx="50%" cy="50%" r="50%">
-                <Stop offset="0" stopColor={accentColor} stopOpacity={urgentCount > 0 ? 0.18 : 0.1} />
+                <Stop offset="0" stopColor={accentColor} stopOpacity={urgentCount > 0 ? 0.45 : 0.35} />
                 <Stop offset="1" stopColor={accentColor} stopOpacity={0} />
               </RadialGradient>
             </Defs>
@@ -575,7 +577,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
         <Animated.View
           pointerEvents="none"
           style={[styles.ringLayer, urgentCount > 0 && { opacity: pulseAnim }]}>
-          <MinimapRing ring={RINGS.inner} signals={grouped.inner} arcColor={arcColor} />
+          <MinimapRing ring={RINGS.inner} signals={grouped.inner} arcColor={accentColor} />
         </Animated.View>
       </Animated.View>
       {urgentCount > 0 ? (
