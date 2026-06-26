@@ -775,8 +775,6 @@ function RotatingRing({
         opacity: opacityAnim,
         transform: [{ rotate: spin }, { scale: scaleAnim }],
       }}>
-      <SolidRing ring={ring} />
-
       {signals.map((s) => {
         const meta = metaForRing(s, ring.key);
         let angleDeg: number;
@@ -2133,7 +2131,6 @@ export default function HoverScreen() {
           resizeMode="cover"
           style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
         />
-        <RadarImageOverlays cx={cx} cy={cy} />
         {/* Brand wordmark banner — centered at the very top, above the
             radar. 140px wide, proportional (square source) height. Sits
             behind the interactive Minimap/help affordances (zIndex 50)
@@ -2309,13 +2306,6 @@ export default function HoverScreen() {
           crewColorMap={crewColorMap}
         />
 
-        <CenterCore
-          cx={cx}
-          cy={cy}
-          accentColor={accentColor}
-          urgent={urgentCount > 0}
-          resolvePulse={centerPulse}
-        />
 
         {/* Ring labels (ON THE HORIZON / APPROACHING FAST / ACT NOW) are baked
             into the radar artwork now, so the Hover screen no longer renders its
@@ -2452,7 +2442,9 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BG,
+    // ImageBackground is the only radar background now; black behind it so no
+    // old radar color shows around the image.
+    backgroundColor: '#000000',
   },
   // Brand wordmark banner — centered at the top of Hover. 140px wide;
   // height is the wordmark's true proportion (cropped source is
