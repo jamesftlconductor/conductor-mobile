@@ -10,10 +10,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
-import { Minimap } from '@/components/Minimap';
 import { WordmarkLoader } from '@/components/WordmarkLoader';
 import { WordmarkReveal } from '@/components/WordmarkReveal';
-import { ExpandedRadar } from '@/components/ExpandedRadar';
 import { tipSeen, markTipShown } from '@/utils/oneTimeTips';
 import { makeTabSwipe } from '@/utils/tabSwipe';
 import LottieView from 'lottie-react-native';
@@ -1058,8 +1056,6 @@ export default function TakeoffScreen() {
   // shows the moment Ground mounts, i.e. cold start). Tabs stay mounted, so
   // it doesn't re-fire when navigating back to Ground within a session.
   const [showIntro, setShowIntro] = useState(true);
-  // Step 4A: tapping the Ground minimap expands the full-screen radar overlay.
-  const [radarExpanded, setRadarExpanded] = useState(false);
   // Ask Conductor — single-shot Q&A. Always fresh call (server-side
   // 30min cache covers the duplicate-question case). State carries the
   // current question draft, the loading flag, the answer/error result.
@@ -2476,15 +2472,8 @@ export default function TakeoffScreen() {
         </ScrollView>
       </GestureDetector>
 
-      {/* Floating Minimap — rendered as a root sibling (NOT inside the
-          ScrollView) so it paints above the brief content and reliably
-          receives taps. As a scroll child its absolute box was overlapped
-          by later content Views which swallowed the tap. */}
-      <Minimap
-        size={72}
-        urgentCount={urgentCount}
-        onPress={() => setRadarExpanded(true)}
-      />
+      {/* Minimap removed from Ground — The Conductor tab is one swipe away, and
+          the minimap cluttered the brief hero. */}
 
       <YesterdayModal
         visible={showYesterday}
@@ -2624,9 +2613,6 @@ export default function TakeoffScreen() {
       {/* Opening wordmark reveal — overlays everything on the first open of
           the day, then fades away to reveal Ground. */}
       {showIntro ? <WordmarkReveal onDone={() => setShowIntro(false)} /> : null}
-
-      {/* Step 4A — full-screen expanded radar (opens from the minimap tap). */}
-      <ExpandedRadar visible={radarExpanded} onClose={() => setRadarExpanded(false)} />
     </View>
   );
 }

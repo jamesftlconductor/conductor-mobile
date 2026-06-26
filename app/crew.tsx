@@ -7,9 +7,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { AddCrewSheet } from '@/components/AddCrewSheet';
 import { HelpButton } from '@/components/HelpButton';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { PulsingCMark } from '@/components/PulsingCMark';
 import { useUserId } from '@/hooks/useUserId';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -675,7 +675,7 @@ export default function CrewScreen() {
 
       {loading && (
         <View style={styles.loading}>
-          <PulsingCMark size={30} />
+          <ActivityIndicator color={accentColor} />
         </View>
       )}
 
