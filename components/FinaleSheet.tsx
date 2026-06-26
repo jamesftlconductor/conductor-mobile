@@ -98,6 +98,18 @@ function CategorySheet(props: CategoryProps) {
         style={[styles.modalBackdrop, styles.filterBackdrop]}
         onPress={onClose}>
         <Pressable style={styles.filterSheet} onPress={() => {}}>
+          {/* Operations-center backdrop: faint schematic grid + accent top line. */}
+          <View pointerEvents="none" style={styles.gridPattern}>
+            <Svg width="100%" height="100%">
+              <Defs>
+                <Pattern id="finaleGridCat" width={26} height={26} patternUnits="userSpaceOnUse">
+                  <Path d="M26 0H0V26" stroke={accentColor} strokeWidth={0.5} fill="none" />
+                </Pattern>
+              </Defs>
+              <Rect width="100%" height="100%" fill="url(#finaleGridCat)" />
+            </Svg>
+          </View>
+          <View pointerEvents="none" style={styles.accentTopLine} />
           <View style={styles.filterHeader}>
             <View style={styles.filterTitleRow}>
               {title ? (
@@ -1343,11 +1355,12 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       backgroundColor: 'rgba(0,0,0,0.4)',
     },
     filterSheet: {
-      backgroundColor: theme.surface,
+      backgroundColor: '#0a0e16',
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
-      paddingTop: 12,
+      paddingTop: 14,
       maxHeight: '70%',
+      overflow: 'hidden',
     },
     filterHeader: {
       flexDirection: 'row',
@@ -1367,6 +1380,9 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     filterTitleEmoji: {
       fontSize: 20,
       lineHeight: 24,
+      textShadowColor: accentColor,
+      textShadowRadius: 12,
+      textShadowOffset: { width: 0, height: 0 },
     },
     filterTitle: {
       fontSize: 15,
@@ -1375,9 +1391,11 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       textTransform: 'uppercase',
     },
     clearFilterText: {
-      color: theme.muted,
-      fontSize: 13,
-      letterSpacing: 0.5,
+      color: accentColor,
+      fontSize: 12,
+      letterSpacing: 1,
+      fontWeight: '600',
+      textTransform: 'uppercase',
     },
     filterList: {
       paddingHorizontal: 24,
@@ -1402,34 +1420,44 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       lineHeight: 28,
       width: 28,
       textAlign: 'center',
+      textShadowColor: accentColor,
+      textShadowRadius: 12,
+      textShadowOffset: { width: 0, height: 0 },
     },
     filterItemBody: {
       flex: 1,
       gap: 4,
     },
     filterItemDescription: {
-      color: theme.text,
-      fontSize: 15,
-      lineHeight: 20,
-      fontWeight: '400',
+      color: '#ffffff',
+      fontSize: 16,
+      lineHeight: 21,
+      fontWeight: '500',
     },
     filterItemMeta: {
       color: theme.muted,
-      fontSize: 12,
-      letterSpacing: 0.3,
+      fontSize: 10,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
     },
     filterRestBtn: {
-      backgroundColor: theme.text,
+      backgroundColor: accentColor,
       paddingVertical: 8,
-      paddingHorizontal: 14,
-      borderRadius: 8,
+      paddingHorizontal: 16,
+      borderRadius: 20,
       alignSelf: 'center',
+      shadowColor: accentColor,
+      shadowOpacity: 0.6,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 5,
     },
     filterRestBtnText: {
-      color: theme.background,
-      fontSize: 13,
-      fontWeight: '600',
-      letterSpacing: 0.3,
+      color: '#0a0e16',
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
     },
   });
 }
