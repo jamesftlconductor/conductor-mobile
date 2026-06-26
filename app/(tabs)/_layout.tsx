@@ -1,5 +1,5 @@
 import { router, Tabs, usePathname } from 'expo-router';
-import { Activity, RadioTower, Settings as SettingsIcon } from 'lucide-react-native';
+import { RadioTower, Settings as SettingsIcon } from 'lucide-react-native';
 import React, { useRef } from 'react';
 import { PanResponder, View } from 'react-native';
 
@@ -8,19 +8,15 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// Swipe navigation order — mirrors the visible bottom tab bar so a swipe never
-// skips a reachable tab: Ground (The Brief) → Hover (The Conductor) → Vitals →
-// Settings (The Hubs). NOTE: the product spec described three tabs
-// (Brief → Conductor → Hubs); Vitals is included here only because it's still
-// a visible tab. Drop it from this array (and the tab bar) to match the
-// three-tab model.
-const SWIPE_ROUTES = ['/(tabs)', '/(tabs)/hover', '/(tabs)/vitals', '/(tabs)/settings'] as const;
+// Three tabs only: Ground (The Brief) → Hover (The Conductor) → Settings (The
+// Hubs). Vitals is hidden from the bar (href: null) but its route is kept so it
+// can be absorbed into The Conductor tab later. Swipe order mirrors the bar.
+const SWIPE_ROUTES = ['/(tabs)', '/(tabs)/hover', '/(tabs)/settings'] as const;
 
 // Resolve the current tab index from the live pathname.
 function indexFromPath(path: string): number {
   if (path.startsWith('/hover')) return 1;
-  if (path.startsWith('/vitals')) return 2;
-  if (path.startsWith('/settings')) return 3;
+  if (path.startsWith('/settings')) return 2;
   return 0; // index / Ground / everything else
 }
 
@@ -75,13 +71,9 @@ export default function TabLayout() {
             tabBarIcon: ({ color }) => <RadioTower size={26} color={color} />,
           }}
         />
-        <Tabs.Screen
-          name="vitals"
-          options={{
-            title: 'Vitals',
-            tabBarIcon: ({ color }) => <Activity size={26} color={color} />,
-          }}
-        />
+        {/* Vitals — hidden from the tab bar for now (to be absorbed into The
+            Conductor tab). href: null keeps the route reachable but off the bar. */}
+        <Tabs.Screen name="vitals" options={{ href: null }} />
         <Tabs.Screen
           name="settings"
           options={{
