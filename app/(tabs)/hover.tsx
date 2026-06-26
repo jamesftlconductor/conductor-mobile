@@ -30,6 +30,7 @@ import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
 import { HoverHelpModal } from '@/components/HoverHelpModal';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
+import { categoryForType } from '@/utils/signalCategories';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
   metaForRing,
@@ -995,7 +996,7 @@ function RotatingRing({
             crewOverride={crewOverride}
             isAttributed={!!crewMemberId}
             clusterCount={isClusterSignal(s) ? s.clusterCount : undefined}
-            prominent={prominentTypes.has((s.type || '').toLowerCase())}
+            prominent={prominentTypes.has(categoryForType(s.type))}
           />
         );
       })}
@@ -2117,8 +2118,8 @@ export default function HoverScreen() {
     const visible: Signal[] = [];
     for (const s of signals) {
       if (animatingIds.has(String(s.id))) continue;
-      // Brief Customize: drop dots whose type is hidden.
-      if (signalVisibility[(s.type || '').toLowerCase()] === false) continue;
+      // Brief Customize: drop dots whose category is hidden.
+      if (signalVisibility[categoryForType(s.type)] === false) continue;
       // Crew member filter (personal view only) — when a crew name
       // is selected, restrict to signals tagged to that member.
       if (viewMode === 'personal' && crewFilter) {

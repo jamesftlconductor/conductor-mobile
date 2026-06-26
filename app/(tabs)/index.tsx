@@ -19,6 +19,7 @@ import { weatherLottieSource } from '@/utils/weatherLottie';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { Minimap } from '@/components/Minimap';
+import { categoryForType } from '@/utils/signalCategories';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { getUserId, useUserId } from '@/hooks/useUserId';
 import YesterdayModal from '@/components/YesterdayModal';
@@ -104,9 +105,10 @@ function applySignalPrefs(
   segs: BriefSegment[],
   visibility: Record<string, boolean>,
 ): BriefSegment[] {
-  const norm = (t?: string) => (t || '').toLowerCase();
+  // Map each chip's raw backend type to its Customize category, then drop it if
+  // that category is hidden.
   return segs.filter(
-    (s) => !(s.type === 'signal' && visibility[norm(s.signalType)] === false),
+    (s) => !(s.type === 'signal' && visibility[categoryForType(s.signalType)] === false),
   );
 }
 
