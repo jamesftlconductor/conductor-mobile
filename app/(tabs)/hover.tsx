@@ -9,6 +9,7 @@ import {
   FlatList,
   Image,
   ImageBackground,
+  Modal,
   LayoutAnimation,
   Platform,
   Pressable,
@@ -29,7 +30,6 @@ import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
 import { HoverHelpModal } from '@/components/HoverHelpModal';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
-import { Users } from 'lucide-react-native';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
   metaForRing,
@@ -1789,6 +1789,8 @@ export default function HoverScreen() {
   // the user toggles back to family view. Crew list fetched once on
   // mount and refreshed when the tab regains focus.
   const [crewFilter, setCrewFilter] = useState<string | null>(null);
+  // Crew filter is now a dropdown opened by tapping the wordmark.
+  const [showCrewDropdown, setShowCrewDropdown] = useState(false);
   const [crewList, setCrewList] = useState<{ name: string; photoUrl?: string | null }[]>([]);
   // Stable color-per-crew-member lookup. Backend records crewMemberId on
   // signals as the lowercased trimmed name, so we key the map the same
@@ -2312,7 +2314,9 @@ export default function HoverScreen() {
       <View style={styles.container}>
         {/* Radar artwork as the screen background — the rings, vapor, center C
             and labels are the image itself. Dots + animated overlays sit on top. */}
-        <HoverImageBackdrop cx={cx} cy={cy} onCenterPress={() => openConductorSheet('hover')} />
+        {/* Center-C glow sits over the astrolabe IMAGE's actual center (screen
+            center), not the radar/dot center (which is 50px higher). */}
+        <HoverImageBackdrop cx={cx} cy={height / 2} onCenterPress={() => openConductorSheet('hover')} />
         {/* Faint rotating overlay rings (astrolabe glint) on top of the image. */}
         <RotatingOverlayRings cx={cx} cy={cy} />
 
@@ -2342,57 +2346,45 @@ export default function HoverScreen() {
             radar. 140px wide, proportional (square source) height. Sits
             behind the interactive Minimap/help affordances (zIndex 50)
             and ignores touches so the radar gestures pass through. */}
-        <View pointerEvents="none" style={[styles.wordmark, { top: insets.top + 8 }]}>
+        {/* Wordmark — tap to open the crew filter dropdown. */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => setShowCrewDropdown(true)}
+          style={[styles.wordmark, { top: insets.top + 8, zIndex: 60 }]}>
           <Image
             source={require('../../assets/wordmark.png')}
             resizeMode="contain"
             tintColor={logoColor}
             style={{ width: '100%', height: '100%' }}
           />
-        </View>
+        </TouchableOpacity>
         {/* Top control line — sits just below the wordmark banner.
             Crew-filter C mark on the left, Minimap on the right, both
             the same 40px size and aligned on the same line. */}
         {/* Crew filter — tap the C mark to reveal the per-member filter
             pills (personal view). Dimmed when in family view. */}
-        <TouchableOpacity
-          onPress={toggleViewMode}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={{
-            position: 'absolute',
-            top: insets.top + 66,
-            left: 22,
-            width: 48,
-            height: 48,
-            zIndex: 50,
-          }}>
-          {(() => {
-            // When filtering to a specific crew member, show that member's
-            // photo/initial avatar instead of the Conductor C mark.
-            const selected = crewFilter
-              ? (Array.isArray(crewList) ? crewList : []).find((m: any) => m.name === crewFilter)
-              : null;
-            if (selected) {
-              const init = ((selected.name || '?').trim().charAt(0) || '?').toUpperCase();
-              return (
-                <CrewFilterAvatar
-                  active
-                  borderColor={accentColor}
-                  hasPhoto={!!selected.photoUrl}
-                  photoUrl={selected.photoUrl}
-                  initial={init}
-                />
-              );
-            }
-            // No member selected — a simple person/crew icon, never the C mark.
-            return (
-              <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-                <Users size={26} color={logoColor} />
-              </View>
-            );
-          })()}
-        </TouchableOpacity>
+        {/* Active-filter indicator (left) — shows the selected crew member's
+            photo/initial, or NOTHING when no member is filtered. Tap to clear.
+            The filter itself is opened from the wordmark dropdown. */}
+        {crewFilter ? (() => {
+          const selected = (Array.isArray(crewList) ? crewList : []).find((m: any) => m.name === crewFilter);
+          const init = ((selected?.name || crewFilter || '?').trim().charAt(0) || '?').toUpperCase();
+          return (
+            <TouchableOpacity
+              onPress={() => { setCrewFilter(null); setViewMode('family'); }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ position: 'absolute', top: insets.top + 66, left: 22, width: 48, height: 48, zIndex: 50 }}>
+              <CrewFilterAvatar
+                active
+                borderColor={accentColor}
+                hasPhoto={!!selected?.photoUrl}
+                photoUrl={selected?.photoUrl}
+                initial={init}
+              />
+            </TouchableOpacity>
+          );
+        })() : null}
         {/* No minimap on Hover — the full-screen astrolabe IS the radar. */}
         {/* Help — the directory affordance, top-right. Styled as the same
             unobtrusive italic "i" used on Ground
@@ -2422,35 +2414,33 @@ export default function HoverScreen() {
             setShowHelp(false);
           }}
         />
-        {viewMode === 'personal' && Array.isArray(crewList) && crewList.length > 0 ? (
-          <Animated.View
-            style={[styles.crewFilterRow, { top: insets.top + 124, opacity: headerOpacity }]}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.crewFilterContent}>
+        {/* Crew filter dropdown — opened by tapping the wordmark. Elegant and
+            hidden until needed: "Everyone" + each crew member; tap to filter
+            the radar; tap outside to dismiss. */}
+        <Modal
+          visible={showCrewDropdown}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowCrewDropdown(false)}>
+          <Pressable style={{ flex: 1 }} onPress={() => setShowCrewDropdown(false)}>
+            <View style={[styles.crewDropdown, { top: insets.top + 56 }]}>
               <TouchableOpacity
-                onPress={() => setCrewFilter(null)}
-                style={[
-                  styles.crewFilterPill,
-                  !crewFilter && styles.crewFilterPillActive,
-                ]}
-                activeOpacity={0.7}>
-                <Text style={[styles.crewFilterPillText, !crewFilter && styles.crewFilterPillTextActive]}>
-                  All
-                </Text>
+                style={styles.crewDropdownRow}
+                activeOpacity={0.7}
+                onPress={() => { setCrewFilter(null); setViewMode('family'); setShowCrewDropdown(false); }}>
+                <View style={styles.crewDropdownAllDot} />
+                <Text style={[styles.crewDropdownName, !crewFilter && { color: accentColor }]}>Everyone</Text>
               </TouchableOpacity>
-              {crewList?.map((m, i) => {
+              {(Array.isArray(crewList) ? crewList : []).map((m, i) => {
                 if (!m || !m.name) return null;
-                const initial = m.name.charAt(0).toUpperCase() || '?';
+                const initial = (m.name.charAt(0) || '?').toUpperCase();
                 const hasPhoto = typeof m.photoUrl === 'string' && m.photoUrl.length > 0;
                 return (
                   <TouchableOpacity
                     key={`${m.name}-${i}`}
-                    onPress={() => setCrewFilter(crewFilter === m.name ? null : m.name)}
-                    style={styles.crewFilterMember}
+                    style={styles.crewDropdownRow}
                     activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    onPress={() => { setCrewFilter(m.name); setViewMode('personal'); setShowCrewDropdown(false); }}>
                     <CrewFilterAvatar
                       active={crewFilter === m.name}
                       borderColor={crewColor(i)}
@@ -2458,15 +2448,17 @@ export default function HoverScreen() {
                       photoUrl={m.photoUrl}
                       initial={initial}
                     />
-                    <Text style={styles.crewFilterName} numberOfLines={1}>
+                    <Text
+                      style={[styles.crewDropdownName, crewFilter === m.name && { color: accentColor }]}
+                      numberOfLines={1}>
                       {m.name}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
-          </Animated.View>
-        ) : null}
+            </View>
+          </Pressable>
+        </Modal>
 
         {expandedRing !== null && <ReferenceCircle cx={cx} cy={cy} />}
         {expandedRing !== null && <ExpandedRingMarkers ring={expandedRing} cx={cx} cy={cy} />}
@@ -2691,6 +2683,42 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     left: 0,
     right: 0,
     zIndex: 5,
+  },
+  // Crew filter dropdown (opened from the wordmark).
+  crewDropdown: {
+    position: 'absolute',
+    alignSelf: 'center',
+    width: '74%',
+    maxHeight: 380,
+    backgroundColor: theme.surface,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  crewDropdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  crewDropdownName: {
+    color: theme.text,
+    fontSize: 15,
+    flex: 1,
+  },
+  crewDropdownAllDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.muted,
   },
   crewFilterContent: {
     paddingHorizontal: 18,
