@@ -455,8 +455,12 @@ function CollapsibleSection({
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const [open, setOpen] = useState(defaultOpen);
+  // Hubs carry a subtitle; nested child sections don't. Indent the children
+  // (with a left rail) so they read as nested inside their hub, never as
+  // top-level siblings.
+  const nested = !subtitle;
   return (
-    <View>
+    <View style={nested ? styles.nestedSection : undefined}>
       <TouchableOpacity
         activeOpacity={0.6}
         onPress={() => {
@@ -2180,7 +2184,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
 
-        <CollapsibleSection title="The Baton" subtitle="how The Conductor works for you" defaultOpen>
+        <CollapsibleSection title="The Baton" subtitle="how The Conductor works for you">
         <CollapsibleSection title="Your Brief">
         <ChevronRow
           label="Takeoff"
@@ -2779,6 +2783,14 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontSize: 12,
     fontStyle: 'italic',
     marginTop: 3,
+  },
+  // Nested child section — indented with a left rail so it reads as living
+  // inside its hub rather than as a top-level section.
+  nestedSection: {
+    marginLeft: 10,
+    paddingLeft: 12,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: SOFT_BORDER,
   },
   sectionSubtext: {
     color: MUTED,
