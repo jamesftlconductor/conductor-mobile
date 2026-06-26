@@ -28,7 +28,6 @@ import Svg, { Circle, Defs, LinearGradient, Line, Stop } from 'react-native-svg'
 import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
 import { HoverHelpModal } from '@/components/HoverHelpModal';
-import { Minimap } from '@/components/Minimap';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
@@ -408,6 +407,62 @@ function RadarImageOverlays({ cx, cy }: { cx: number; cy: number }) {
         }}
       />
     </View>
+  );
+}
+
+// Breathing radar backdrop — the whole ImageBackground gently breathes its
+// opacity (0.85→1.0→0.85, 3s) and a golden center-C glow pulses as a strong
+// heartbeat over the image's center mark (scale 0.8→1.3, opacity 0.5→1.0, 2s).
+function HoverImageBackdrop({ cx, cy }: { cx: number; cy: number }) {
+  const bgPulse = useRef(new Animated.Value(0.85)).current;
+  const cScale = useRef(new Animated.Value(0.8)).current;
+  const cGlow = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bgPulse, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bgPulse, { toValue: 0.85, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [bgPulse]);
+
+  useEffect(() => {
+    const up = Animated.parallel([
+      Animated.timing(cScale, { toValue: 1.3, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(cGlow, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]);
+    const down = Animated.parallel([
+      Animated.timing(cScale, { toValue: 0.8, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(cGlow, { toValue: 0.5, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]);
+    const loop = Animated.loop(Animated.sequence([up, down]));
+    loop.start();
+    return () => loop.stop();
+  }, [cScale, cGlow]);
+
+  return (
+    <>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: bgPulse }]}>
+        <ImageBackground source={RADAR_IMG} resizeMode="cover" style={StyleSheet.absoluteFill} />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: cx - 30,
+          top: cy - 30,
+          width: 60,
+          height: 60,
+          borderRadius: 30,
+          backgroundColor: 'rgba(240, 208, 96, 0.4)',
+          opacity: cGlow,
+          transform: [{ scale: cScale }],
+        }}
+      />
+    </>
   );
 }
 
@@ -2126,11 +2181,7 @@ export default function HoverScreen() {
       <View style={styles.container}>
         {/* Radar artwork as the screen background — the rings, vapor, center C
             and labels are the image itself. Dots + animated overlays sit on top. */}
-        <ImageBackground
-          source={RADAR_IMG}
-          resizeMode="cover"
-          style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
-        />
+        <HoverImageBackdrop cx={cx} cy={cy} />
         {/* Brand wordmark banner — centered at the very top, above the
             radar. 140px wide, proportional (square source) height. Sits
             behind the interactive Minimap/help affordances (zIndex 50)
@@ -2160,33 +2211,37 @@ export default function HoverScreen() {
             height: 48,
             zIndex: 50,
           }}>
-          <Image
-            source={require('../../assets/c-mark.png')}
-            resizeMode="contain"
-            tintColor={logoColor}
-            // Always fully visible at the same 48px footprint as the Minimap
-            // disc on the opposite end of the top line — no longer dims in
-            // family view.
-            style={{ width: 48, height: 48 }}
-          />
+          {(() => {
+            // When filtering to a specific crew member, show that member's
+            // photo/initial avatar instead of the Conductor C mark.
+            const selected = crewFilter
+              ? (Array.isArray(crewList) ? crewList : []).find((m: any) => m.name === crewFilter)
+              : null;
+            if (selected) {
+              const init = ((selected.name || '?').trim().charAt(0) || '?').toUpperCase();
+              return (
+                <CrewFilterAvatar
+                  active
+                  borderColor={accentColor}
+                  hasPhoto={!!selected.photoUrl}
+                  photoUrl={selected.photoUrl}
+                  initial={init}
+                />
+              );
+            }
+            return (
+              <Image
+                source={require('../../assets/c-mark.png')}
+                resizeMode="contain"
+                tintColor={logoColor}
+                style={{ width: 48, height: 48 }}
+              />
+            );
+          })()}
         </TouchableOpacity>
-        {/* Minimap top-right — the tap surface for ConductorSheet, the
-            universal affordance present on every screen. */}
-        <View
-          style={{
-            position: 'absolute',
-            top: insets.top + 66,
-            right: 22,
-            zIndex: 50,
-          }}>
-          <Minimap
-            floating={false}
-            urgentCount={urgentCount}
-            onPress={() => openConductorSheet('hover')}
-          />
-        </View>
-        {/* Help — the directory affordance, top-right above the Conductor
-            minimap. Styled as the same unobtrusive italic "i" used on Ground
+        {/* No minimap on Hover — the full-screen astrolabe IS the radar. */}
+        {/* Help — the directory affordance, top-right. Styled as the same
+            unobtrusive italic "i" used on Ground
             (InfoHint) so "i = info" reads consistently across the app. */}
         <TouchableOpacity
           onPress={() => setShowHelp(true)}

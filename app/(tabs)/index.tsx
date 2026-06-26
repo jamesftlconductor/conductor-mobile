@@ -18,6 +18,7 @@ import LottieView from 'lottie-react-native';
 import { weatherLottieSource } from '@/utils/weatherLottie';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
+import { Minimap } from '@/components/Minimap';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { getUserId, useUserId } from '@/hooks/useUserId';
 import YesterdayModal from '@/components/YesterdayModal';
@@ -1695,13 +1696,11 @@ export default function TakeoffScreen() {
           <Image
             source={require('../../assets/wordmark.png')}
             resizeMode="contain"
-            style={[
-              styles.wordmark,
-              { tintColor: logoColor },
-              isDark ? null : { width: 200, height: 73 },
-            ]}
+            style={[styles.wordmark, { tintColor: logoColor }]}
           />
 
+          {/* Greeting + mode label sit as quiet context directly above the
+              brief hero (not at the top). */}
           <View style={styles.header}>
             <Text style={[styles.greeting, { color: bandTheme.greeting }]}>
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
@@ -1709,8 +1708,6 @@ export default function TakeoffScreen() {
             <Text style={styles.title}>{mode.title}</Text>
             <View style={styles.modeLabelLine} />
           </View>
-
-          <Text style={styles.inFlowDate}>{date}</Text>
 
 
           {loading ? (
@@ -2244,15 +2241,6 @@ export default function TakeoffScreen() {
             </Animated.View>
           ) : null}
 
-          {!loading && transparency ? (
-            <TouchableOpacity
-              style={styles.transparencyLinkCentered}
-              onPress={() => setShowTransparency(true)}
-              activeOpacity={0.6}>
-              <Text style={styles.transparencyLinkText}>How Conductor thought about this</Text>
-            </TouchableOpacity>
-          ) : null}
-
           {/* Subtle separator — The Pulse + Ask now sit below the brief so
               the brief leads the screen. */}
           <View style={[styles.divider, { backgroundColor: bandTheme.divider }]} />
@@ -2338,129 +2326,6 @@ export default function TakeoffScreen() {
             </TouchableOpacity>
           ) : null}
 
-          {mode.title !== 'Overwatch' ? (
-            // Ask Conductor — single-shot Q&A. Placed below The Pulse and
-            // above the in-flow date so the input is the natural next
-            // landing spot after reading the synthesis sentence. Overwatch
-            // mode has no brief, so the question UI is hidden there too.
-            <View style={styles.askWrap}>
-              <View style={styles.askInputRow}>
-                <TextInput
-                  ref={askInputRef}
-                  value={askQuestion}
-                  onChangeText={setAskQuestion}
-                  onSubmitEditing={submitAsk}
-                  onFocus={() => setAskFocused(true)}
-                  onBlur={() => setAskFocused(false)}
-                  placeholder="Ask The Conductor..."
-                  placeholderTextColor={theme.muted}
-                  returnKeyType="send"
-                  editable={!askLoading}
-                  blurOnSubmit={false}
-                  style={styles.askInput}
-                />
-                <TouchableOpacity
-                  onPress={submitAsk}
-                  activeOpacity={0.6}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  disabled={askLoading || askQuestion.trim().length === 0}>
-                  <Text
-                    style={[
-                      styles.askSend,
-                      (askLoading || askQuestion.trim().length === 0) && { opacity: 0.4 },
-                    ]}>
-                    →
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {askFocused && !askAnswer && !askLoading ? (
-                // Suggestion chips — derived from brief state at render
-                // time so they're contextually useful for what's
-                // actually on the user's radar today.
-                <View style={styles.askChipsRow}>
-                  {buildAskChips({
-                    segments,
-                    urgentCount: pulseData?.urgentCount || 0,
-                    pulseFlags,
-                    pulseData,
-                    conductorQuestion,
-                    maintenancePlanOffer,
-                    modeIsTakeoff: mode.endpoint === 'brief',
-                  }).slice(0, 3).map((q) => (
-                    <TouchableOpacity
-                      key={q}
-                      onPress={() => {
-                        setAskQuestion(q);
-                        askInputRef.current?.focus();
-                      }}
-                      activeOpacity={0.6}
-                      style={styles.askChip}>
-                      <Text style={styles.askChipText}>{q}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
-              {askLoading ? (
-                <Text style={styles.askThinking}>Conductor is thinking...</Text>
-              ) : null}
-              {!askLoading && askError ? (
-                <Text style={styles.askThinking}>Conductor couldn&apos;t reach that one. Try again.</Text>
-              ) : null}
-              {!askLoading && !askError && askAnswer ? (
-                <View style={styles.askAnswerCard}>
-                  <Text style={[styles.askAnswerText, { color: bandTheme.brief }]}>{askAnswer}</Text>
-                  {speechActive ? (
-                    <TouchableOpacity onPress={stopSpeech} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 8 }}>■ Stop</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  {askAction?.type === 'confirm_setting' ? (
-                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-                      <TouchableOpacity
-                        onPress={async () => {
-                          // Best-effort: route the user to settings for now.
-                          // A future patch endpoint would apply the setting
-                          // server-side.
-                          setAskAction(null);
-                          router.push('/settings' as never);
-                        }}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 11,
-                          borderRadius: 22,
-                          backgroundColor: accentColor,
-                          alignItems: 'center',
-                        }}>
-                        <Text style={{ color: theme.background, fontSize: 13, fontWeight: '600' }}>
-                          Yes, do it →
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setAskAction(null)}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 11,
-                          borderRadius: 22,
-                          borderWidth: StyleSheet.hairlineWidth,
-                          borderColor: theme.inputBackground,
-                          alignItems: 'center',
-                        }}>
-                        <Text style={{ color: theme.muted, fontSize: 13 }}>No thanks</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-                  <TouchableOpacity
-                    onPress={() => { resetAsk(); setAskAction(null); }}
-                    activeOpacity={0.6}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={styles.askAnotherWrap}>
-                    <Text style={styles.askAnother}>Ask another →</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
           <View style={[styles.divider, { backgroundColor: bandTheme.divider }]} />
 
           <TouchableOpacity
@@ -2469,11 +2334,23 @@ export default function TakeoffScreen() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={styles.inFlowYesterday}>Yesterday&apos;s Programme →</Text>
           </TouchableOpacity>
+
+          {/* Reasoning/transparency link — the very last thing on Ground,
+              below all content. */}
+          {!loading && transparency ? (
+            <TouchableOpacity
+              style={styles.transparencyLinkCentered}
+              onPress={() => setShowTransparency(true)}
+              activeOpacity={0.6}>
+              <Text style={styles.transparencyLinkText}>How The Conductor thought about this →</Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       </GestureDetector>
 
-      {/* Minimap removed from Ground — The Conductor tab is one swipe away, and
-          the minimap cluttered the brief hero. */}
+      {/* Ambient pulsing-astrolabe minimap, top-right. Tap opens The Conductor
+          chat — the only Conductor entry point on Ground now. */}
+      <Minimap size={64} onPress={() => openConductorSheet('ground')} />
 
       <YesterdayModal
         visible={showYesterday}
@@ -2830,20 +2707,23 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   content: {
     padding: 32,
-    paddingTop: 80,
+    paddingTop: 48,
     minHeight: '100%',
   },
-  // Brand wordmark banner — sits at the very top of Ground, above the
-  // greeting. 140px wide; height is the wordmark's true proportion
-  // (cropped source is 554×202 → 140×51). Centered.
+  // Brand wordmark banner — the first thing you see, large + centered at the
+  // top. 220px wide; height is the wordmark's true proportion (554×202 →
+  // 220×80).
   wordmark: {
-    width: 140,
-    height: 51,
+    width: 220,
+    height: 80,
     alignSelf: 'center',
-    marginBottom: 8,
   },
+  // Greeting + mode label — quiet context just above the brief. The big top
+  // margin is the breathing space below the wordmark; the small bottom margin
+  // keeps the TAKEOFF label tight to the brief.
   header: {
-    marginBottom: 32,
+    marginTop: 36,
+    marginBottom: 4,
   },
   greeting: {
     color: theme.muted,
