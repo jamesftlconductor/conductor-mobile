@@ -1306,8 +1306,19 @@ const SIGNAL_TYPE_KEYS = SIGNAL_TYPES.map((t) => t.key);
 
 function BriefCustomizeBlock() {
   const { theme, accentColor } = useTheme();
+  const userId = useUserId();
   const [order, setOrder] = useState<string[]>(SIGNAL_TYPE_KEYS);
   const [visible, setVisible] = useState<Record<string, boolean>>({});
+
+  // Push the prefs to the backend so future brief generation can honor them.
+  function syncPrefs(nextOrder: string[], nextVisible: Record<string, boolean>) {
+    if (!userId) return;
+    fetch(`${API_BASE}/signals?type=preferences`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, signalPriority: nextOrder, signalVisibility: nextVisible }),
+    }).catch(() => { /* best-effort */ });
+  }
 
   useEffect(() => {
     (async () => {
@@ -1344,11 +1355,13 @@ function BriefCustomizeBlock() {
     next[j] = tmp;
     setOrder(next);
     AsyncStorage.setItem('conductorSignalPriority', JSON.stringify(next)).catch(() => {});
+    syncPrefs(next, visible);
   }
   function toggleVis(k: string) {
     const next = { ...visible, [k]: !isVisible(k) };
     setVisible(next);
     AsyncStorage.setItem('conductorSignalVisibility', JSON.stringify(next)).catch(() => {});
+    syncPrefs(order, next);
   }
 
   return (

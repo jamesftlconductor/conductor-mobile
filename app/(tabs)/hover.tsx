@@ -749,6 +749,7 @@ function RotatingRing({
   freshlyAddedIds,
   onSignalPress,
   crewColorMap,
+  prominentTypes,
 }: {
   ring: RingDef;
   cx: number;
@@ -762,6 +763,7 @@ function RotatingRing({
   freshlyAddedIds: Set<string>;
   onSignalPress: (s: Signal) => void;
   crewColorMap: Record<string, string>;
+  prominentTypes: Set<string>;
 }) {
   const rotation = useRef(new Animated.Value(0)).current;
   const isExpanded = expandedRing === ring.key;
@@ -946,6 +948,7 @@ function RotatingRing({
             crewOverride={crewOverride}
             isAttributed={!!crewMemberId}
             clusterCount={isClusterSignal(s) ? s.clusterCount : undefined}
+            prominent={prominentTypes.has((s.type || '').toLowerCase())}
           />
         );
       })}
@@ -968,6 +971,7 @@ function SignalDot({
   crewOverride,
   isAttributed,
   clusterCount,
+  prominent,
 }: {
   meta: TypeMeta;
   x: number;
@@ -983,6 +987,7 @@ function SignalDot({
   crewOverride?: string;
   isAttributed?: boolean;
   clusterCount?: number;
+  prominent?: boolean;
 }) {
   const { theme, accentColor } = useTheme();
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
@@ -1051,7 +1056,7 @@ function SignalDot({
   const baseOpacity = dim ? 0.2 : 1;
   // Focused dots get a noticeable extra bump (1.35×) on top of the pulse so
   // they read as "expanded"; highlighted (type-filter) dots get a subtle 1.2×.
-  const staticBump = focused ? 1.35 : highlight ? 1.2 / 1.25 : 1;
+  const staticBump = (focused ? 1.35 : highlight ? 1.2 / 1.25 : 1) * (prominent ? 1.33 : 1);
   const composedScale =
     staticBump === 1 ? scale : Animated.multiply(scale, new Animated.Value(staticBump));
 
@@ -1791,6 +1796,27 @@ export default function HoverScreen() {
   const [crewFilter, setCrewFilter] = useState<string | null>(null);
   // Crew filter is now a dropdown opened by tapping the wordmark.
   const [showCrewDropdown, setShowCrewDropdown] = useState(false);
+  // Brief Customize prefs — hide dots of hidden types; higher-priority types
+  // get slightly larger dots.
+  const [signalVisibility, setSignalVisibility] = useState<Record<string, boolean>>({});
+  const [signalPriority, setSignalPriority] = useState<string[]>([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const [v, p] = await Promise.all([
+          AsyncStorage.getItem('conductorSignalVisibility'),
+          AsyncStorage.getItem('conductorSignalPriority'),
+        ]);
+        if (v) { const o = JSON.parse(v); if (o && typeof o === 'object') setSignalVisibility(o); }
+        if (p) { const a = JSON.parse(p); if (Array.isArray(a)) setSignalPriority(a); }
+      } catch { /* defaults */ }
+    })();
+  }, []);
+  // Top half of the priority order → "prominent" (larger) dots.
+  const prominentTypes = useMemo(() => {
+    const half = Math.ceil(signalPriority.length / 2);
+    return new Set(signalPriority.slice(0, half).map((t) => String(t).toLowerCase()));
+  }, [signalPriority]);
   const [crewList, setCrewList] = useState<{ name: string; photoUrl?: string | null }[]>([]);
   // Stable color-per-crew-member lookup. Backend records crewMemberId on
   // signals as the lowercased trimmed name, so we key the map the same
@@ -2044,6 +2070,8 @@ export default function HoverScreen() {
     const visible: Signal[] = [];
     for (const s of signals) {
       if (animatingIds.has(String(s.id))) continue;
+      // Brief Customize: drop dots whose type is hidden.
+      if (signalVisibility[(s.type || '').toLowerCase()] === false) continue;
       // Crew member filter (personal view only) — when a crew name
       // is selected, restrict to signals tagged to that member.
       if (viewMode === 'personal' && crewFilter) {
@@ -2102,7 +2130,7 @@ export default function HoverScreen() {
     const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
     for (const s of dots) out[ringForSignal(s)].push(s);
     return out;
-  }, [signals, resolveAnims, viewMode, crewFilter, userId]);
+  }, [signals, resolveAnims, viewMode, crewFilter, userId, signalVisibility]);
 
   function startRest(signal: Signal) {
     const ring = ringForSignal(signal);
@@ -2477,6 +2505,7 @@ export default function HoverScreen() {
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={handleDotPress}
           crewColorMap={crewColorMap}
+          prominentTypes={prominentTypes}
         />
         <RotatingRing
           ring={RINGS.middle}
@@ -2491,6 +2520,7 @@ export default function HoverScreen() {
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={handleDotPress}
           crewColorMap={crewColorMap}
+          prominentTypes={prominentTypes}
         />
         <RotatingRing
           ring={RINGS.inner}
@@ -2505,6 +2535,7 @@ export default function HoverScreen() {
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={handleDotPress}
           crewColorMap={crewColorMap}
+          prominentTypes={prominentTypes}
         />
 
 

@@ -95,6 +95,32 @@ type BriefSegment =
   | { type: 'text'; content: string }
   | { type: 'signal'; content: string; signalId: string | number; signalType?: string };
 
+// Apply the user's brief Customize prefs (Settings → The Baton → Customize):
+// drop signal chips whose type is hidden, then re-rank the remaining signal
+// chips by the saved priority order (text segments stay anchored in place).
+// Type matching is case-insensitive; unknown types are kept + ranked last.
+function applySignalPrefs(
+  segs: BriefSegment[],
+  priority: string[],
+  visibility: Record<string, boolean>,
+): BriefSegment[] {
+  const norm = (t?: string) => (t || '').toLowerCase();
+  const filtered = segs.filter(
+    (s) => !(s.type === 'signal' && visibility[norm(s.signalType)] === false),
+  );
+  if (!priority.length) return filtered;
+  const rank = (t?: string) => {
+    const i = priority.indexOf(norm(t));
+    return i === -1 ? 999 : i;
+  };
+  const sorted = filtered
+    .filter((s): s is Extract<BriefSegment, { type: 'signal' }> => s.type === 'signal')
+    .slice()
+    .sort((a, b) => rank(a.signalType) - rank(b.signalType));
+  let si = 0;
+  return filtered.map((s) => (s.type === 'signal' ? sorted[si++] : s));
+}
+
 const SIGNAL_TYPE_COLORS: Record<string, string> = {
   package: '#60a5fa',
   delivery: '#7dd3fc',
@@ -925,6 +951,22 @@ export default function TakeoffScreen() {
   // unobtrusive InfoHint "i" affordances next to The Pulse and the brief.
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
+  // Brief Customize prefs (Settings → The Baton → Customize), applied to the
+  // rendered brief: hidden types are filtered out, the rest re-ranked.
+  const [signalPriority, setSignalPriority] = useState<string[]>([]);
+  const [signalVisibility, setSignalVisibility] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    (async () => {
+      try {
+        const [p, v] = await Promise.all([
+          AsyncStorage.getItem('conductorSignalPriority'),
+          AsyncStorage.getItem('conductorSignalVisibility'),
+        ]);
+        if (p) { const a = JSON.parse(p); if (Array.isArray(a)) setSignalPriority(a); }
+        if (v) { const o = JSON.parse(v); if (o && typeof o === 'object') setSignalVisibility(o); }
+      } catch { /* defaults */ }
+    })();
+  }, []);
   const [transparency, setTransparency] = useState<string | null>(null);
   const [showTransparency, setShowTransparency] = useState(false);
   // The Read — overflow context Conductor deemed worth knowing but
@@ -1722,7 +1764,11 @@ export default function TakeoffScreen() {
                   styles.brief,
                   { color: bandTheme.brief },
                 ]}>
-                {(segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment]).map((seg, i) => {
+                {applySignalPrefs(
+                  segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment],
+                  signalPriority,
+                  signalVisibility,
+                ).map((seg, i) => {
                   if (seg.type === 'signal') {
                     const color = (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
                     const acted = quickActed[String(seg.signalId)];
