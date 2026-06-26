@@ -2180,6 +2180,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
 
+        <CollapsibleSection title="The Baton" subtitle="how The Conductor works for you" defaultOpen>
         <CollapsibleSection title="Your Brief">
         <ChevronRow
           label="Takeoff"
@@ -2229,7 +2230,63 @@ export default function SettingsScreen() {
         <VoiceStyleBlock />
         </CollapsibleSection>
 
+        <CollapsibleSection title="What You Love">
+        <WhatYouLoveBlock />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Notifications">
+        <ToggleRow label="Health context" value={settings.healthEnabled} onChange={setHealth} />
+        <ToggleRow label="Childcare" value={settings.childcareEnabled} onChange={setChildcare} />
+        <Row
+          label="In-person requirements"
+          right={<Lock size={16} color={MUTED} />}
+        />
+        <SectionHeader title="On the Horizon" subtext="One surprising signal from the bigger picture" />
+        <ToggleRow label="Watching" value={settings.horizonEnabled} onChange={setHorizon} />
+        <ChevronRow
+          label="Frequency"
+          rightText={settings.horizonFrequency}
+          onPress={cycleFrequency}
+        />
+        {settings.horizonEnabled && (
+          <ChevronRow label="View The Horizon" onPress={() => router.push('/horizon' as never)} />
+        )}
+        </CollapsibleSection>
+
+        <CollapsibleSection title="App &amp; Sharing">
+        <HowConductorThinksRow />
+        <AppearanceBlock />
+        <AppIconRow />
+        <LanguageRow />
+        <HeyConductorBlock />
+        <ShortcutsLibraryBlock />
+        <Row label="Conductor" subtext="Version 1.0.0" />
+        <ChevronRow
+          label="Memory"
+          onPress={() => router.push('/journal' as never)}
+        />
+        <ChevronRow
+          label="Share This Week"
+          onPress={() => router.push('/summary-card?period=week' as never)}
+        />
+        <ChevronRow
+          label="Share This Month"
+          onPress={() => router.push('/summary-card?period=month' as never)}
+        />
+        <ChevronRow
+          label="How Conductor thinks"
+          onPress={() => comingSoon('How Conductor thinks')}
+        />
+        <ChevronRow
+          label="Directory"
+          onPress={() => router.push('/directory' as never)}
+        />
+        <ReferralBlock />
+        </CollapsibleSection>
+        </CollapsibleSection>
+
         <CollapsibleSection title="The Orchestra" subtitle="the people and places it watches">
+        <CollapsibleSection title="Your Household">
         <HouseholdNameRow />
         <Row label="RangerOaks925" subtext="Your household" />
         <ChevronRow label="Invite a member" onPress={() => handleInviteMember(userId)} />
@@ -2323,8 +2380,10 @@ export default function SettingsScreen() {
         <CollapsibleSection title="Your Crew">
         <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
         </CollapsibleSection>
+        </CollapsibleSection>
 
         <CollapsibleSection title="The Score" subtitle="everything The Conductor reads from">
+        <CollapsibleSection title="What Conductor Sees">
         <Row
           label="Connected accounts"
           right={
@@ -2486,29 +2545,6 @@ export default function SettingsScreen() {
         />
         </CollapsibleSection>
 
-        <CollapsibleSection title="What You Love">
-        <WhatYouLoveBlock />
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Notifications">
-        <ToggleRow label="Health context" value={settings.healthEnabled} onChange={setHealth} />
-        <ToggleRow label="Childcare" value={settings.childcareEnabled} onChange={setChildcare} />
-        <Row
-          label="In-person requirements"
-          right={<Lock size={16} color={MUTED} />}
-        />
-        <SectionHeader title="On the Horizon" subtext="One surprising signal from the bigger picture" />
-        <ToggleRow label="Watching" value={settings.horizonEnabled} onChange={setHorizon} />
-        <ChevronRow
-          label="Frequency"
-          rightText={settings.horizonFrequency}
-          onPress={cycleFrequency}
-        />
-        {settings.horizonEnabled && (
-          <ChevronRow label="View The Horizon" onPress={() => router.push('/horizon' as never)} />
-        )}
-        </CollapsibleSection>
-
         <CollapsibleSection title="Privacy & Data">
         <SecuritySection />
         <Row
@@ -2522,36 +2558,6 @@ export default function SettingsScreen() {
           onPress={() => router.push('/privacy-dashboard' as never)}
         />
         </CollapsibleSection>
-
-        <CollapsibleSection title="The Baton" subtitle="how The Conductor works for you">
-        <HowConductorThinksRow />
-        <AppearanceBlock />
-        <AppIconRow />
-        <LanguageRow />
-        <HeyConductorBlock />
-        <ShortcutsLibraryBlock />
-        <Row label="Conductor" subtext="Version 1.0.0" />
-        <ChevronRow
-          label="Memory"
-          onPress={() => router.push('/journal' as never)}
-        />
-        <ChevronRow
-          label="Share This Week"
-          onPress={() => router.push('/summary-card?period=week' as never)}
-        />
-        <ChevronRow
-          label="Share This Month"
-          onPress={() => router.push('/summary-card?period=month' as never)}
-        />
-        <ChevronRow
-          label="How Conductor thinks"
-          onPress={() => comingSoon('How Conductor thinks')}
-        />
-        <ChevronRow
-          label="Directory"
-          onPress={() => router.push('/directory' as never)}
-        />
-        <ReferralBlock />
         </CollapsibleSection>
 
         <View style={{ height: 40 }} />
