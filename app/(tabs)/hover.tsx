@@ -69,7 +69,7 @@ type RingDef = {
 const RINGS: Record<RingKey, RingDef> = {
   outer:  { key: 'outer',  radius: 165, rotationMs: 60000, strokeOpacity: 0.15, label: 'ON THE HORIZON',    pulseMs: 2500 },
   middle: { key: 'middle', radius: 115, rotationMs: 30000, strokeOpacity: 0.25, label: 'APPROACHING FAST',  pulseMs: 1500 },
-  inner:  { key: 'inner',  radius: 65,  rotationMs: 15000, strokeOpacity: 0.4,  label: 'ACT NOW',           pulseMs: 600  },
+  inner:  { key: 'inner',  radius: 44,  rotationMs: 15000, strokeOpacity: 0.4,  label: 'ACT NOW',           pulseMs: 600  },
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -79,7 +79,7 @@ const EXPANDED_RADIUS = 155;
 // hit zone is its actual radius ± half the gap to its neighbour, so the
 // three zones are contiguous and non-overlapping (0–90 inner, 90–140 middle,
 // 140–200 outer). Keep these in sync with the radii in RINGS.
-const RING_HIT_BOUNDARIES = { innerOuter: 90, middleOuter: 140, outerOuter: 200 };
+const RING_HIT_BOUNDARIES = { innerOuter: 78, middleOuter: 140, outerOuter: 200 };
 const EXPANDED_HIT_TOLERANCE = 30;
 
 function parseEta(eta?: string | null) {
@@ -494,8 +494,7 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
       </Animated.View>
 
       {/* Wand — the C mark's baton as a rotating clock hand pivoting at the
-          center. The current hour rides the tip (counter-rotated so the digit
-          stays upright). Refreshes every minute. */}
+          center: direction only, no number. Refreshes every minute. */}
       <View
         pointerEvents="none"
         style={{ position: 'absolute', left: cx, top: cy, zIndex: 31, transform: [{ rotate: `${clock.angle}deg` }] }}>
@@ -503,17 +502,6 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
         <Svg width={4} height={55} style={{ position: 'absolute', left: -2, top: -55 }}>
           <Polygon points="1,55 3,55 2.5,0 1.5,0" fill={accentColor} />
         </Svg>
-        <View
-          style={{
-            position: 'absolute',
-            left: -11,
-            top: -73,
-            width: 22,
-            alignItems: 'center',
-            transform: [{ rotate: `-${clock.angle}deg` }],
-          }}>
-          <Text style={{ fontSize: 10, color: accentColor, fontWeight: '700' }}>{clock.hour}</Text>
-        </View>
       </View>
 
       {/* Center C — strong radiating golden glow; the tap target for chat. */}
@@ -592,7 +580,7 @@ function SpinRing({ cx, cy, radius, durationMs, clockwise }: { cx: number; cy: n
 function RotatingOverlayRings({ cx, cy }: { cx: number; cy: number }) {
   return (
     <>
-      <SpinRing cx={cx} cy={cy} radius={65} durationMs={30000} clockwise />
+      <SpinRing cx={cx} cy={cy} radius={44} durationMs={30000} clockwise />
       <SpinRing cx={cx} cy={cy} radius={115} durationMs={45000} clockwise={false} />
       <SpinRing cx={cx} cy={cy} radius={165} durationMs={60000} clockwise />
     </>
@@ -2368,54 +2356,48 @@ export default function HoverScreen() {
       if (!insideExpandedRing) setExpandedRing(null);
     });
 
-  // Center-origin directional swipes. Only swipes that BEGIN within the center
-  // 60% of the screen navigate directionally; edge-origin swipes call
-  // state.fail() so the root tab-switch PanResponder (app/(tabs)/_layout.tsx)
-  // still handles them. manualActivation lets us activate/fail by touch origin.
-  const swipeOriginRef = useRef<{ x: number; y: number; center: boolean } | null>(null);
-  const centerSwipe = Gesture.Pan()
-    .manualActivation(true)
+  // Swipe navigation. Two direction-locked Pan gestures (activeOffset makes
+  // activation reliable on EVERY swipe — the prior manualActivation version
+  // could miss after the first). Origin within the center 60% = directional
+  // nav; edge origin = tab switch (handled here because this GestureDetector
+  // intercepts the root PanResponder in _layout.tsx).
+  const swipeOriginRef = useRef<{ center: boolean } | null>(null);
+  const recordOrigin = (x: number, y: number) => {
+    swipeOriginRef.current = {
+      center: x > width * 0.2 && x < width * 0.8 && y > height * 0.2 && y < height * 0.8,
+    };
+  };
+  const hSwipe = Gesture.Pan()
+    .activeOffsetX([-24, 24])
+    .failOffsetY([-32, 32])
     .runOnJS(true)
-    .onTouchesDown((e) => {
-      const t = e.changedTouches[0];
-      if (!t) return;
-      const center = t.x > width * 0.2 && t.x < width * 0.8 && t.y > height * 0.2 && t.y < height * 0.8;
-      swipeOriginRef.current = { x: t.x, y: t.y, center };
-    })
-    .onTouchesMove((e, state) => {
-      const o = swipeOriginRef.current;
-      const t = e.changedTouches[0];
-      if (!o || !t) return;
-      // Activate on any clear swipe (center OR edge). The root PanResponder in
-      // _layout.tsx is intercepted by this GestureDetector, so we handle the
-      // edge-origin horizontal "tab switch" here too rather than failing it.
-      if (Math.abs(t.x - o.x) > 18 || Math.abs(t.y - o.y) > 18) state.activate();
-    })
+    .onBegin((e) => recordOrigin(e.x, e.y))
     .onEnd((e) => {
-      const o = swipeOriginRef.current;
-      if (!o) return;
-      const dx = e.translationX;
-      const dy = e.translationY;
-      if (Math.abs(dx) < 50 && Math.abs(dy) < 50) return;
-      const horizontal = Math.abs(dx) > Math.abs(dy);
-      if (o.center) {
-        // Center-origin → directional navigation.
-        if (horizontal) {
-          if (dx < 0) { markSwiped('left'); router.push('/(tabs)/settings?hub=score' as never); }
-          else { markSwiped('right'); router.push('/(tabs)/settings?hub=orchestra' as never); }
-        } else {
-          if (dy < 0) { markSwiped('up'); router.push('/horizon' as never); }
-          else { markSwiped('down'); router.push('/journal' as never); }
-        }
-      } else if (horizontal) {
-        // Edge-origin horizontal → switch tabs (Hover sits between Ground and
-        // Settings). Swipe left → Settings, swipe right → Ground.
-        if (dx < 0) router.push('/(tabs)/settings' as never);
+      if (Math.abs(e.translationX) < 45) return;
+      const center = !!swipeOriginRef.current?.center;
+      if (e.translationX < 0) {
+        // Swipe left.
+        if (center) { markSwiped('left'); router.push('/(tabs)/settings?hub=score' as never); }
+        else router.push('/(tabs)/settings' as never);
+      } else {
+        // Swipe right.
+        if (center) { markSwiped('right'); router.push('/(tabs)/settings?hub=orchestra' as never); }
         else router.push('/(tabs)' as never);
       }
     });
+  const vSwipe = Gesture.Pan()
+    .activeOffsetY([-24, 24])
+    .failOffsetX([-32, 32])
+    .runOnJS(true)
+    .onBegin((e) => recordOrigin(e.x, e.y))
+    .onEnd((e) => {
+      if (Math.abs(e.translationY) < 45) return;
+      if (!swipeOriginRef.current?.center) return;
+      if (e.translationY < 0) { markSwiped('up'); router.push('/horizon' as never); }
+      else { markSwiped('down'); router.push('/journal' as never); }
+    });
 
-  const composedGesture = Gesture.Race(centerSwipe, swipeGesture, longPressGesture, tapGesture);
+  const composedGesture = Gesture.Race(hSwipe, vSwipe, swipeGesture, longPressGesture, tapGesture);
 
   return (
     <GestureDetector gesture={composedGesture}>
