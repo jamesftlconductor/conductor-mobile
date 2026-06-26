@@ -412,12 +412,13 @@ function RadarImageOverlays({ cx, cy }: { cx: number; cy: number }) {
   );
 }
 
-// Current-time clock-hand angle: 12 o'clock = 0°, 3 o'clock = 90°, etc.
-function clockHandAngle(): number {
+// Current-time clock state for the wand: angle (12 o'clock = 0°, 3 = 90°, …)
+// plus the 12-hour hour number shown riding the wand tip.
+function clockState(): { angle: number; hour: number } {
   const now = new Date();
-  const hours = now.getHours() % 12;
+  const h = now.getHours() % 12;
   const minutes = now.getMinutes();
-  return ((hours * 60 + minutes) / 720) * 360;
+  return { angle: ((h * 60 + minutes) / 720) * 360, hour: h === 0 ? 12 : h };
 }
 
 // The C mark is the living heart of the radar. Centered on (cx,cy) — the same
@@ -428,11 +429,12 @@ function clockHandAngle(): number {
 // glow doubles as the tap target for The Conductor chat.
 function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number; onCenterPress: () => void }) {
   const { width: SW, height: SH } = useWindowDimensions();
+  const { accentColor } = useTheme();
   const bgPulse = useRef(new Animated.Value(0.85)).current;
   const cScale = useRef(new Animated.Value(0.75)).current;
   const cGlow = useRef(new Animated.Value(0.4)).current;
   const nebula = useRef(new Animated.Value(0.08)).current;
-  const [batonAngle, setBatonAngle] = useState<number>(() => clockHandAngle());
+  const [clock, setClock] = useState(() => clockState());
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -462,9 +464,9 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
     return () => loop.stop();
   }, [cScale, cGlow, nebula]);
 
-  // Baton tracks the current time; refresh every minute.
+  // Wand tracks the current time; refresh every minute.
   useEffect(() => {
-    const id = setInterval(() => setBatonAngle(clockHandAngle()), 60000);
+    const id = setInterval(() => setClock(clockState()), 60000);
     return () => clearInterval(id);
   }, []);
 
@@ -491,11 +493,24 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
         </Svg>
       </Animated.View>
 
-      {/* Baton — points to the current time, pivoting at the C mark. */}
+      {/* Wand — the C mark's baton as a rotating clock hand pivoting at the
+          center. The current hour rides the tip (counter-rotated so the digit
+          stays upright). Refreshes every minute. */}
       <View
         pointerEvents="none"
-        style={{ position: 'absolute', left: cx, top: cy, zIndex: 31, transform: [{ rotate: `${batonAngle}deg` }] }}>
-        <View style={{ position: 'absolute', left: -1.5, top: -28, width: 3, height: 28, borderRadius: 1.5, backgroundColor: 'rgba(240, 208, 96, 0.9)' }} />
+        style={{ position: 'absolute', left: cx, top: cy, zIndex: 31, transform: [{ rotate: `${clock.angle}deg` }] }}>
+        <View style={{ position: 'absolute', left: -1.5, top: -55, width: 3, height: 55, borderRadius: 1.5, backgroundColor: accentColor }} />
+        <View
+          style={{
+            position: 'absolute',
+            left: -11,
+            top: -73,
+            width: 22,
+            alignItems: 'center',
+            transform: [{ rotate: `-${clock.angle}deg` }],
+          }}>
+          <Text style={{ fontSize: 11, color: accentColor, fontWeight: '700' }}>{clock.hour}</Text>
+        </View>
       </View>
 
       {/* Center C — strong radiating golden glow; the tap target for chat. */}
@@ -1962,7 +1977,10 @@ export default function HoverScreen() {
   }, [expandedRing]);
 
   const cx = width / 2;
-  const cy = height / 2 - 50;
+  // Exact center of the cover-cropped astrolabe image. ALL center elements —
+  // the C-mark glow, the pulse, the wand, and the orbiting rings — share this
+  // one point.
+  const cy = height / 2;
 
   // Direction-hint visibility — each faint compass hint fades permanently once
   // the user has swiped that direction (persisted per-direction in AsyncStorage).
