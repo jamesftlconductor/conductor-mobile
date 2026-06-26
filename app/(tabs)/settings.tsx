@@ -475,8 +475,20 @@ function CollapsibleSection({
           setOpen((o) => !o);
         }}
         style={styles.collapsibleHeader}>
+        {/* Hubs (sections with a subtitle) get classified-dossier corner
+            brackets; nested child sections don't. */}
+        {subtitle ? (
+          <>
+            <View pointerEvents="none" style={[styles.hubBracket, styles.hubBracketTL]} />
+            <View pointerEvents="none" style={[styles.hubBracket, styles.hubBracketTR]} />
+            <View pointerEvents="none" style={[styles.hubBracket, styles.hubBracketBL]} />
+            <View pointerEvents="none" style={[styles.hubBracket, styles.hubBracketBR]} />
+          </>
+        ) : null}
         <View style={{ flex: 1 }}>
-          <Text style={styles.sectionHeader}>{title}</Text>
+          <Text style={subtitle ? styles.hubHeaderText : styles.sectionHeader}>
+            {subtitle ? `[${title}]` : title}
+          </Text>
           {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
         </View>
         <ChevronRight
@@ -2891,7 +2903,8 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginBottom: 6,
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: SOFT_BORDER,
+    // Thin accent divider (~0.12 opacity) — more refined than the soft border.
+    borderBottomColor: accentColor + '1f',
   },
   howThinksHeader: {
     flexDirection: 'row',
@@ -2916,6 +2929,28 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     textTransform: 'uppercase',
     fontWeight: '600',
   },
+  // Hub title — bracketed monospace in the accent, matching the Finale HUD
+  // label language. e.g. [THE BATON].
+  hubHeaderText: {
+    color: accentColor,
+    fontSize: 12,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+  },
+  // L-shaped corner brackets framing a hub header — accent at ~0.20 opacity
+  // (33 hex), 1px stroke, 10px arms. Each corner enables its two borders.
+  hubBracket: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderColor: accentColor + '33',
+  },
+  hubBracketTL: { top: 0, left: 0, borderTopWidth: 1, borderLeftWidth: 1 },
+  hubBracketTR: { top: 0, right: 0, borderTopWidth: 1, borderRightWidth: 1 },
+  hubBracketBL: { bottom: 0, left: 0, borderBottomWidth: 1, borderLeftWidth: 1 },
+  hubBracketBR: { bottom: 0, right: 0, borderBottomWidth: 1, borderRightWidth: 1 },
   // Hub subtitle beneath the section title (e.g. "how The Conductor works for you").
   sectionSubtitle: {
     color: MUTED,
