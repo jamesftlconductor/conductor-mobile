@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Defs, LinearGradient, Line, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Line, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
@@ -499,7 +499,10 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
       <View
         pointerEvents="none"
         style={{ position: 'absolute', left: cx, top: cy, zIndex: 31, transform: [{ rotate: `${clock.angle}deg` }] }}>
-        <View style={{ position: 'absolute', left: -1.5, top: -55, width: 3, height: 55, borderRadius: 1.5, backgroundColor: accentColor }} />
+        {/* Tapered wand — 2px at the pivot, 1px at the tip. */}
+        <Svg width={4} height={55} style={{ position: 'absolute', left: -2, top: -55 }}>
+          <Polygon points="1,55 3,55 2.5,0 1.5,0" fill={accentColor} />
+        </Svg>
         <View
           style={{
             position: 'absolute',
@@ -509,7 +512,7 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
             alignItems: 'center',
             transform: [{ rotate: `-${clock.angle}deg` }],
           }}>
-          <Text style={{ fontSize: 11, color: accentColor, fontWeight: '700' }}>{clock.hour}</Text>
+          <Text style={{ fontSize: 10, color: accentColor, fontWeight: '700' }}>{clock.hour}</Text>
         </View>
       </View>
 
@@ -2383,21 +2386,32 @@ export default function HoverScreen() {
       const o = swipeOriginRef.current;
       const t = e.changedTouches[0];
       if (!o || !t) return;
-      if (!o.center) { state.fail(); return; }
+      // Activate on any clear swipe (center OR edge). The root PanResponder in
+      // _layout.tsx is intercepted by this GestureDetector, so we handle the
+      // edge-origin horizontal "tab switch" here too rather than failing it.
       if (Math.abs(t.x - o.x) > 18 || Math.abs(t.y - o.y) > 18) state.activate();
     })
     .onEnd((e) => {
       const o = swipeOriginRef.current;
-      if (!o || !o.center) return;
+      if (!o) return;
       const dx = e.translationX;
       const dy = e.translationY;
       if (Math.abs(dx) < 50 && Math.abs(dy) < 50) return;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx < 0) { markSwiped('left'); router.push('/(tabs)/settings?hub=score' as never); }
-        else { markSwiped('right'); router.push('/(tabs)/settings?hub=orchestra' as never); }
-      } else {
-        if (dy < 0) { markSwiped('up'); router.push('/horizon' as never); }
-        else { markSwiped('down'); router.push('/journal' as never); }
+      const horizontal = Math.abs(dx) > Math.abs(dy);
+      if (o.center) {
+        // Center-origin → directional navigation.
+        if (horizontal) {
+          if (dx < 0) { markSwiped('left'); router.push('/(tabs)/settings?hub=score' as never); }
+          else { markSwiped('right'); router.push('/(tabs)/settings?hub=orchestra' as never); }
+        } else {
+          if (dy < 0) { markSwiped('up'); router.push('/horizon' as never); }
+          else { markSwiped('down'); router.push('/journal' as never); }
+        }
+      } else if (horizontal) {
+        // Edge-origin horizontal → switch tabs (Hover sits between Ground and
+        // Settings). Swipe left → Settings, swipe right → Ground.
+        if (dx < 0) router.push('/(tabs)/settings' as never);
+        else router.push('/(tabs)' as never);
       }
     });
 
