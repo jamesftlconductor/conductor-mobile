@@ -1698,224 +1698,11 @@ export default function TakeoffScreen() {
             <Text style={[styles.greeting, { color: bandTheme.greeting }]}>
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
             </Text>
-            <Text style={[styles.title, { color: bandTheme.title }]}>{mode.title}</Text>
+            <Text style={styles.title}>{mode.title}</Text>
           </View>
-
-          {pulse || pulseData ? (
-            // The Pulse — synthesis layer output. One warm editorial
-            // sentence; tap expands inline into the full health + context
-            // card via LayoutAnimation. Card sections render from
-            // pulseData with per-field null guards.
-            //
-            // The headline sentence (`pulse`) is best-effort on the backend
-            // (a Haiku synthesis call that can return null), but `pulseData`
-            // is built deterministically. Gating the whole block on `pulse`
-            // alone hid the entire Pulse — card included — whenever that
-            // call came back empty (notably on Takeoff). Render whenever
-            // either is present; show the sentence only when we have it, and
-            // surface the data card directly (expanded) when there's no
-            // headline to collapse from.
-            <TouchableOpacity
-              onPress={togglePulse}
-              activeOpacity={0.6}
-              hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
-              style={styles.pulseWrap}>
-              <View style={styles.pulseLabelRow}>
-                <Text style={styles.pulseLabel}>THE PULSE</Text>
-                <InfoHint message="One sentence synthesizing your health, weather, and signal load." />
-              </View>
-              {pulse ? <Text style={styles.pulseText}>{pulse}</Text> : null}
-              {showPulseTip ? (
-                <View style={styles.tooltipInline} pointerEvents="box-none">
-                  <Tooltip
-                    visible={showPulseTip}
-                    message="Tap to see what Conductor is synthesizing today."
-                    arrow="up"
-                    showButton={false}
-                    onDismiss={() => setShowPulseTip(false)}
-                  />
-                </View>
-              ) : null}
-              {(pulseExpanded || !pulse) && pulseData ? (
-                <View style={styles.pulseCard}>
-                  <PulseHealthSection health={pulseData.health} />
-                  <PulseConditionsSection weather={pulseData.weather} />
-                  <PulseTimelineSection weather={pulseData.weather} />
-                  <PulseLoadSection
-                    signalLoad={pulseData.signalLoad}
-                    urgentCount={pulseData.urgentCount}
-                  />
-                  <PulseFlagsSection flags={pulseData.synthesisFlags} />
-                </View>
-              ) : null}
-              {/* Expand affordance — bottom-right chevron signalling the card
-                  opens. Rotates to point up once expanded. Only shown when
-                  there's a data card to expand into. */}
-              {pulseData ? (
-                <View style={styles.pulseChevron} pointerEvents="none">
-                  <ChevronDown
-                    size={12}
-                    color={theme.muted}
-                    style={{ transform: [{ rotate: pulseExpanded ? '180deg' : '0deg' }] }}
-                  />
-                </View>
-              ) : null}
-            </TouchableOpacity>
-          ) : null}
-
-          {householdInterview ? (
-            // Household interview — when the radar is thin the brief surfaces
-            // one profile-building question. Tapping opens The Conductor
-            // pre-loaded with the question; the answer becomes a signal/vault
-            // item via /api/ask's interview handler.
-            <TouchableOpacity
-              onPress={() =>
-                openConductorSheet('ground', { interviewQuestion: householdInterview.question })
-              }
-              activeOpacity={0.6}
-              style={styles.interviewPrompt}>
-              <Text style={styles.interviewPromptText}>The Conductor has a question →</Text>
-              {householdInterview.context ? (
-                <Text style={styles.interviewPromptContext} numberOfLines={2}>
-                  {householdInterview.context}
-                </Text>
-              ) : null}
-            </TouchableOpacity>
-          ) : null}
-
-          {mode.title !== 'Overwatch' ? (
-            // Ask Conductor — single-shot Q&A. Placed below The Pulse and
-            // above the in-flow date so the input is the natural next
-            // landing spot after reading the synthesis sentence. Overwatch
-            // mode has no brief, so the question UI is hidden there too.
-            <View style={styles.askWrap}>
-              <View style={styles.askInputRow}>
-                <TextInput
-                  ref={askInputRef}
-                  value={askQuestion}
-                  onChangeText={setAskQuestion}
-                  onSubmitEditing={submitAsk}
-                  onFocus={() => setAskFocused(true)}
-                  onBlur={() => setAskFocused(false)}
-                  placeholder="Ask The Conductor..."
-                  placeholderTextColor={theme.muted}
-                  returnKeyType="send"
-                  editable={!askLoading}
-                  blurOnSubmit={false}
-                  style={styles.askInput}
-                />
-                <TouchableOpacity
-                  onPress={submitAsk}
-                  activeOpacity={0.6}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  disabled={askLoading || askQuestion.trim().length === 0}>
-                  <Text
-                    style={[
-                      styles.askSend,
-                      (askLoading || askQuestion.trim().length === 0) && { opacity: 0.4 },
-                    ]}>
-                    →
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {askFocused && !askAnswer && !askLoading ? (
-                // Suggestion chips — derived from brief state at render
-                // time so they're contextually useful for what's
-                // actually on the user's radar today.
-                <View style={styles.askChipsRow}>
-                  {buildAskChips({
-                    segments,
-                    urgentCount: pulseData?.urgentCount || 0,
-                    pulseFlags,
-                    pulseData,
-                    conductorQuestion,
-                    maintenancePlanOffer,
-                    modeIsTakeoff: mode.endpoint === 'brief',
-                  }).slice(0, 3).map((q) => (
-                    <TouchableOpacity
-                      key={q}
-                      onPress={() => {
-                        setAskQuestion(q);
-                        askInputRef.current?.focus();
-                      }}
-                      activeOpacity={0.6}
-                      style={styles.askChip}>
-                      <Text style={styles.askChipText}>{q}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
-              {askLoading ? (
-                <Text style={styles.askThinking}>Conductor is thinking...</Text>
-              ) : null}
-              {!askLoading && askError ? (
-                <Text style={styles.askThinking}>Conductor couldn&apos;t reach that one. Try again.</Text>
-              ) : null}
-              {!askLoading && !askError && askAnswer ? (
-                <View style={styles.askAnswerCard}>
-                  <Text style={[styles.askAnswerText, { color: bandTheme.brief }]}>{askAnswer}</Text>
-                  {speechActive ? (
-                    <TouchableOpacity onPress={stopSpeech} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 8 }}>■ Stop</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  {askAction?.type === 'confirm_setting' ? (
-                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-                      <TouchableOpacity
-                        onPress={async () => {
-                          // Best-effort: route the user to settings for now.
-                          // A future patch endpoint would apply the setting
-                          // server-side.
-                          setAskAction(null);
-                          router.push('/settings' as never);
-                        }}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 11,
-                          borderRadius: 22,
-                          backgroundColor: accentColor,
-                          alignItems: 'center',
-                        }}>
-                        <Text style={{ color: theme.background, fontSize: 13, fontWeight: '600' }}>
-                          Yes, do it →
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setAskAction(null)}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 11,
-                          borderRadius: 22,
-                          borderWidth: StyleSheet.hairlineWidth,
-                          borderColor: theme.inputBackground,
-                          alignItems: 'center',
-                        }}>
-                        <Text style={{ color: theme.muted, fontSize: 13 }}>No thanks</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-                  <TouchableOpacity
-                    onPress={() => { resetAsk(); setAskAction(null); }}
-                    activeOpacity={0.6}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={styles.askAnotherWrap}>
-                    <Text style={styles.askAnother}>Ask another →</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
 
           <Text style={styles.inFlowDate}>{date}</Text>
 
-          <View style={[styles.divider, { backgroundColor: bandTheme.divider }]} />
-
-          <TouchableOpacity
-            onPress={() => setShowYesterday(true)}
-            activeOpacity={0.6}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Text style={styles.inFlowYesterday}>Yesterday&apos;s Programme →</Text>
-          </TouchableOpacity>
 
           {loading ? (
             <WordmarkLoader />
@@ -2456,6 +2243,223 @@ export default function TakeoffScreen() {
               <Text style={styles.transparencyLinkText}>How Conductor thought about this</Text>
             </TouchableOpacity>
           ) : null}
+
+          {/* Subtle separator — The Pulse + Ask now sit below the brief so
+              the brief leads the screen. */}
+          <View style={[styles.divider, { backgroundColor: bandTheme.divider }]} />
+          {pulse || pulseData ? (
+            // The Pulse — synthesis layer output. One warm editorial
+            // sentence; tap expands inline into the full health + context
+            // card via LayoutAnimation. Card sections render from
+            // pulseData with per-field null guards.
+            //
+            // The headline sentence (`pulse`) is best-effort on the backend
+            // (a Haiku synthesis call that can return null), but `pulseData`
+            // is built deterministically. Gating the whole block on `pulse`
+            // alone hid the entire Pulse — card included — whenever that
+            // call came back empty (notably on Takeoff). Render whenever
+            // either is present; show the sentence only when we have it, and
+            // surface the data card directly (expanded) when there's no
+            // headline to collapse from.
+            <TouchableOpacity
+              onPress={togglePulse}
+              activeOpacity={0.6}
+              hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+              style={styles.pulseWrap}>
+              <View style={styles.pulseLabelRow}>
+                <Text style={styles.pulseLabel}>THE PULSE</Text>
+                <InfoHint message="One sentence synthesizing your health, weather, and signal load." />
+              </View>
+              {pulse ? <Text style={styles.pulseText}>{pulse}</Text> : null}
+              {showPulseTip ? (
+                <View style={styles.tooltipInline} pointerEvents="box-none">
+                  <Tooltip
+                    visible={showPulseTip}
+                    message="Tap to see what Conductor is synthesizing today."
+                    arrow="up"
+                    showButton={false}
+                    onDismiss={() => setShowPulseTip(false)}
+                  />
+                </View>
+              ) : null}
+              {(pulseExpanded || !pulse) && pulseData ? (
+                <View style={styles.pulseCard}>
+                  <PulseHealthSection health={pulseData.health} />
+                  <PulseConditionsSection weather={pulseData.weather} />
+                  <PulseTimelineSection weather={pulseData.weather} />
+                  <PulseLoadSection
+                    signalLoad={pulseData.signalLoad}
+                    urgentCount={pulseData.urgentCount}
+                  />
+                  <PulseFlagsSection flags={pulseData.synthesisFlags} />
+                </View>
+              ) : null}
+              {/* Expand affordance — bottom-right chevron signalling the card
+                  opens. Rotates to point up once expanded. Only shown when
+                  there's a data card to expand into. */}
+              {pulseData ? (
+                <View style={styles.pulseChevron} pointerEvents="none">
+                  <ChevronDown
+                    size={12}
+                    color={theme.muted}
+                    style={{ transform: [{ rotate: pulseExpanded ? '180deg' : '0deg' }] }}
+                  />
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          ) : null}
+
+          {householdInterview ? (
+            // Household interview — when the radar is thin the brief surfaces
+            // one profile-building question. Tapping opens The Conductor
+            // pre-loaded with the question; the answer becomes a signal/vault
+            // item via /api/ask's interview handler.
+            <TouchableOpacity
+              onPress={() =>
+                openConductorSheet('ground', { interviewQuestion: householdInterview.question })
+              }
+              activeOpacity={0.6}
+              style={styles.interviewPrompt}>
+              <Text style={styles.interviewPromptText}>The Conductor has a question →</Text>
+              {householdInterview.context ? (
+                <Text style={styles.interviewPromptContext} numberOfLines={2}>
+                  {householdInterview.context}
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+          ) : null}
+
+          {mode.title !== 'Overwatch' ? (
+            // Ask Conductor — single-shot Q&A. Placed below The Pulse and
+            // above the in-flow date so the input is the natural next
+            // landing spot after reading the synthesis sentence. Overwatch
+            // mode has no brief, so the question UI is hidden there too.
+            <View style={styles.askWrap}>
+              <View style={styles.askInputRow}>
+                <TextInput
+                  ref={askInputRef}
+                  value={askQuestion}
+                  onChangeText={setAskQuestion}
+                  onSubmitEditing={submitAsk}
+                  onFocus={() => setAskFocused(true)}
+                  onBlur={() => setAskFocused(false)}
+                  placeholder="Ask The Conductor..."
+                  placeholderTextColor={theme.muted}
+                  returnKeyType="send"
+                  editable={!askLoading}
+                  blurOnSubmit={false}
+                  style={styles.askInput}
+                />
+                <TouchableOpacity
+                  onPress={submitAsk}
+                  activeOpacity={0.6}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  disabled={askLoading || askQuestion.trim().length === 0}>
+                  <Text
+                    style={[
+                      styles.askSend,
+                      (askLoading || askQuestion.trim().length === 0) && { opacity: 0.4 },
+                    ]}>
+                    →
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {askFocused && !askAnswer && !askLoading ? (
+                // Suggestion chips — derived from brief state at render
+                // time so they're contextually useful for what's
+                // actually on the user's radar today.
+                <View style={styles.askChipsRow}>
+                  {buildAskChips({
+                    segments,
+                    urgentCount: pulseData?.urgentCount || 0,
+                    pulseFlags,
+                    pulseData,
+                    conductorQuestion,
+                    maintenancePlanOffer,
+                    modeIsTakeoff: mode.endpoint === 'brief',
+                  }).slice(0, 3).map((q) => (
+                    <TouchableOpacity
+                      key={q}
+                      onPress={() => {
+                        setAskQuestion(q);
+                        askInputRef.current?.focus();
+                      }}
+                      activeOpacity={0.6}
+                      style={styles.askChip}>
+                      <Text style={styles.askChipText}>{q}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+              {askLoading ? (
+                <Text style={styles.askThinking}>Conductor is thinking...</Text>
+              ) : null}
+              {!askLoading && askError ? (
+                <Text style={styles.askThinking}>Conductor couldn&apos;t reach that one. Try again.</Text>
+              ) : null}
+              {!askLoading && !askError && askAnswer ? (
+                <View style={styles.askAnswerCard}>
+                  <Text style={[styles.askAnswerText, { color: bandTheme.brief }]}>{askAnswer}</Text>
+                  {speechActive ? (
+                    <TouchableOpacity onPress={stopSpeech} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 8 }}>■ Stop</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {askAction?.type === 'confirm_setting' ? (
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          // Best-effort: route the user to settings for now.
+                          // A future patch endpoint would apply the setting
+                          // server-side.
+                          setAskAction(null);
+                          router.push('/settings' as never);
+                        }}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 11,
+                          borderRadius: 22,
+                          backgroundColor: accentColor,
+                          alignItems: 'center',
+                        }}>
+                        <Text style={{ color: theme.background, fontSize: 13, fontWeight: '600' }}>
+                          Yes, do it →
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setAskAction(null)}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 11,
+                          borderRadius: 22,
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor: theme.inputBackground,
+                          alignItems: 'center',
+                        }}>
+                        <Text style={{ color: theme.muted, fontSize: 13 }}>No thanks</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                  <TouchableOpacity
+                    onPress={() => { resetAsk(); setAskAction(null); }}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.askAnotherWrap}>
+                    <Text style={styles.askAnother}>Ask another →</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={[styles.divider, { backgroundColor: bandTheme.divider }]} />
+
+          <TouchableOpacity
+            onPress={() => setShowYesterday(true)}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.inFlowYesterday}>Yesterday&apos;s Programme →</Text>
+          </TouchableOpacity>
         </ScrollView>
       </GestureDetector>
 
@@ -2844,11 +2848,15 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     letterSpacing: 0.5,
     marginBottom: 6,
   },
+  // Mode label — a quiet section-label-style context line above the brief
+  // (TAKEOFF / CLEARANCE / MIDDAY / DUSK), not a headline. The brief itself
+  // is the headline now.
   title: {
-    color: theme.text,
-    fontSize: 42,
-    fontWeight: '700',
-    letterSpacing: -1,
+    color: theme.muted,
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   divider: {
     height: 1,
@@ -2860,6 +2868,8 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   },
   briefContainer: {
     flex: 1,
+    // Breathing room so the brief reads as the hero of the screen.
+    paddingVertical: 24,
   },
   // Small leading row that holds the unobtrusive "i" info affordance
   // above the brief text without pushing the brief itself around.
