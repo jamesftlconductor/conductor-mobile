@@ -375,6 +375,15 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
   const innerSignals = grouped.inner;
   const glowColor = innerSignals.length > 0 ? colorFor(innerSignals[0]) : null;
 
+  // Urgency arc — fraction of visible signals that are urgent (inner ring =
+  // ACT NOW) over the total. Full ring = all urgent, no arc = clear. Drawn
+  // just outside the disc and recomputed whenever the grouped signals change.
+  const totalDots = grouped.inner.length + grouped.middle.length + grouped.outer.length;
+  const urgencyRatio = totalDots > 0 ? grouped.inner.length / totalDots : 0;
+  const arcBox = size + 8;
+  const arcR = size / 2 + 2;
+  const arcC = 2 * Math.PI * arcR;
+
   // Pulse cadence comes from householdState.pulseSpeed (ms per half
   // cycle). When pulseSpeed is null (busy/clear) we stop the loop and
   // hold opacity at 1. Otherwise the inner ring opacity oscillates
@@ -608,6 +617,39 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
           )}
         </Svg>
       </Animated.View>
+      {/* Urgency arc — thin segmented ring just outside the disc; the filled
+          fraction = urgent signals / total. Soft glow via a wider faint pass
+          under the sharp stroke. Rotated -90° so it grows from 12 o'clock. */}
+      {urgencyRatio > 0 ? (
+        <Svg
+          width={arcBox}
+          height={arcBox}
+          pointerEvents="none"
+          style={{ position: 'absolute', top: -4, left: -4, transform: [{ rotate: '-90deg' }] }}>
+          <Circle
+            cx={arcBox / 2}
+            cy={arcBox / 2}
+            r={arcR}
+            stroke={accentColor}
+            strokeOpacity={0.22}
+            strokeWidth={3.5}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={`${urgencyRatio * arcC} ${arcC}`}
+          />
+          <Circle
+            cx={arcBox / 2}
+            cy={arcBox / 2}
+            r={arcR}
+            stroke={accentColor}
+            strokeOpacity={0.9}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={`${urgencyRatio * arcC} ${arcC}`}
+          />
+        </Svg>
+      ) : null}
       {urgentCount > 0 ? (
         <View
           pointerEvents="none"

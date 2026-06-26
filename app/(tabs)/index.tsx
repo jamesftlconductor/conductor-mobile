@@ -1733,7 +1733,7 @@ export default function TakeoffScreen() {
             <Text style={[styles.greeting, { color: bandTheme.greeting }]}>
               {greeting}{userName && userName !== 'there' ? `, ${userName}` : ''}.
             </Text>
-            <Text style={styles.title}>{mode.title}</Text>
+            <Text style={styles.title}>{`[${mode.title}]`}</Text>
             <View style={styles.modeLabelLine} />
           </View>
 
@@ -1742,6 +1742,12 @@ export default function TakeoffScreen() {
             <WordmarkLoader />
           ) : (
             <View style={styles.briefContainer}>
+              {/* Very subtle L-shaped corner brackets — ties the brief card to
+                  the Finale HUD visual language. Barely visible. */}
+              <View pointerEvents="none" style={[styles.briefBracket, styles.briefBracketTL]} />
+              <View pointerEvents="none" style={[styles.briefBracket, styles.briefBracketTR]} />
+              <View pointerEvents="none" style={[styles.briefBracket, styles.briefBracketBL]} />
+              <View pointerEvents="none" style={[styles.briefBracket, styles.briefBracketBR]} />
               <View style={styles.briefInfoRow}>
                 <InfoHint message="Your household's morning brief. Tap any signal to act." />
               </View>
@@ -2774,6 +2780,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     fontWeight: '600',
     letterSpacing: 3,
     textTransform: 'uppercase',
+    fontFamily: Platform.select({ ios: 'Courier', android: 'monospace' }),
   },
   // Thin brass underline beneath the mode label — makes it read as a branded
   // mode indicator rather than a plain label.
@@ -2796,6 +2803,19 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     // Breathing room so the brief reads as the hero of the screen.
     paddingVertical: 24,
   },
+  // L-shaped corner brackets framing the brief card — accentColor at ~0.25
+  // opacity (40 hex), 1px stroke, 12px arms. Each corner enables the two
+  // borders that form its L.
+  briefBracket: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderColor: accentColor + '40',
+  },
+  briefBracketTL: { top: 0, left: 0, borderTopWidth: 1, borderLeftWidth: 1 },
+  briefBracketTR: { top: 0, right: 0, borderTopWidth: 1, borderRightWidth: 1 },
+  briefBracketBL: { bottom: 0, left: 0, borderBottomWidth: 1, borderLeftWidth: 1 },
+  briefBracketBR: { bottom: 0, right: 0, borderBottomWidth: 1, borderRightWidth: 1 },
   // Small leading row that holds the unobtrusive "i" info affordance
   // above the brief text without pushing the brief itself around.
   briefInfoRow: {
