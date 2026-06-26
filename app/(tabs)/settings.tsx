@@ -38,6 +38,8 @@ import {
   UIManager,
   View,
 } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { makeTabSwipe } from '@/utils/tabSwipe';
 
 // Android needs an explicit opt-in for LayoutAnimation (used by the
 // collapsible settings sections). iOS enables it by default.
@@ -2155,6 +2157,7 @@ export default function SettingsScreen() {
   }
 
   return (
+    <GestureDetector gesture={makeTabSwipe(3)}>
     <View style={styles.container}>
       {/* Minimap top-right — matches the universal "tap to ask
           Conductor" affordance every screen has. Settings doesn't
@@ -2695,6 +2698,7 @@ export default function SettingsScreen() {
         </Pressable>
       </Modal>
     </View>
+    </GestureDetector>
   );
 }
 

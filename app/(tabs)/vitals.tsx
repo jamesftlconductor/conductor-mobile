@@ -10,8 +10,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
 
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { makeTabSwipe } from '@/utils/tabSwipe';
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { useTheme } from '@/app/theme';
 import { useUserId } from '@/hooks/useUserId';
@@ -200,6 +202,7 @@ export default function VitalsScreen() {
   const humidityText = weather?.humidity != null ? `${Math.round(weather.humidity)}%` : null;
 
   return (
+    <GestureDetector gesture={makeTabSwipe(2)}>
     <View style={styles.container}>
       <ScreenHeader title="Vitals" subtitle="Your household, live" screenContext="vitals" />
       <ScrollView
@@ -250,6 +253,7 @@ export default function VitalsScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
+    </GestureDetector>
   );
 }
 

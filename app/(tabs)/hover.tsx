@@ -41,6 +41,8 @@ import YesterdayModal from '@/components/YesterdayModal';
 import { Tooltip } from '@/components/Tooltip';
 import { useTheme } from '../theme';
 import { useUserId } from '@/hooks/useUserId';
+import { tipSeen, markTipShown } from '@/utils/oneTimeTips';
+import { makeTabSwipe } from '@/utils/tabSwipe';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const PENDING_SIGNAL_KEY = 'conductor:pendingSignalId';
@@ -1514,15 +1516,10 @@ export default function HoverScreen() {
   const [showReveal, setShowReveal] = useState(false);
   useEffect(() => {
     (async () => {
-      try {
-        const seen = await AsyncStorage.getItem('tutorial_hover_rings');
-        if (!seen) {
-          setShowRingsTip(true);
-          // Mark seen on show so it never reshows across sessions/days even
-          // if the user doesn't tap "Got it".
-          AsyncStorage.setItem('tutorial_hover_rings', 'done').catch(() => {});
-        }
-      } catch { /* ignore */ }
+      if (!(await tipSeen('tutorial_hover_rings'))) {
+        setShowRingsTip(true);
+        markTipShown('tutorial_hover_rings');
+      }
     })();
   }, []);
 
@@ -1962,15 +1959,9 @@ export default function HoverScreen() {
   }, [signals, filterTypeKey]);
 
   // Swipe right → go back to Ground (index tab)
-  const swipeGesture = Gesture.Pan()
-    .activeOffsetX([-30, 30])
-    .failOffsetY([-20, 20])
-    .runOnJS(true)
-    .onEnd((e) => {
-      if (e.translationX > 60 && Math.abs(e.translationY) < 80) {
-        router.push('/(tabs)');
-      }
-    });
+  // Tab-swipe: right → Ground, left → Vitals. Composed (Race) with the
+  // radar long-press/tap gestures below.
+  const swipeGesture = makeTabSwipe(1);
 
   // Long-press on any ring (or its label) expands that ring. Distance from
   // (cx, cy) is bucketed into one of three contiguous zones so labels in

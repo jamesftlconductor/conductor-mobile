@@ -7,13 +7,14 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import LottieView from 'lottie-react-native';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import { HelpButton } from '@/components/HelpButton';
 import { Minimap } from '@/components/Minimap';
 import { WordmarkLoader } from '@/components/WordmarkLoader';
 import { WordmarkReveal } from '@/components/WordmarkReveal';
+import { tipSeen, markTipShown } from '@/utils/oneTimeTips';
+import { makeTabSwipe } from '@/utils/tabSwipe';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
@@ -26,7 +27,6 @@ import { Tooltip } from '@/components/Tooltip';
 import { useShakeToAsk } from '@/components/useShakeToAsk';
 import { conductorHaptics } from '@/app/haptics';
 import { useTheme } from '@/app/theme';
-import { weatherLottieSource } from '@/utils/weatherLottie';
 
 // Defensive native-module require: the binary running this OTA may
 // predate the expo-speech install. A top-level `import * as Speech
@@ -1394,26 +1394,16 @@ export default function TakeoffScreen() {
       // shows when the brief actually has chip segments to point at;
       // Pulse tooltip shows when pulse is present + auto-dismisses
       // after 4s on first viewing.
-      try {
-        const seenTap = await AsyncStorage.getItem('tutorial_signal_tap');
-        const segArr = Array.isArray(data.segments) ? data.segments : [];
-        if (!seenTap && segArr.some((s: any) => s?.type === 'signal')) {
-          setShowSignalTapTip(true);
-          // Mark seen the moment it's shown so it never reshows across
-          // sessions/days even if the user ignores it instead of tapping "Got it".
-          AsyncStorage.setItem('tutorial_signal_tap', 'done').catch(() => {});
-        }
-      } catch { /* ignore */ }
-      try {
-        const seenPulse = await AsyncStorage.getItem('tutorial_pulse');
-        if (!seenPulse && typeof data.pulse === 'string' && data.pulse.length > 0) {
-          setShowPulseTip(true);
-          // Persist on show (not only on the 4s auto-dismiss) so closing the
-          // app early can't leave it un-marked and reshowing tomorrow.
-          AsyncStorage.setItem('tutorial_pulse', 'done').catch(() => {});
-          setTimeout(() => setShowPulseTip(false), 4000);
-        }
-      } catch { /* ignore */ }
+      const segArr = Array.isArray(data.segments) ? data.segments : [];
+      if (!(await tipSeen('tutorial_signal_tap')) && segArr.some((s: any) => s?.type === 'signal')) {
+        setShowSignalTapTip(true);
+        markTipShown('tutorial_signal_tap');
+      }
+      if (!(await tipSeen('tutorial_pulse')) && typeof data.pulse === 'string' && data.pulse.length > 0) {
+        setShowPulseTip(true);
+        markTipShown('tutorial_pulse');
+        setTimeout(() => setShowPulseTip(false), 4000);
+      }
 
       // Conductor question — load + filter against today's
       // dismissed-questions list so the user doesn't see the same
@@ -1693,39 +1683,12 @@ export default function TakeoffScreen() {
   }
 
   // Swipe left → go to Hover
-  const swipeGesture = Gesture.Pan()
-    .activeOffsetX([-30, 30])
-    .failOffsetY([-20, 20])
-    .runOnJS(true)
-    .onEnd((e) => {
-      if (e.translationX < -60 && Math.abs(e.translationY) < 80) {
-        router.push('/(tabs)/hover');
-      }
-    });
+  const swipeGesture = makeTabSwipe(0);
 
   const bandTheme = mode.title === 'Takeoff' ? makeTakeoffTheme(theme) : makeClearanceTheme(theme);
 
-  // Weather-reactive Lottie backdrop. Falls back to null (the solid dark
-  // band background) when there's no weather data or no matching animation.
-  const weatherLottie = useMemo(() => {
-    const hour = new Date().getHours();
-    const isNight = hour < 6 || hour >= 19;
-    return weatherLottieSource(pulseData?.weather?.conditions, { isNight });
-  }, [pulseData?.weather?.conditions]);
-
   return (
     <View style={[styles.container, { backgroundColor: bandTheme.bg }]}>
-      {weatherLottie ? (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: 0.6 }]}>
-          <LottieView
-            source={weatherLottie}
-            autoPlay
-            loop
-            resizeMode="cover"
-            style={{ flex: 1 }}
-          />
-        </View>
-      ) : null}
       {/* Positioned to the left of the Minimap (40x40 at right: 20, top: 60).
           Minimap's left edge is 60px from screen right; HelpButton's right
           edge sits at 68px to give an 8px gap. */}
