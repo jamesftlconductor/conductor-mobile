@@ -21,7 +21,6 @@ import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { getUserId, useUserId } from '@/hooks/useUserId';
-import OverwatchView from '@/components/OverwatchView';
 import YesterdayModal from '@/components/YesterdayModal';
 import { ChevronDown } from 'lucide-react-native';
 import { InfoHint } from '@/components/InfoHint';
@@ -384,10 +383,12 @@ function getBriefMode(hour: number, overwatchHour: number = 23, middayEnabled: b
   // effective-1/effective-2 boundaries never go negative.
   const effective =
     !Number.isFinite(overwatchHour) || overwatchHour <= 0 ? 24 : Math.min(overwatchHour, 24);
-  if (hour < 7 || hour >= effective) return { title: 'Overwatch', endpoint: null as string | null };
-  // Dusk — the wind-down hour right before Overwatch begins. The named
-  // evening period between Clearance and Overwatch; it carries the
-  // evening (Clearance) brief forward under a calmer name.
+  // Overwatch (the overnight idle screen) is removed — the app ALWAYS shows
+  // The Brief regardless of time; the backend owns the overnight quiet window.
+  // The overwatchHour preference still drives the evening Dusk/Clearance bands.
+  // Early morning (hour < 7) now falls through to Takeoff, and late night
+  // (hour >= effective) carries the evening brief forward as Dusk — never a
+  // separate Overwatch view.
   if (hour >= effective - 1) return { title: 'Dusk', endpoint: 'clearance' as string | null };
   // Clearance — the evening close. clearanceHour === overwatchHour - 2.
   if (hour >= effective - 2) return { title: 'Clearance', endpoint: 'clearance' as string | null };
@@ -1157,21 +1158,13 @@ export default function TakeoffScreen() {
   const [showYesterday, setShowYesterday] = useState(false);
   const navigation = useNavigation();
 
-  // Hide the bottom tab bar while Overwatch is active. Reaching `getParent()`
-  // walks up to the Tabs navigator where the tabBarStyle option is meaningful.
-  // The cleanup restores the bar when the screen unmounts or the mode flips.
+  // The bottom tab bar always shows now that Overwatch (which used to hide it)
+  // is gone. Kept as an effect so any externally-set tabBarStyle is reset.
   useEffect(() => {
     const parent = navigation.getParent();
     if (!parent) return;
-    if (mode.title === 'Overwatch') {
-      parent.setOptions({ tabBarStyle: { display: 'none' } });
-    } else {
-      parent.setOptions({ tabBarStyle: undefined });
-    }
-    return () => {
-      parent.setOptions({ tabBarStyle: undefined });
-    };
-  }, [mode.title, navigation]);
+    parent.setOptions({ tabBarStyle: undefined });
+  }, [navigation]);
 
   useEffect(() => {
     const now = new Date();
@@ -1646,34 +1639,8 @@ export default function TakeoffScreen() {
     );
   }
 
-  // Overwatch — overnight idle surface (10pm–7am). Renders alongside the
-  // YesterdayModal so the same modal can be opened from the bottom link.
-  if (mode.title === 'Overwatch') {
-    // Swipe right (+X) → Hover; swipe left (−X) → Settings. 50px threshold.
-    const overwatchSwipe = Gesture.Pan()
-      .activeOffsetX([-30, 30])
-      .failOffsetY([-20, 20])
-      .runOnJS(true)
-      .onEnd((e) => {
-        if (Math.abs(e.translationY) >= 80) return;
-        if (e.translationX > 50) router.push('/(tabs)/hover');
-        else if (e.translationX < -50) router.push('/(tabs)/settings');
-      });
-    return (
-      <>
-        <GestureDetector gesture={overwatchSwipe}>
-          <View style={{ flex: 1 }}>
-            <OverwatchView onYesterday={() => setShowYesterday(true)} />
-          </View>
-        </GestureDetector>
-        <YesterdayModal
-          visible={showYesterday}
-          userId={userId}
-          onClose={() => setShowYesterday(false)}
-        />
-      </>
-    );
-  }
+  // Overwatch removed — Ground always renders The Brief below, regardless of
+  // time of day. (The overnight quiet window is handled by the backend.)
 
   // Swipe left → go to Hover
   const swipeGesture = makeTabSwipe(0);
