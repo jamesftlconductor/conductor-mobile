@@ -8,6 +8,7 @@ import {
   Easing,
   FlatList,
   Image,
+  ImageBackground,
   LayoutAnimation,
   Platform,
   Pressable,
@@ -46,6 +47,10 @@ import { makeTabSwipe } from '@/utils/tabSwipe';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const PENDING_SIGNAL_KEY = 'conductor:pendingSignalId';
+
+// The radar artwork is the screen background; rings/vapor/center-C come from it.
+const RADAR_IMG = require('../../assets/conductor-radar.png');
+const RING_HIGHLIGHT = '#e3c15a'; // matches the image's ring highlight color
 
 const OFF_WHITE = '#f0ede8';
 
@@ -251,40 +256,158 @@ type ResolveAnim = {
 // parent RotatingRing layer spins, that arc reads as a directional sheen —
 // the ring feels alive even with no signals on it. Graduated per-ring stroke
 // opacity (outer 0.15 → inner 0.4) keeps the hierarchy subtle, never harsh.
-function SolidRing({ ring }: { ring: RingDef }) {
-  const { theme, accentColor } = useTheme();
-  const radius = ring.radius;
-  const size = radius * 2 + 4;
+function SolidRing(_props: { ring: RingDef }) {
+  // The ring strokes now come from the radar artwork (conductor-radar.png), so
+  // the rotating layer draws no ring of its own — only its signal dots remain.
+  // The animated pulse/rotation rings are rendered by RadarImageOverlays.
+  return null;
+}
+
+// Animated overlay rings layered on top of the static radar image: each ring
+// breathes its opacity and slowly rotates (an astrolabe glint via a gradient
+// sheen arc), independent of the signal dots. Radii match the dot rings so the
+// pulse sits on the image's rings.
+function OverlayRing({
+  radius,
+  cx,
+  cy,
+  pulseMax,
+  pulseMs,
+  rotationMs,
+  clockwise,
+  gid,
+}: {
+  radius: number;
+  cx: number;
+  cy: number;
+  pulseMax: number;
+  pulseMs: number;
+  rotationMs: number;
+  clockwise: boolean;
+  gid: string;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const rot = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const half = pulseMs / 2;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: pulseMax, duration: half, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: half, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity, pulseMax, pulseMs]);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(rot, { toValue: 1, duration: rotationMs, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [rot, rotationMs]);
+
+  const spin = rot.interpolate({ inputRange: [0, 1], outputRange: clockwise ? ['0deg', '360deg'] : ['0deg', '-360deg'] });
+  const size = radius * 2 + 6;
   const c = size / 2;
-  // Unique per-ring id so the three sibling SVGs' gradient defs never collide.
-  const gid = `ringSheen-${ring.key}`;
+
   return (
-    <Svg width={size} height={size}>
-      <Defs>
-        <LinearGradient id={gid} x1="0.5" y1="0" x2="0.5" y2="1">
-          <Stop offset="0" stopColor={accentColor} stopOpacity={0.9} />
-          <Stop offset="0.32" stopColor={accentColor} stopOpacity={0} />
-          <Stop offset="1" stopColor={accentColor} stopOpacity={0} />
-        </LinearGradient>
-      </Defs>
-      <Circle
-        cx={c}
-        cy={c}
-        r={radius}
-        stroke={theme.text}
-        strokeOpacity={ring.strokeOpacity}
-        strokeWidth={1}
-        fill="none"
+    <Animated.View
+      pointerEvents="none"
+      style={{ position: 'absolute', left: cx - c, top: cy - c, opacity, transform: [{ rotate: spin }] }}>
+      <Svg width={size} height={size}>
+        <Defs>
+          <LinearGradient id={gid} x1="0.5" y1="0" x2="0.5" y2="1">
+            <Stop offset="0" stopColor={RING_HIGHLIGHT} stopOpacity={1} />
+            <Stop offset="0.3" stopColor={RING_HIGHLIGHT} stopOpacity={0} />
+            <Stop offset="1" stopColor={RING_HIGHLIGHT} stopOpacity={0} />
+          </LinearGradient>
+        </Defs>
+        <Circle cx={c} cy={c} r={radius} stroke={RING_HIGHLIGHT} strokeOpacity={0.6} strokeWidth={1.5} fill="none" />
+        <Circle cx={c} cy={c} r={radius} stroke={`url(#${gid})`} strokeWidth={2.2} fill="none" />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+// Center C glow + vapor drift + the three pulse/rotation rings.
+function RadarImageOverlays({ cx, cy }: { cx: number; cy: number }) {
+  const cScale = useRef(new Animated.Value(0.85)).current;
+  const cGlow = useRef(new Animated.Value(0.6)).current;
+  const driftX = useRef(new Animated.Value(0)).current;
+  const driftY = useRef(new Animated.Value(0)).current;
+
+  // Center C pulse (scale 0.85→1.15, opacity 0.6→1.0, 2s).
+  useEffect(() => {
+    const up = Animated.parallel([
+      Animated.timing(cScale, { toValue: 1.15, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(cGlow, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]);
+    const down = Animated.parallel([
+      Animated.timing(cScale, { toValue: 0.85, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(cGlow, { toValue: 0.6, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]);
+    const loop = Animated.loop(Animated.sequence([up, down]));
+    loop.start();
+    return () => loop.stop();
+  }, [cScale, cGlow]);
+
+  // Vapor drift (±8px / ±6px over 8s) — enhances the image's nebula.
+  useEffect(() => {
+    const mk = (val: Animated.Value, to: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(val, { toValue: to, duration: 4000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(val, { toValue: -to, duration: 4000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+      );
+    const lx = mk(driftX, 8);
+    const ly = mk(driftY, 6);
+    lx.start();
+    ly.start();
+    return () => {
+      lx.stop();
+      ly.stop();
+    };
+  }, [driftX, driftY]);
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {/* Vapor drift — a faint accent bloom that slowly wanders. */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: cx - 150,
+          top: cy - 150,
+          width: 300,
+          height: 300,
+          borderRadius: 150,
+          backgroundColor: RING_HIGHLIGHT,
+          opacity: 0.15,
+          transform: [{ translateX: driftX }, { translateY: driftY }],
+        }}
       />
-      <Circle
-        cx={c}
-        cy={c}
-        r={radius}
-        stroke={`url(#${gid})`}
-        strokeWidth={1.4}
-        fill="none"
+      <OverlayRing radius={165} cx={cx} cy={cy} pulseMax={0.2} pulseMs={4000} rotationMs={60000} clockwise gid="ovr-outer" />
+      <OverlayRing radius={115} cx={cx} cy={cy} pulseMax={0.25} pulseMs={2500} rotationMs={45000} clockwise={false} gid="ovr-middle" />
+      <OverlayRing radius={65} cx={cx} cy={cy} pulseMax={0.3} pulseMs={1500} rotationMs={30000} clockwise gid="ovr-inner" />
+
+      {/* Center C pulse glow. */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: cx - 22,
+          top: cy - 22,
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          backgroundColor: 'rgba(240, 208, 96, 0.4)',
+          opacity: cGlow,
+          transform: [{ scale: cScale }],
+        }}
       />
-    </Svg>
+    </View>
   );
 }
 
@@ -2003,6 +2126,14 @@ export default function HoverScreen() {
   return (
     <GestureDetector gesture={composedGesture}>
       <View style={styles.container}>
+        {/* Radar artwork as the screen background — the rings, vapor, center C
+            and labels are the image itself. Dots + animated overlays sit on top. */}
+        <ImageBackground
+          source={RADAR_IMG}
+          resizeMode="cover"
+          style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}
+        />
+        <RadarImageOverlays cx={cx} cy={cy} />
         {/* Brand wordmark banner — centered at the very top, above the
             radar. 140px wide, proportional (square source) height. Sits
             behind the interactive Minimap/help affordances (zIndex 50)
