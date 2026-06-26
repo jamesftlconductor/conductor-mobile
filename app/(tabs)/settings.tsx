@@ -443,10 +443,12 @@ function SectionHeader({
 // screen into scannable groups. Collapsed by default unless defaultOpen.
 function CollapsibleSection({
   title,
+  subtitle,
   defaultOpen = false,
   children,
 }: {
   title: string;
+  subtitle?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
@@ -462,7 +464,10 @@ function CollapsibleSection({
           setOpen((o) => !o);
         }}
         style={styles.collapsibleHeader}>
-        <Text style={styles.sectionHeader}>{title}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.sectionHeader}>{title}</Text>
+          {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+        </View>
         <ChevronRight
           size={18}
           color={theme.muted}
@@ -2224,7 +2229,7 @@ export default function SettingsScreen() {
         <VoiceStyleBlock />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Your Household">
+        <CollapsibleSection title="The Orchestra" subtitle="the people and places it watches">
         <HouseholdNameRow />
         <Row label="RangerOaks925" subtext="Your household" />
         <ChevronRow label="Invite a member" onPress={() => handleInviteMember(userId)} />
@@ -2319,7 +2324,7 @@ export default function SettingsScreen() {
         <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
         </CollapsibleSection>
 
-        <CollapsibleSection title="What Conductor Sees">
+        <CollapsibleSection title="The Score" subtitle="everything The Conductor reads from">
         <Row
           label="Connected accounts"
           right={
@@ -2518,7 +2523,7 @@ export default function SettingsScreen() {
         />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Your Conductor">
+        <CollapsibleSection title="The Baton" subtitle="how The Conductor works for you">
         <HowConductorThinksRow />
         <AppearanceBlock />
         <AppIconRow />
@@ -2761,6 +2766,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     letterSpacing: 3,
     textTransform: 'uppercase',
     fontWeight: '600',
+  },
+  // Hub subtitle beneath the section title (e.g. "how The Conductor works for you").
+  sectionSubtitle: {
+    color: MUTED,
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 3,
   },
   sectionSubtext: {
     color: MUTED,
