@@ -29,6 +29,7 @@ import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
 import { HoverHelpModal } from '@/components/HoverHelpModal';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
+import { Users } from 'lucide-react-native';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
   metaForRing,
@@ -414,15 +415,15 @@ function RadarImageOverlays({ cx, cy }: { cx: number; cy: number }) {
 // opacity (0.85→1.0→0.85, 3s) and a golden center-C glow pulses as a strong
 // heartbeat over the image's center mark (scale 0.8→1.3, opacity 0.5→1.0, 2s).
 function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number; onCenterPress: () => void }) {
-  const bgPulse = useRef(new Animated.Value(0.85)).current;
+  const bgPulse = useRef(new Animated.Value(0.75)).current;
   const cScale = useRef(new Animated.Value(0.8)).current;
   const cGlow = useRef(new Animated.Value(0.5)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(bgPulse, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(bgPulse, { toValue: 0.85, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bgPulse, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bgPulse, { toValue: 0.75, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ]),
     );
     loop.start();
@@ -2243,13 +2244,11 @@ export default function HoverScreen() {
                 />
               );
             }
+            // No member selected — a simple person/crew icon, never the C mark.
             return (
-              <Image
-                source={require('../../assets/c-mark.png')}
-                resizeMode="contain"
-                tintColor={logoColor}
-                style={{ width: 48, height: 48 }}
-              />
+              <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={26} color={logoColor} />
+              </View>
             );
           })()}
         </TouchableOpacity>

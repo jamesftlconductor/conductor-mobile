@@ -2348,9 +2348,12 @@ export default function TakeoffScreen() {
         </ScrollView>
       </GestureDetector>
 
-      {/* Ambient pulsing-astrolabe minimap, top-right. Tap opens The Conductor
-          chat — the only Conductor entry point on Ground now. */}
-      <Minimap size={64} onPress={() => openConductorSheet('ground')} />
+      {/* Ambient pulsing-astrolabe minimap — sits in the gap between the
+          wordmark (bottom ~128) and the brief, right-aligned, filling the void.
+          Tap opens The Conductor chat (the only entry point on Ground now). */}
+      <View style={{ position: 'absolute', top: 144, right: 20, zIndex: 50 }}>
+        <Minimap floating={false} size={64} onPress={() => openConductorSheet('ground')} />
+      </View>
 
       <YesterdayModal
         visible={showYesterday}
