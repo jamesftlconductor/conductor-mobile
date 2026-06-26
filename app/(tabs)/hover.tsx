@@ -2317,35 +2317,9 @@ export default function HoverScreen() {
           resolvePulse={centerPulse}
         />
 
-        {/* Fixed (non-rotating) ring labels at 12 o'clock in the gaps between rings.
-            The active ring's label brightens (90% opacity, 10px) per the spec. */}
-        <View pointerEvents="none" style={[styles.betweenRingLabel, { top: cy - 39 }]}>
-          <Text
-            style={[
-              styles.betweenRingLabelText,
-              expandedRing === 'inner' && styles.betweenRingLabelTextActive,
-            ]}>
-            ACT NOW
-          </Text>
-        </View>
-        <View pointerEvents="none" style={[styles.betweenRingLabel, { top: cy - 94 }]}>
-          <Text
-            style={[
-              styles.betweenRingLabelText,
-              expandedRing === 'middle' && styles.betweenRingLabelTextActive,
-            ]}>
-            APPROACHING FAST
-          </Text>
-        </View>
-        <View pointerEvents="none" style={[styles.betweenRingLabel, { top: cy - 144 }]}>
-          <Text
-            style={[
-              styles.betweenRingLabelText,
-              expandedRing === 'outer' && styles.betweenRingLabelTextActive,
-            ]}>
-            ON THE HORIZON
-          </Text>
-        </View>
+        {/* Ring labels (ON THE HORIZON / APPROACHING FAST / ACT NOW) are baked
+            into the radar artwork now, so the Hover screen no longer renders its
+            own — that avoided doubled/offset text over the image. */}
 
         {resolveAnims.map((a) => {
           const tx = a.travel.interpolate({ inputRange: [0, 1], outputRange: [a.startX, cx] });
