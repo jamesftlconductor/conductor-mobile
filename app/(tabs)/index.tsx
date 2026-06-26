@@ -15,6 +15,8 @@ import { WordmarkLoader } from '@/components/WordmarkLoader';
 import { WordmarkReveal } from '@/components/WordmarkReveal';
 import { tipSeen, markTipShown } from '@/utils/oneTimeTips';
 import { makeTabSwipe } from '@/utils/tabSwipe';
+import LottieView from 'lottie-react-native';
+import { weatherLottieSource } from '@/utils/weatherLottie';
 import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
@@ -1046,23 +1048,10 @@ export default function TakeoffScreen() {
   // received silently, nothing replaces it. Reset when a fresh brief loads.
   const [feedbackHidden, setFeedbackHidden] = useState(false);
   const feedbackOpacity = useRef(new Animated.Value(1)).current;
-  // Opening wordmark reveal — shown once per day on first open. Gated on a
-  // stored date key so relaunches the same day skip it.
-  const [showIntro, setShowIntro] = useState(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const d = new Date();
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-        const seen = await AsyncStorage.getItem('hasSeenIntro');
-        if (seen !== today) {
-          setShowIntro(true);
-          AsyncStorage.setItem('hasSeenIntro', today).catch(() => {});
-        }
-      } catch { /* ignore — just skip the reveal */ }
-    })();
-  }, []);
+  // Opening wordmark splash — fires on EVERY launch (initialized true so it
+  // shows the moment Ground mounts, i.e. cold start). Tabs stay mounted, so
+  // it doesn't re-fire when navigating back to Ground within a session.
+  const [showIntro, setShowIntro] = useState(true);
   // Ask Conductor — single-shot Q&A. Always fresh call (server-side
   // 30min cache covers the duplicate-question case). State carries the
   // current question draft, the loading flag, the answer/error result.
@@ -1685,10 +1674,25 @@ export default function TakeoffScreen() {
   // Swipe left → go to Hover
   const swipeGesture = makeTabSwipe(0);
 
+  // Weather-reactive Lottie backdrop, rendered at FULL opacity so the dark
+  // band background can't bleed through and grey it out (that 0.6-opacity
+  // bleed was the "grey film"). The transparent ScrollView content sits on
+  // top, so the animation reads cleanly behind the brief.
+  const weatherLottie = useMemo(() => {
+    const hour = new Date().getHours();
+    const isNight = hour < 6 || hour >= 19;
+    return weatherLottieSource(pulseData?.weather?.conditions, { isNight });
+  }, [pulseData?.weather?.conditions]);
+
   const bandTheme = mode.title === 'Takeoff' ? makeTakeoffTheme(theme) : makeClearanceTheme(theme);
 
   return (
     <View style={[styles.container, { backgroundColor: bandTheme.bg }]}>
+      {weatherLottie ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+          <LottieView source={weatherLottie} autoPlay loop resizeMode="cover" style={{ flex: 1 }} />
+        </View>
+      ) : null}
       {/* Positioned to the left of the Minimap (40x40 at right: 20, top: 60).
           Minimap's left edge is 60px from screen right; HelpButton's right
           edge sits at 68px to give an 8px gap. */}
