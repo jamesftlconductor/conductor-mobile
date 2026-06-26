@@ -467,9 +467,11 @@ function CelebrationRow({
   );
 }
 
+const RELATIONSHIP_OPTIONS = ['Wife', 'Husband', 'Partner', 'Spouse'];
+
 type EditTarget =
-  | { kind: 'member'; targetUserId: string; name: string; birthday: string; anniversary: string }
-  | { kind: 'other'; memberType: string; name: string; birthday: string; anniversary: string };
+  | { kind: 'member'; targetUserId: string; name: string; birthday: string; anniversary: string; relationship: string }
+  | { kind: 'other'; memberType: string; name: string; birthday: string; anniversary: string; relationship: string };
 
 export default function CrewScreen() {
   const userId = useUserId();
@@ -498,6 +500,7 @@ export default function CrewScreen() {
             name: (member as any).name || '',
             birthday: (member as any).birthday || '',
             anniversary: (member as any).anniversary || '',
+            relationship: (member as any).relationship || '',
           });
         },
       },
@@ -581,6 +584,7 @@ export default function CrewScreen() {
         userId: userId,
         birthday: birthdayVal,
         anniversary: anniversaryVal,
+        relationship: editing.relationship.trim() || null,
       };
       if (editing.kind === 'member') {
         body.targetUserId = editing.targetUserId;
@@ -695,6 +699,7 @@ export default function CrewScreen() {
                   name: m.name || m.fullName || 'Member',
                   birthday: m.birthday || '',
                   anniversary: m.anniversary || '',
+                  relationship: (m as any).relationship || '',
                 })
               }
             />
@@ -749,7 +754,41 @@ export default function CrewScreen() {
             <Text style={styles.modalTitle}>
               {editing ? `Edit ${editing.name}` : 'Edit'}
             </Text>
-            <Text style={styles.modalLabel}>Birthday (MM-DD)</Text>
+            <Text style={styles.modalLabel}>Relationship</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {RELATIONSHIP_OPTIONS.map((r) => {
+                const active = editing?.relationship === r;
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    onPress={() =>
+                      setEditing((prev) => (prev ? { ...prev, relationship: active ? '' : r } : prev))
+                    }
+                    activeOpacity={0.7}
+                    style={[
+                      {
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: 16,
+                        borderWidth: StyleSheet.hairlineWidth,
+                        borderColor: theme.border,
+                        backgroundColor: theme.surface,
+                      },
+                      active && { borderColor: accentColor, backgroundColor: accentColor + '1a' },
+                    ]}>
+                    <Text
+                      style={{
+                        color: active ? accentColor : theme.text,
+                        fontSize: 13,
+                        fontWeight: active ? '600' : '400',
+                      }}>
+                      {r}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={[styles.modalLabel, { marginTop: 16 }]}>Birthday (MM-DD)</Text>
             <TextInput
               value={editing?.birthday || ''}
               onChangeText={(t) =>
@@ -853,6 +892,9 @@ function MemberCard({ member, onEdit }: { member: Member; onEdit: () => void }) 
         </TouchableOpacity>
       </View>
 
+      {member.birthday || member.anniversary ? (
+        <Text style={styles.occasionsHeader}>Special Occasions</Text>
+      ) : null}
       {member.birthday ? (
         <CelebrationRow emoji="🎂" label="Birthday" mmDd={member.birthday} />
       ) : null}
@@ -1317,6 +1359,9 @@ function ExtendedCard({
         ) : null}
       </View>
 
+      {ext.birthday || ext.anniversary ? (
+        <Text style={styles.occasionsHeader}>Special Occasions</Text>
+      ) : null}
       {ext.birthday ? (
         <CelebrationRow emoji="🎂" label="Birthday" mmDd={ext.birthday} />
       ) : null}
@@ -1446,6 +1491,16 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: 12,
+  },
+  // Header for the grouped birthday/anniversary rows on a crew card.
+  occasionsHeader: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginTop: 12,
+    marginBottom: 4,
   },
   card: {
     backgroundColor: 'rgba(255,255,255,0.03)',
