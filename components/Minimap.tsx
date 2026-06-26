@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 import { useTheme } from '@/app/theme';
 import { useHouseholdState } from '@/hooks/useHouseholdState';
@@ -91,6 +91,11 @@ function angleDegForSignal(id: Signal['id']) {
 
 const SIZE = 48;
 const CENTER = SIZE / 2;
+
+// Per-instance counter so each mounted Minimap's vapor RadialGradient has a
+// unique id — react-native-svg can otherwise collide same-id gradients across
+// SVGs (multiple Minimaps stay mounted across the tab screens).
+let vaporInstanceCounter = 0;
 
 function MinimapRing({
   ring,
@@ -247,7 +252,7 @@ const DISCOVERY_AUTOHIDE_MS = 4000;
 export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp }: MinimapProps = {}) {
   const userId = useUserId();
   if (!userId) return null;
-  const { theme, isDark } = useTheme();
+  const { theme, accentColor, isDark } = useTheme();
   // Arc color flips with the theme so the rings read in light mode (where
   // the old hardcoded off-white was invisible). The radar disc keeps its
   // dark navy in dark mode but lightens to the theme surface in light mode
@@ -407,6 +412,34 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
     return () => loop.stop();
   }, [breatheAnim]);
 
+  // Resting-state vapor — a soft accent radial glow behind the rings that
+  // breathes its opacity 0.6 → 1.0 → 0.6 on a 4s cycle, fully independent of
+  // the ring pulse and the disc breathe above, so the minimap feels alive even
+  // when nothing is happening. The gradient's center opacity itself lifts from
+  // 0.10 to 0.18 when there are urgent signals (set on the Stop below).
+  const vaporId = useRef(`minimapVapor-${++vaporInstanceCounter}`).current;
+  const vaporAnim = useRef(new Animated.Value(0.6)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(vaporAnim, {
+          toValue: 1.0,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(vaporAnim, {
+          toValue: 0.6,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [vaporAnim]);
+
   // First-render discovery: scale-bounce 3 times, then surface a
   // tooltip ("Tap to ask The Conductor anything") for up to 4 seconds.
   // Persisted via AsyncStorage so it only fires once per install.
@@ -523,6 +556,20 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
           // Slow 4s breathing pulse so the disc never sits at a faint rest.
           { opacity: breatheAnim },
         ]}>
+        {/* Resting-state vapor — accent radial glow behind everything, its
+            opacity breathing 0.6 → 1.0 (vaporAnim) independent of the rings.
+            Center opacity lifts 0.10 → 0.18 when urgent signals exist. */}
+        <Animated.View pointerEvents="none" style={[styles.ringLayer, { opacity: vaporAnim }]}>
+          <Svg width={SIZE} height={SIZE}>
+            <Defs>
+              <RadialGradient id={vaporId} cx="50%" cy="50%" r="50%">
+                <Stop offset="0" stopColor={accentColor} stopOpacity={urgentCount > 0 ? 0.18 : 0.1} />
+                <Stop offset="1" stopColor={accentColor} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Circle cx={CENTER} cy={CENTER} r={CENTER} fill={`url(#${vaporId})`} />
+          </Svg>
+        </Animated.View>
         <MinimapRing ring={RINGS.outer} signals={grouped.outer} arcColor={arcColor} />
         <MinimapRing ring={RINGS.middle} signals={grouped.middle} arcColor={arcColor} />
         <Animated.View
