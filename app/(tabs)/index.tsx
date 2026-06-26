@@ -379,7 +379,11 @@ function getBriefMode(hour: number, overwatchHour: number = 23, middayEnabled: b
   // to begin at the rollover into the next day. The raw comparison
   // `hour >= 0` would be true for every hour, so normalize to 24
   // for the boundary check. This is the Midnight picker option.
-  const effective = overwatchHour === 0 ? 24 : overwatchHour;
+  // Normalize defensively: 0 (Midnight) and any non-positive/out-of-range
+  // value map to 24 so `hour >= effective` isn't trivially true and the
+  // effective-1/effective-2 boundaries never go negative.
+  const effective =
+    !Number.isFinite(overwatchHour) || overwatchHour <= 0 ? 24 : Math.min(overwatchHour, 24);
   if (hour < 7 || hour >= effective) return { title: 'Overwatch', endpoint: null as string | null };
   // Dusk — the wind-down hour right before Overwatch begins. The named
   // evening period between Clearance and Overwatch; it carries the
