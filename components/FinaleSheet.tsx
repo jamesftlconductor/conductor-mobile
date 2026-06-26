@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Svg, { Defs, Path, Pattern, Rect } from 'react-native-svg';
 import { metaFor, Signal, TYPE_META } from './signalTypes';
 import { CameraScanner } from './CameraScanner';
 import { SMSComposerSheet } from './SMSComposerSheet';
@@ -439,6 +440,19 @@ function SingleSheet({
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
         <SwipeDismissSheet style={styles.sheet} onClose={onClose}>
           <Pressable onPress={() => {}}>
+          {/* Faint technical-schematic grid behind everything + a thin accent
+              line at the very top — operations-center briefing aesthetic. */}
+          <View pointerEvents="none" style={styles.gridPattern}>
+            <Svg width="100%" height="100%">
+              <Defs>
+                <Pattern id="finaleGrid" width={26} height={26} patternUnits="userSpaceOnUse">
+                  <Path d="M26 0H0V26" stroke={accentColor} strokeWidth={0.5} fill="none" />
+                </Pattern>
+              </Defs>
+              <Rect width="100%" height="100%" fill="url(#finaleGrid)" />
+            </Svg>
+          </View>
+          <View pointerEvents="none" style={styles.accentTopLine} />
           <View style={styles.sheetHeaderWrap}>
             <Text style={styles.sheetHeader}>Finale</Text>
             {!editing && (
@@ -550,6 +564,11 @@ function SingleSheet({
               ) : null}
 
               <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnNoted]}
+                  onPress={() => { dismissFinaleTip(); onClose(); }}>
+                  <Text style={styles.btnNotedText}>Noted</Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => { dismissFinaleTip(); onHold(signal); }}>
@@ -938,12 +957,31 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       justifyContent: 'flex-end',
     },
     sheet: {
-      backgroundColor: theme.surface,
+      backgroundColor: '#0a0e16',
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       paddingHorizontal: 24,
-      paddingTop: 12,
+      paddingTop: 14,
       paddingBottom: 40,
+      overflow: 'hidden',
+    },
+    // Faint technical-schematic grid behind the content.
+    gridPattern: {
+      ...StyleSheet.absoluteFillObject,
+      opacity: 0.05,
+    },
+    // Thin glowing accent line at the very top of the sheet.
+    accentTopLine: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 2,
+      backgroundColor: accentColor,
+      shadowColor: accentColor,
+      shadowOpacity: 0.8,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 0 },
     },
     sheetHandle: {
       alignSelf: 'center',
@@ -985,12 +1023,16 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       lineHeight: 48,
       textAlign: 'center',
       marginBottom: 16,
+      // Soft accent glow behind the type icon.
+      textShadowColor: accentColor,
+      textShadowRadius: 16,
+      textShadowOffset: { width: 0, height: 0 },
     },
     sheetDescription: {
-      color: theme.text,
-      fontSize: 18,
-      fontWeight: '300',
-      lineHeight: 26,
+      color: '#ffffff',
+      fontSize: 22,
+      fontWeight: '400',
+      lineHeight: 30,
       textAlign: 'center',
       marginBottom: 20,
       letterSpacing: 0.2,
@@ -1059,9 +1101,10 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     },
     metaLine: {
       color: theme.muted,
-      fontSize: 13,
-      letterSpacing: 0.3,
+      fontSize: 11,
+      letterSpacing: 1.5,
       textAlign: 'center',
+      textTransform: 'uppercase',
     },
     finaleTipWrap: {
       alignItems: 'center',
@@ -1222,27 +1265,57 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     },
     btn: {
       flex: 1,
-      paddingVertical: 14,
-      borderRadius: 12,
+      paddingVertical: 13,
+      borderRadius: 24,
       alignItems: 'center',
+      justifyContent: 'center',
     },
+    // Rest — accent fill with a glow.
     btnPrimary: {
-      backgroundColor: theme.text,
+      backgroundColor: accentColor,
+      shadowColor: accentColor,
+      shadowOpacity: 0.6,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 6,
     },
     btnPrimaryText: {
-      color: theme.background,
-      fontSize: 15,
-      fontWeight: '600',
-      letterSpacing: 0.3,
+      color: '#0a0e16',
+      fontSize: 14,
+      fontWeight: '700',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
     },
+    // Hold — outlined accent with a softer glow.
     btnSecondary: {
-      backgroundColor: 'rgba(255,255,255,0.06)',
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderColor: accentColor,
+      shadowColor: accentColor,
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 3,
     },
     btnSecondaryText: {
-      color: theme.text,
-      fontSize: 15,
+      color: accentColor,
+      fontSize: 14,
+      fontWeight: '600',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    // Noted — subtle, muted; just acknowledges + closes.
+    btnNoted: {
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255,255,255,0.1)',
+    },
+    btnNotedText: {
+      color: theme.muted,
+      fontSize: 14,
       fontWeight: '500',
-      letterSpacing: 0.3,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
     },
     // Camouflage link sits below the Hold/Rest button row. Small, muted,
     // not styled as a button — it's an escape hatch, not a primary
