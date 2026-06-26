@@ -22,7 +22,7 @@ export const MONTH_NAMES = [
 ] as const;
 
 export type MonthIcon = (typeof MONTH_ICONS)[number];
-export type IconKey = MonthIcon | 'founding';
+export type IconKey = MonthIcon | 'founding' | 'default';
 
 // Final approved monthly icon colors — each month's app-icon background plus
 // the logo (C-mark) tint that sits on it. The selector grid + suggestion sheet
@@ -46,9 +46,16 @@ export const MONTH_ICON_COLORS: Record<MonthIcon, { background: string; logoColo
 // Founding edition isn't a month — give it the house brand pairing.
 export const FOUNDING_ICON_COLORS = { background: '#0f0f0f', logoColor: '#b8960c' };
 
+// Classic Black — the default/primary app icon: jet-black field, brass C.
+// Maps to the OS "DEFAULT" icon (the binary's primary), so selecting it
+// resets to the original icon rather than an alternate variant.
+export const DEFAULT_ICON_COLORS = { background: '#000000', logoColor: '#b8960c' };
+
 // Resolve the {background, logoColor} pair for any icon key.
 export function iconColors(key: IconKey): { background: string; logoColor: string } {
-  return key === 'founding' ? FOUNDING_ICON_COLORS : MONTH_ICON_COLORS[key];
+  if (key === 'founding') return FOUNDING_ICON_COLORS;
+  if (key === 'default') return DEFAULT_ICON_COLORS;
+  return MONTH_ICON_COLORS[key];
 }
 
 // Background-only map kept for existing consumers (swatch backgrounds, the
@@ -67,6 +74,7 @@ export const ICON_COLORS: Record<IconKey, string> = {
   november:  MONTH_ICON_COLORS.november.background,
   december:  MONTH_ICON_COLORS.december.background,
   founding:  FOUNDING_ICON_COLORS.background,
+  default:   DEFAULT_ICON_COLORS.background,
 };
 
 // Short tag that surfaces alongside the icon — used by both the
@@ -85,6 +93,7 @@ export const ICON_TAGLINES: Record<IconKey, string> = {
   november:  'Household gathering',
   december:  'Christmas',
   founding:  'Founding household',
+  default:   'The original',
 };
 
 export function getCurrentMonthIcon(): MonthIcon {
@@ -137,7 +146,7 @@ export async function acceptIconChange(iconName: IconKey): Promise<void> {
       // Variant names match the plugin config keys (the 12 months). 'founding'
       // has no variant, so reset to the default icon. setAppIcon is synchronous
       // in v1.x and returns the applied name (or false on failure).
-      setAppIcon(iconName === 'founding' ? 'DEFAULT' : iconName);
+      setAppIcon(iconName === 'founding' || iconName === 'default' ? 'DEFAULT' : iconName);
     }
   } catch {
     // Native module not in this binary — preference is stored, OS icon stays put.

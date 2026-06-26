@@ -82,7 +82,8 @@ export default function IconSelectorScreen() {
     setTimeout(() => setSavedToast(null), 1800);
   }
 
-  const allIcons: IconKey[] = [...MONTH_ICONS];
+  // Classic Black ('default') is always available at the top of the grid.
+  const allIcons: IconKey[] = ['default', ...MONTH_ICONS];
   if (isFounding) allIcons.push('founding');
 
   return (
@@ -112,7 +113,10 @@ export default function IconSelectorScreen() {
         <View style={styles.grid}>
           {allIcons.map((key, idx) => {
             const active = key === currentIcon;
-            const name = key === 'founding' ? 'Founding' : MONTH_NAMES[MONTH_ICONS.indexOf(key as any)];
+            const name =
+              key === 'founding' ? 'Founding'
+              : key === 'default' ? 'Classic Black'
+              : MONTH_NAMES[MONTH_ICONS.indexOf(key as any)];
             return (
               <TouchableOpacity
                 key={key}
@@ -185,7 +189,9 @@ export default function IconSelectorScreen() {
               <Text style={styles.previewName}>
                 {preview === 'founding'
                   ? 'Founding'
-                  : MONTH_NAMES[MONTH_ICONS.indexOf(preview as any)]}
+                  : preview === 'default'
+                    ? 'Classic Black'
+                    : MONTH_NAMES[MONTH_ICONS.indexOf(preview as any)]}
               </Text>
               <TouchableOpacity
                 style={styles.previewSetBtn}
