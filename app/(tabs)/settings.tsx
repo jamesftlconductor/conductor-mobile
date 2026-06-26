@@ -1290,16 +1290,20 @@ const HOBBY_OPTIONS: { id: string; label: string }[] = [
 // Order persists to AsyncStorage `conductorSignalPriority` (brief.js reads it to
 // rank signals); visibility persists to `conductorSignalVisibility` (hidden
 // types are dropped from the brief + radar).
+// The 8 canonical categories that api/brief.js normalizeType() collapses raw
+// signal types into. Keys MUST match those buckets exactly or the visibility/
+// priority prefs won't line up with what the backend filters on. Health,
+// Subscription and Legal were removed — they were never emitted as signal
+// types (health lives in a separate key; subscription is a vault category;
+// legal emails classify as deadline).
 const SIGNAL_TYPES: { key: string; label: string }[] = [
   { key: 'delivery', label: 'Delivery' },
-  { key: 'deadline', label: 'Deadline' },
+  { key: 'food', label: 'Food' },
   { key: 'service', label: 'Service' },
   { key: 'financial', label: 'Financial' },
   { key: 'travel', label: 'Travel' },
-  { key: 'health', label: 'Health' },
+  { key: 'deadline', label: 'Deadline' },
   { key: 'home', label: 'Home' },
-  { key: 'subscription', label: 'Subscription' },
-  { key: 'legal', label: 'Legal' },
   { key: 'other', label: 'Other' },
 ];
 const SIGNAL_TYPE_KEYS = SIGNAL_TYPES.map((t) => t.key);
