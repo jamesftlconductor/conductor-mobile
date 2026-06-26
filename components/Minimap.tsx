@@ -21,7 +21,7 @@ type ViewMode = 'family' | 'personal';
 const NAVY = '#0a0f1e';
 const OFF_WHITE = '#f0ede8';
 
-type RingKey = 'inner' | 'middle' | 'outer';
+export type RingKey = 'inner' | 'middle' | 'outer';
 
 type RingDef = {
   key: RingKey;
@@ -49,7 +49,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 const DEFAULT_COLOR = '#ef4444';
 
-type Signal = {
+export type Signal = {
   id: number | string;
   status?: string;
   eta?: string | null;
@@ -64,7 +64,7 @@ type Signal = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
 
-function colorFor(s: Signal) {
+export function colorFor(s: Signal) {
   if (s.type && TYPE_COLORS[s.type]) return TYPE_COLORS[s.type];
   return DEFAULT_COLOR;
 }
@@ -74,7 +74,7 @@ function parseEta(eta?: string | null) {
   return Date.parse(eta);
 }
 
-function ringForSignal(s: Signal): RingKey {
+export function ringForSignal(s: Signal): RingKey {
   const ms = parseEta(s.eta);
   const now = Date.now();
   const isDelayed = (s.status || '').toLowerCase().includes('delay');
@@ -84,9 +84,55 @@ function ringForSignal(s: Signal): RingKey {
   return 'outer';
 }
 
-function angleDegForSignal(id: Signal['id']) {
+export function angleDegForSignal(id: Signal['id']) {
   const n = typeof id === 'number' ? id : parseInt(String(id), 10) || 0;
   return Math.abs(n) % 60;
+}
+
+// Shared signal → ring grouping (thread clustering + ETA bucketing), reused by
+// both the Minimap and the full-screen ExpandedRadar so their dots match.
+export function groupSignalsForRadar(
+  signals: Signal[],
+  viewMode: string,
+  userId: string | null | undefined,
+): Record<RingKey, Signal[]> {
+  const visible: Signal[] = [];
+  for (const s of signals) {
+    if (viewMode === 'personal' && s.userId && s.userId !== userId) continue;
+    visible.push(s);
+  }
+
+  const byThread = new Map<string, Signal[]>();
+  const dots: Signal[] = [];
+  for (const s of visible) {
+    if (s.threadId) {
+      const arr = byThread.get(s.threadId);
+      if (arr) arr.push(s);
+      else byThread.set(s.threadId, [s]);
+    } else {
+      dots.push(s);
+    }
+  }
+  for (const [tid, members] of byThread) {
+    if (members.length < 2) {
+      dots.push(...members);
+      continue;
+    }
+    let earliestMs = Infinity;
+    for (const m of members) {
+      const ms = parseEta(m.eta);
+      if (!isNaN(ms) && ms < earliestMs) earliestMs = ms;
+    }
+    dots.push({
+      id: `cluster:${tid}`,
+      type: 'travel',
+      eta: isFinite(earliestMs) ? new Date(earliestMs).toISOString() : members[0].eta,
+    });
+  }
+
+  const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
+  for (const s of dots) out[ringForSignal(s)].push(s);
+  return out;
 }
 
 const SIZE = 48;
@@ -317,49 +363,10 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
     return () => clearInterval(id);
   }, []);
 
-  const grouped = useMemo(() => {
-    // Apply the personal-view filter, then collapse signals that share a
-    // threadId into a single dot (placed on the ring of its soonest leg)
-    // so a multi-leg trip reads as one dot here just like on Hover. No
-    // count badge — dots are 3px, too small to label legibly.
-    const visible: Signal[] = [];
-    for (const s of signals) {
-      if (viewMode === 'personal' && s.userId && s.userId !== userId) continue;
-      visible.push(s);
-    }
-
-    const byThread = new Map<string, Signal[]>();
-    const dots: Signal[] = [];
-    for (const s of visible) {
-      if (s.threadId) {
-        const arr = byThread.get(s.threadId);
-        if (arr) arr.push(s);
-        else byThread.set(s.threadId, [s]);
-      } else {
-        dots.push(s);
-      }
-    }
-    for (const [tid, members] of byThread) {
-      if (members.length < 2) {
-        dots.push(...members);
-        continue;
-      }
-      let earliestMs = Infinity;
-      for (const m of members) {
-        const ms = parseEta(m.eta);
-        if (!isNaN(ms) && ms < earliestMs) earliestMs = ms;
-      }
-      dots.push({
-        id: `cluster:${tid}`,
-        type: 'travel',
-        eta: isFinite(earliestMs) ? new Date(earliestMs).toISOString() : members[0].eta,
-      });
-    }
-
-    const out: Record<RingKey, Signal[]> = { inner: [], middle: [], outer: [] };
-    for (const s of dots) out[ringForSignal(s)].push(s);
-    return out;
-  }, [signals, viewMode, userId]);
+  const grouped = useMemo(
+    () => groupSignalsForRadar(signals, viewMode, userId),
+    [signals, viewMode, userId],
+  );
 
   const innerSignals = grouped.inner;
   const glowColor = innerSignals.length > 0 ? colorFor(innerSignals[0]) : null;
