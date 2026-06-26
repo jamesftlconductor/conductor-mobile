@@ -413,7 +413,7 @@ function RadarImageOverlays({ cx, cy }: { cx: number; cy: number }) {
 // Breathing radar backdrop — the whole ImageBackground gently breathes its
 // opacity (0.85→1.0→0.85, 3s) and a golden center-C glow pulses as a strong
 // heartbeat over the image's center mark (scale 0.8→1.3, opacity 0.5→1.0, 2s).
-function HoverImageBackdrop({ cx, cy }: { cx: number; cy: number }) {
+function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number; onCenterPress: () => void }) {
   const bgPulse = useRef(new Animated.Value(0.85)).current;
   const cScale = useRef(new Animated.Value(0.8)).current;
   const cGlow = useRef(new Animated.Value(0.5)).current;
@@ -448,20 +448,34 @@ function HoverImageBackdrop({ cx, cy }: { cx: number; cy: number }) {
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: bgPulse }]}>
         <ImageBackground source={RADAR_IMG} resizeMode="cover" style={StyleSheet.absoluteFill} />
       </Animated.View>
-      <Animated.View
-        pointerEvents="none"
+      {/* Center C — tap to open The Conductor chat (Hover's entry point now
+          that there's no minimap). The glow is visual; the Pressable is the
+          stable touch target above the radar layers. */}
+      <Pressable
+        onPress={onCenterPress}
+        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
         style={{
           position: 'absolute',
-          left: cx - 30,
-          top: cy - 30,
-          width: 60,
-          height: 60,
-          borderRadius: 30,
-          backgroundColor: 'rgba(240, 208, 96, 0.4)',
-          opacity: cGlow,
-          transform: [{ scale: cScale }],
-        }}
-      />
+          left: cx - 35,
+          top: cy - 35,
+          width: 70,
+          height: 70,
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 30,
+        }}>
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            width: 60,
+            height: 60,
+            borderRadius: 30,
+            backgroundColor: 'rgba(240, 208, 96, 0.4)',
+            opacity: cGlow,
+            transform: [{ scale: cScale }],
+          }}
+        />
+      </Pressable>
     </>
   );
 }
@@ -2181,7 +2195,7 @@ export default function HoverScreen() {
       <View style={styles.container}>
         {/* Radar artwork as the screen background — the rings, vapor, center C
             and labels are the image itself. Dots + animated overlays sit on top. */}
-        <HoverImageBackdrop cx={cx} cy={cy} />
+        <HoverImageBackdrop cx={cx} cy={cy} onCenterPress={() => openConductorSheet('hover')} />
         {/* Brand wordmark banner — centered at the very top, above the
             radar. 140px wide, proportional (square source) height. Sits
             behind the interactive Minimap/help affordances (zIndex 50)
