@@ -2552,7 +2552,7 @@ export default function HoverScreen() {
           onSignalPress={handleDotPress}
           contextLabel={
             viewMode === 'family'
-              ? 'Management in Motion'
+              ? ''
               : crewFilter
               ? `${crewFilter}'s signals`
               : `${FIRST_NAME}.`

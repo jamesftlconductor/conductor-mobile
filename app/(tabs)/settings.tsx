@@ -1286,6 +1286,114 @@ const HOBBY_OPTIONS: { id: string; label: string }[] = [
   { id: 'wellness', label: '🧘 Wellness' },
 ];
 
+// Brief Customize — signal-type priority order (up/down) + per-type visibility.
+// Order persists to AsyncStorage `conductorSignalPriority` (brief.js reads it to
+// rank signals); visibility persists to `conductorSignalVisibility` (hidden
+// types are dropped from the brief + radar).
+const SIGNAL_TYPES: { key: string; label: string }[] = [
+  { key: 'delivery', label: 'Delivery' },
+  { key: 'deadline', label: 'Deadline' },
+  { key: 'service', label: 'Service' },
+  { key: 'financial', label: 'Financial' },
+  { key: 'travel', label: 'Travel' },
+  { key: 'health', label: 'Health' },
+  { key: 'home', label: 'Home' },
+  { key: 'subscription', label: 'Subscription' },
+  { key: 'legal', label: 'Legal' },
+  { key: 'other', label: 'Other' },
+];
+const SIGNAL_TYPE_KEYS = SIGNAL_TYPES.map((t) => t.key);
+
+function BriefCustomizeBlock() {
+  const { theme, accentColor } = useTheme();
+  const [order, setOrder] = useState<string[]>(SIGNAL_TYPE_KEYS);
+  const [visible, setVisible] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const rawOrder = await AsyncStorage.getItem('conductorSignalPriority');
+        if (rawOrder) {
+          const parsed = JSON.parse(rawOrder);
+          if (Array.isArray(parsed)) {
+            // Keep saved order for known keys, then append any new types.
+            setOrder([
+              ...parsed.filter((k: unknown): k is string => typeof k === 'string' && SIGNAL_TYPE_KEYS.includes(k)),
+              ...SIGNAL_TYPE_KEYS.filter((k) => !parsed.includes(k)),
+            ]);
+          }
+        }
+        const rawVis = await AsyncStorage.getItem('conductorSignalVisibility');
+        if (rawVis) {
+          const parsed = JSON.parse(rawVis);
+          if (parsed && typeof parsed === 'object') setVisible(parsed as Record<string, boolean>);
+        }
+      } catch { /* fall back to defaults */ }
+    })();
+  }, []);
+
+  const labelFor = (k: string) => SIGNAL_TYPES.find((t) => t.key === k)?.label ?? k;
+  const isVisible = (k: string) => visible[k] !== false;
+
+  function move(idx: number, dir: -1 | 1) {
+    const j = idx + dir;
+    if (j < 0 || j >= order.length) return;
+    const next = order.slice();
+    const tmp = next[idx];
+    next[idx] = next[j];
+    next[j] = tmp;
+    setOrder(next);
+    AsyncStorage.setItem('conductorSignalPriority', JSON.stringify(next)).catch(() => {});
+  }
+  function toggleVis(k: string) {
+    const next = { ...visible, [k]: !isVisible(k) };
+    setVisible(next);
+    AsyncStorage.setItem('conductorSignalVisibility', JSON.stringify(next)).catch(() => {});
+  }
+
+  return (
+    <View style={{ paddingHorizontal: 22, paddingBottom: 10 }}>
+      <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 18, marginBottom: 10 }}>
+        Reorder signal types to set what surfaces first in your brief. Toggle a
+        type off to hide it from the brief and radar.
+      </Text>
+      {order.map((key, idx) => {
+        const first = idx === 0;
+        const last = idx === order.length - 1;
+        return (
+          <View
+            key={key}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 9,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: 'rgba(255,255,255,0.06)',
+              opacity: isVisible(key) ? 1 : 0.45,
+            }}>
+            <View style={{ marginRight: 14 }}>
+              <TouchableOpacity onPress={() => move(idx, -1)} disabled={first} hitSlop={{ top: 6, bottom: 2, left: 10, right: 10 }}>
+                <Text style={{ color: accentColor, fontSize: 13, lineHeight: 15, opacity: first ? 0.25 : 1 }}>▲</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => move(idx, 1)} disabled={last} hitSlop={{ top: 2, bottom: 6, left: 10, right: 10 }}>
+                <Text style={{ color: accentColor, fontSize: 13, lineHeight: 15, opacity: last ? 0.25 : 1 }}>▼</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ color: theme.text, fontSize: 15, flex: 1 }}>{labelFor(key)}</Text>
+            <Switch
+              value={isVisible(key)}
+              onValueChange={() => toggleVis(key)}
+              trackColor={{ false: theme.inputBackground, true: accentColor }}
+              thumbColor={'#f5f0eb'}
+              ios_backgroundColor={theme.inputBackground}
+            />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function WhatYouLoveBlock() {
   const userId = useUserId();
   const { theme, accentColor } = useTheme();
@@ -2296,6 +2404,10 @@ export default function SettingsScreen() {
           onPress={() => router.push('/directory' as never)}
         />
         <ReferralBlock />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Customize">
+        <BriefCustomizeBlock />
         </CollapsibleSection>
         </CollapsibleSection>
 
