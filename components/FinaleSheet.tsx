@@ -16,7 +16,15 @@ import {
 } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Defs, Path, Pattern, Rect } from 'react-native-svg';
+import Svg, {
+  Circle,
+  Defs,
+  Path,
+  Pattern,
+  RadialGradient,
+  Rect,
+  Stop,
+} from 'react-native-svg';
 import { metaFor, Signal, TYPE_META } from './signalTypes';
 import { CameraScanner } from './CameraScanner';
 import { SMSComposerSheet } from './SMSComposerSheet';
@@ -26,6 +34,16 @@ import { useTheme } from '../app/theme';
 import { useUserId } from '@/hooks/useUserId';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
+
+// ── Finale HUD identity ──────────────────────────────────────────────
+// The Finale sheet has its own visual language — a simplified Jarvis-style
+// holographic HUD — but rendered in the user's chosen accent (not a fixed
+// hue) so it stays consistent with the rest of the app.
+const HUD_BG = '#0a0e16';
+// Monospace face for the technical readouts / bracket notation.
+const MONO = Platform.select({ ios: 'Courier', android: 'monospace' });
+// Circumference of the central gauge ring (r = 52).
+const GAUGE_C = 2 * Math.PI * 52;
 
 type ThemeColors = { background: string; surface: string; text: string; muted: string };
 
@@ -109,7 +127,9 @@ function CategorySheet(props: CategoryProps) {
               <Rect width="100%" height="100%" fill="url(#finaleGridCat)" />
             </Svg>
           </View>
+          <RadialGlow accentColor={accentColor} />
           <View pointerEvents="none" style={styles.accentTopLine} />
+          <CornerBrackets styles={styles} />
           <View style={styles.filterHeader}>
             <View style={styles.filterTitleRow}>
               {title ? (
@@ -202,6 +222,43 @@ function SingleSheet({
   const styles = useMemo(() => makeStyles(theme, accentColor), [theme, accentColor]);
   const MUTED = theme.muted;
   const meta = metaFor(signal);
+
+  // Central gauge: maps days-until-ETA to a fill fraction + a big centered
+  // readout. Closer ETAs fill the ring further (urgency). Falls back to
+  // carry-forward briefCount, then a neutral half-ring when no ETA exists.
+  const gauge = useMemo(() => {
+    const eta = signal.eta;
+    if (eta) {
+      const t = Date.parse(eta);
+      if (!Number.isNaN(t)) {
+        const days = Math.round((t - Date.now()) / 86400000);
+        const value = Math.max(0.05, Math.min(1, 1 - days / 21));
+        return {
+          value,
+          big: days <= 0 ? '0' : String(days),
+          unit: days <= 0 ? 'NOW' : Math.abs(days) === 1 ? 'DAY' : 'DAYS',
+        };
+      }
+    }
+    const bc = (signal as Signal & { briefCount?: number }).briefCount;
+    if (typeof bc === 'number' && bc > 0) {
+      return { value: Math.min(1, bc / 7), big: String(bc), unit: 'BRIEFS' };
+    }
+    return { value: 0.5, big: '—', unit: 'ACTIVE' };
+  }, [signal.eta, signal.id]);
+
+  // Short bracketed signal identifier — last 4 of the id, like [#4F2A].
+  const signalId = String(signal.id).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase().padStart(4, '0');
+
+  // Age in days since ingestion — drives one of the bottom micro-dials.
+  const ageDays = useMemo(() => {
+    const c = signal.createdAt;
+    if (!c) return 0;
+    const t = Date.parse(c);
+    if (Number.isNaN(t)) return 0;
+    return Math.max(0, Math.round((Date.now() - t) / 86400000));
+  }, [signal.createdAt]);
+  const briefCount = (signal as Signal & { briefCount?: number }).briefCount ?? 0;
   const [editing, setEditing] = useState(false);
   const [editedDescription, setEditedDescription] = useState(signal.description || '');
   const [editedEta, setEditedEta] = useState(signal.eta || '');
@@ -464,26 +521,78 @@ function SingleSheet({
               <Rect width="100%" height="100%" fill="url(#finaleGrid)" />
             </Svg>
           </View>
+          <RadialGlow accentColor={accentColor} />
           <View pointerEvents="none" style={styles.accentTopLine} />
-          <View style={styles.sheetHeaderWrap}>
-            <Text style={styles.sheetHeader}>Finale</Text>
-            {!editing && (
-              <TouchableOpacity
-                style={styles.editLinkPosition}
-                onPress={() => setEditing(true)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Text style={styles.editLink}>ADJUST</Text>
-              </TouchableOpacity>
-            )}
+          <CornerBrackets styles={styles} />
+          {/* HEADER — bracketed signal type (left); id + ADJUST (right). */}
+          <View style={styles.hudHeader}>
+            <Text style={styles.hudTypeLabel} numberOfLines={1}>
+              [{(meta.label || 'SIGNAL').toUpperCase()}]
+            </Text>
+            <View style={styles.hudHeaderRight}>
+              <Text style={styles.hudSignalId}>[#{signalId}]</Text>
+              {!editing && (
+                <TouchableOpacity
+                  onPress={() => setEditing(true)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={styles.editLink}>ADJUST</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-          <Text style={styles.sheetEmoji}>{meta.emoji}</Text>
 
           {!editing ? (
             <>
-              <Animated.Text
-                style={[styles.sheetDescription, { opacity: dimOpacity }]}>
-                {signal.description || 'Unknown signal'}
-              </Animated.Text>
+              {/* CENTRAL GAUGE — urgency ring filled by days-until-ETA, big
+                  centered readout at its core. */}
+              <View style={styles.gaugeWrap}>
+                <Svg width={124} height={124} viewBox="0 0 124 124">
+                  <Circle
+                    cx={62}
+                    cy={62}
+                    r={52}
+                    stroke={accentColor}
+                    strokeWidth={2}
+                    fill="none"
+                    opacity={0.15}
+                  />
+                  <Circle
+                    cx={62}
+                    cy={62}
+                    r={52}
+                    stroke={accentColor}
+                    strokeWidth={2.5}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={`${gauge.value * GAUGE_C} ${GAUGE_C}`}
+                    transform="rotate(-90 62 62)"
+                  />
+                  <Circle
+                    cx={62}
+                    cy={62}
+                    r={44}
+                    stroke={accentColor}
+                    strokeWidth={0.6}
+                    fill="none"
+                    opacity={0.25}
+                  />
+                  <Circle cx={62} cy={10} r={2.4} fill={accentColor} />
+                </Svg>
+                <View style={styles.gaugeCenter} pointerEvents="none">
+                  <Text style={styles.gaugeBig}>{gauge.big}</Text>
+                  <Text style={styles.gaugeUnit}>{gauge.unit}</Text>
+                </View>
+              </View>
+
+              {/* DESCRIPTION — hero text with a bracket rule on its left edge. */}
+              <View style={styles.descRow}>
+                <View style={styles.descBracket} />
+                <Animated.Text
+                  style={[styles.sheetDescription, { opacity: dimOpacity }]}>
+                  {signal.description || 'Unknown signal'}
+                </Animated.Text>
+              </View>
+
               {attribSuggestion ? (
                 <View style={styles.attribSuggestion}>
                   <Text style={styles.attribSuggestionText} numberOfLines={2}>
@@ -500,14 +609,21 @@ function SingleSheet({
                   </TouchableOpacity>
                 </View>
               ) : null}
+
               <View style={styles.metaBlock}>
-                {!!signal.sender && (
-                  <Text style={styles.metaLine}>From {signal.sender}</Text>
-                )}
-                {!!signal.status && (
-                  <Text style={styles.metaLine}>Status {signal.status}</Text>
-                )}
-                <Text style={styles.metaLine}>ETA {signal.eta || 'Unknown'}</Text>
+                {[
+                  { k: 'FROM', v: signal.sender || '—' },
+                  { k: 'STATUS', v: signal.status ? signal.status.toUpperCase() : 'UNKNOWN' },
+                  { k: 'ETA', v: signal.eta || 'PENDING' },
+                  { k: 'TYPE', v: (meta.label || 'SIGNAL').toUpperCase() },
+                ].map((row) => (
+                  <View key={row.k} style={styles.hudMetaRow}>
+                    <Text style={styles.hudMetaLabel}>[{row.k}]</Text>
+                    <Text style={styles.hudMetaValue} numberOfLines={1}>
+                      {row.v}
+                    </Text>
+                  </View>
+                ))}
                 {(signal as Signal & { recurring?: boolean; recurringInterval?: number }).recurring ? (
                   <Text style={styles.recurringLine}>
                     🔄  Recurring — every {(signal as Signal & { recurringInterval?: number }).recurringInterval ?? '?'} days
@@ -579,17 +695,20 @@ function SingleSheet({
                 <TouchableOpacity
                   style={[styles.btn, styles.btnNoted]}
                   onPress={() => { dismissFinaleTip(); onClose(); }}>
+                  <BtnCorners color={theme.muted} />
                   <Text style={styles.btnNotedText}>Noted</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnSecondary]}
                   onPress={() => { dismissFinaleTip(); onHold(signal); }}>
+                  <BtnCorners color={accentColor} />
                   <Text style={styles.btnSecondaryText}>Hold</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnPrimary, resolving && { opacity: 0.5 }]}
                   onPress={() => { dismissFinaleTip(); onRest(signal); }}
                   disabled={resolving}>
+                  <BtnCorners color={HUD_BG} />
                   <Text style={styles.btnPrimaryText}>Rest</Text>
                 </TouchableOpacity>
               </View>
@@ -634,6 +753,7 @@ function SingleSheet({
                   </Text>
                 </TouchableOpacity>
               ) : null}
+
             </>
           ) : (
             <>
@@ -839,7 +959,7 @@ function EmotionalTagRow({
                 borderRadius: 16,
                 borderWidth: 1,
                 borderColor: active ? accentColor : 'rgba(255,255,255,0.08)',
-                backgroundColor: active ? 'rgba(184,150,12,0.08)' : 'transparent',
+                backgroundColor: active ? 'rgba(0,212,255,0.10)' : 'transparent',
                 alignItems: 'center',
               }}>
               <Text style={{ fontSize: 16 }}>{p.emoji}</Text>
@@ -961,6 +1081,51 @@ function CrewAttributionRow({
   );
 }
 
+// ── HUD chrome ───────────────────────────────────────────────────────
+// Four L-shaped corner clamps that frame the sheet like a targeting
+// bezel. Purely decorative; rendered absolutely at the sheet edges.
+// Very subtle radial wash — a touch lighter at the sheet's upper-center —
+// behind all content. Holographic depth without washing out readability.
+function RadialGlow({ accentColor }: { accentColor: string }) {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <RadialGradient id="finaleGlow" cx="50%" cy="36%" r="68%">
+            <Stop offset="0" stopColor={accentColor} stopOpacity={0.06} />
+            <Stop offset="1" stopColor={accentColor} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill="url(#finaleGlow)" />
+      </Svg>
+    </View>
+  );
+}
+
+// Subtle 1px corner-bracket marks on the edges of an action button.
+function BtnCorners({ color }: { color: string }) {
+  const arm = { position: 'absolute' as const, width: 7, height: 7, borderColor: color, opacity: 0.7 };
+  return (
+    <>
+      <View pointerEvents="none" style={[arm, { top: 4, left: 4, borderLeftWidth: 1, borderTopWidth: 1 }]} />
+      <View pointerEvents="none" style={[arm, { top: 4, right: 4, borderRightWidth: 1, borderTopWidth: 1 }]} />
+      <View pointerEvents="none" style={[arm, { bottom: 4, left: 4, borderLeftWidth: 1, borderBottomWidth: 1 }]} />
+      <View pointerEvents="none" style={[arm, { bottom: 4, right: 4, borderRightWidth: 1, borderBottomWidth: 1 }]} />
+    </>
+  );
+}
+
+function CornerBrackets({ styles }: { styles: ReturnType<typeof makeStyles> }) {
+  return (
+    <>
+      <View pointerEvents="none" style={[styles.cornerBracket, styles.cornerTL]} />
+      <View pointerEvents="none" style={[styles.cornerBracket, styles.cornerTR]} />
+      <View pointerEvents="none" style={[styles.cornerBracket, styles.cornerBL]} />
+      <View pointerEvents="none" style={[styles.cornerBracket, styles.cornerBR]} />
+    </>
+  );
+}
+
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     modalBackdrop: {
@@ -969,18 +1134,141 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       justifyContent: 'flex-end',
     },
     sheet: {
-      backgroundColor: '#0a0e16',
+      backgroundColor: HUD_BG,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       paddingHorizontal: 24,
       paddingTop: 14,
-      paddingBottom: 40,
+      paddingBottom: 44,
       overflow: 'hidden',
+      borderTopWidth: 1,
+      borderColor: accentColor + '33',
     },
     // Faint technical-schematic grid behind the content.
     gridPattern: {
       ...StyleSheet.absoluteFillObject,
-      opacity: 0.05,
+      opacity: 0.08,
+    },
+    // ── Corner clamps (L-shaped, 1.5px stroke, 18px arms) ──
+    cornerBracket: {
+      position: 'absolute',
+      width: 18,
+      height: 18,
+      borderColor: accentColor,
+      shadowColor: accentColor,
+      shadowOpacity: 0.7,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 0 },
+    },
+    cornerTL: { top: 10, left: 10, borderLeftWidth: 1.5, borderTopWidth: 1.5 },
+    cornerTR: { top: 10, right: 10, borderRightWidth: 1.5, borderTopWidth: 1.5 },
+    cornerBL: { bottom: 10, left: 10, borderLeftWidth: 1.5, borderBottomWidth: 1.5 },
+    cornerBR: { bottom: 10, right: 10, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
+    // ── Header: bracketed type (left) + id / ADJUST (right) ──
+    hudHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    hudTypeLabel: {
+      flex: 1,
+      color: accentColor,
+      fontSize: 11,
+      letterSpacing: 2,
+      fontFamily: MONO,
+      textShadowColor: accentColor,
+      textShadowRadius: 6,
+      textShadowOffset: { width: 0, height: 0 },
+    },
+    hudHeaderRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    hudSignalId: {
+      color: theme.muted,
+      fontSize: 9,
+      letterSpacing: 1.2,
+      fontFamily: MONO,
+    },
+    // ── Central gauge ──
+    gaugeWrap: {
+      alignSelf: 'center',
+      width: 124,
+      height: 124,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 20,
+    },
+    gaugeCenter: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    gaugeBig: {
+      color: '#ffffff',
+      fontSize: 28,
+      fontWeight: '700',
+      fontFamily: MONO,
+      letterSpacing: 1,
+      textShadowColor: accentColor,
+      textShadowRadius: 12,
+      textShadowOffset: { width: 0, height: 0 },
+    },
+    gaugeUnit: {
+      color: theme.muted,
+      fontSize: 9,
+      letterSpacing: 3,
+      fontFamily: MONO,
+      textTransform: 'uppercase',
+      marginTop: 3,
+    },
+    // ── Metadata grid ──
+    hudMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 9,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: accentColor + '1f',
+    },
+    hudMetaLabel: {
+      color: theme.muted,
+      fontSize: 9,
+      letterSpacing: 1.5,
+      fontFamily: MONO,
+      textTransform: 'uppercase',
+    },
+    hudMetaValue: {
+      color: '#ffffff',
+      fontSize: 13,
+      letterSpacing: 0.5,
+      fontWeight: '500',
+      maxWidth: '64%',
+      textAlign: 'right',
+    },
+    // ── Bottom telemetry ──
+    hudBottomRow: {
+      marginTop: 18,
+      marginBottom: 18,
+    },
+    hudWaveWrap: {
+      marginBottom: 12,
+    },
+    telemetryText: {
+      color: accentColor,
+      fontSize: 8,
+      letterSpacing: 1.2,
+      fontFamily: MONO,
+      opacity: 0.6,
+      marginTop: 4,
+      textAlign: 'center',
+    },
+    hudDials: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
     },
     // Thin glowing accent line at the very top of the sheet.
     accentTopLine: {
@@ -1040,13 +1328,32 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       textShadowRadius: 16,
       textShadowOffset: { width: 0, height: 0 },
     },
+    // ── Description with a bracket rule on the left ──
+    descRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      marginBottom: 20,
+    },
+    // A `[`-shaped rule: vertical line with short serifs top & bottom.
+    descBracket: {
+      width: 7,
+      marginRight: 14,
+      borderLeftWidth: 2,
+      borderTopWidth: 2,
+      borderBottomWidth: 2,
+      borderColor: accentColor,
+      shadowColor: accentColor,
+      shadowOpacity: 0.6,
+      shadowRadius: 5,
+      shadowOffset: { width: 0, height: 0 },
+    },
     sheetDescription: {
+      flex: 1,
       color: '#ffffff',
       fontSize: 22,
       fontWeight: '400',
       lineHeight: 30,
-      textAlign: 'center',
-      marginBottom: 20,
+      textAlign: 'left',
       letterSpacing: 0.2,
     },
     editDescription: {
@@ -1278,7 +1585,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     btn: {
       flex: 1,
       paddingVertical: 13,
-      borderRadius: 24,
+      borderRadius: 7,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1292,7 +1599,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       elevation: 6,
     },
     btnPrimaryText: {
-      color: '#0a0e16',
+      color: HUD_BG,
       fontSize: 14,
       fontWeight: '700',
       letterSpacing: 0.6,
@@ -1355,12 +1662,15 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       backgroundColor: 'rgba(0,0,0,0.4)',
     },
     filterSheet: {
-      backgroundColor: '#0a0e16',
+      backgroundColor: HUD_BG,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       paddingTop: 14,
+      paddingBottom: 22,
       maxHeight: '70%',
       overflow: 'hidden',
+      borderTopWidth: 1,
+      borderColor: accentColor + '33',
     },
     filterHeader: {
       flexDirection: 'row',
@@ -1453,7 +1763,7 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       elevation: 5,
     },
     filterRestBtnText: {
-      color: '#0a0e16',
+      color: HUD_BG,
       fontSize: 12,
       fontWeight: '700',
       letterSpacing: 0.6,
