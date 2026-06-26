@@ -32,9 +32,9 @@ type RingDef = {
 };
 
 const RINGS: Record<RingKey, RingDef> = {
-  outer:  { key: 'outer',  radius: 19, rotationMs: 60000, strokeOpacity: 0.5,  pulseMs: 2500 },
-  middle: { key: 'middle', radius: 13, rotationMs: 30000, strokeOpacity: 0.65, pulseMs: 1500 },
-  inner:  { key: 'inner',  radius: 7,  rotationMs: 15000, strokeOpacity: 0.8,  pulseMs: 600  },
+  outer:  { key: 'outer',  radius: 19, rotationMs: 60000, strokeOpacity: 0.7,  pulseMs: 2500 },
+  middle: { key: 'middle', radius: 13, rotationMs: 30000, strokeOpacity: 0.8,  pulseMs: 1500 },
+  inner:  { key: 'inner',  radius: 7,  rotationMs: 15000, strokeOpacity: 1.0,  pulseMs: 600  },
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -101,11 +101,16 @@ function MinimapRing({
   ring,
   signals,
   arcColor,
+  size,
 }: {
   ring: RingDef;
   signals: Signal[];
   arcColor: string;
+  size: number;
 }) {
+  // All geometry scales from the disc size; ring.radius is authored for SIZE.
+  const center = size / 2;
+  const radius = ring.radius * (size / SIZE);
   const rotation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -149,11 +154,11 @@ function MinimapRing({
         styles.ringLayer,
         { transform: [{ rotate: spin }] },
       ]}>
-      <Svg width={SIZE} height={SIZE}>
+      <Svg width={size} height={size}>
         <Circle
-          cx={CENTER}
-          cy={CENTER}
-          r={ring.radius}
+          cx={center}
+          cy={center}
+          r={radius}
           stroke={arcColor}
           strokeOpacity={ring.strokeOpacity}
           strokeWidth={1.2}
@@ -162,8 +167,8 @@ function MinimapRing({
       </Svg>
       {signals.map((s) => {
         const angle = (angleDegForSignal(s.id) * Math.PI) / 180;
-        const x = CENTER + ring.radius * Math.cos(angle - Math.PI / 2);
-        const y = CENTER + ring.radius * Math.sin(angle - Math.PI / 2);
+        const x = center + radius * Math.cos(angle - Math.PI / 2);
+        const y = center + radius * Math.sin(angle - Math.PI / 2);
         return (
           <PulsingDot
             key={String(s.id)}
@@ -244,12 +249,17 @@ type MinimapProps = {
   // Number of signals currently warranting attention — drives the
   // top-right badge and the inner-ring pulse. Default 0 hides both.
   urgentCount?: number;
+  // Diameter of the minimap disc in px. All geometry (rings, vapor, dots,
+  // badge) scales from this. Default 48 (inline/header minimaps); Ground
+  // passes a larger value so it reads as the primary affordance.
+  size?: number;
 };
 
 const DISCOVERY_KEY = 'minimapDiscovered';
 const DISCOVERY_AUTOHIDE_MS = 4000;
 
-export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp }: MinimapProps = {}) {
+export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp, size = SIZE }: MinimapProps = {}) {
+  const center = size / 2;
   const userId = useUserId();
   if (!userId) return null;
   const { theme, accentColor, isDark } = useTheme();
@@ -544,6 +554,7 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
       <Animated.View
         style={[
           styles.circle,
+          { width: size, height: size, borderRadius: size / 2 },
           { backgroundColor: discBg },
           glowColor && {
             shadowColor: glowColor,
@@ -562,22 +573,22 @@ export function Minimap({ floating = true, onPress, urgentCount: urgentCountProp
             opacity breathing 0.6 → 1.0 (vaporAnim) independent of the rings.
             Center opacity lifts 0.10 → 0.18 when urgent signals exist. */}
         <Animated.View pointerEvents="none" style={[styles.ringLayer, { opacity: vaporAnim }]}>
-          <Svg width={SIZE} height={SIZE}>
+          <Svg width={size} height={size}>
             <Defs>
               <RadialGradient id={vaporId} cx="50%" cy="50%" r="50%">
-                <Stop offset="0" stopColor={accentColor} stopOpacity={urgentCount > 0 ? 0.45 : 0.35} />
+                <Stop offset="0" stopColor={accentColor} stopOpacity={urgentCount > 0 ? 0.6 : 0.5} />
                 <Stop offset="1" stopColor={accentColor} stopOpacity={0} />
               </RadialGradient>
             </Defs>
-            <Circle cx={CENTER} cy={CENTER} r={CENTER} fill={`url(#${vaporId})`} />
+            <Circle cx={center} cy={center} r={center} fill={`url(#${vaporId})`} />
           </Svg>
         </Animated.View>
-        <MinimapRing ring={RINGS.outer} signals={grouped.outer} arcColor={arcColor} />
-        <MinimapRing ring={RINGS.middle} signals={grouped.middle} arcColor={arcColor} />
+        <MinimapRing ring={RINGS.outer} signals={grouped.outer} arcColor={arcColor} size={size} />
+        <MinimapRing ring={RINGS.middle} signals={grouped.middle} arcColor={arcColor} size={size} />
         <Animated.View
           pointerEvents="none"
           style={[styles.ringLayer, urgentCount > 0 && { opacity: pulseAnim }]}>
-          <MinimapRing ring={RINGS.inner} signals={grouped.inner} arcColor={accentColor} />
+          <MinimapRing ring={RINGS.inner} signals={grouped.inner} arcColor={accentColor} size={size} />
         </Animated.View>
       </Animated.View>
       {urgentCount > 0 ? (
@@ -633,12 +644,11 @@ const styles = StyleSheet.create({
     backgroundColor: NAVY,
     overflow: 'hidden',
   },
+  // Fills the (variable-size) disc so each ring's Svg is centered on it.
   ringLayer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: SIZE,
-    height: SIZE,
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Top-right urgent count. The 1.5px border in theme.background
   // creates a thin gap between the badge and the minimap rings so

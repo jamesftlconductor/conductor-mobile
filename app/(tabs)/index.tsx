@@ -1655,10 +1655,19 @@ export default function TakeoffScreen() {
     return weatherLottieSource(pulseData?.weather?.conditions, { isNight });
   }, [pulseData?.weather?.conditions]);
 
+  // Sky backdrop behind the weather Lottie. The previous flat near-black
+  // theme background (#0f0f0f) is what read as a "grey film": it showed
+  // straight through the Lottie's transparent regions (and fully whenever
+  // there was no weather data). An atmospheric sky tone — day blue / night
+  // navy — makes the weather read cleanly while staying dark enough that the
+  // light hero brief text stays legible. No overlay, no opacity reduction.
+  const nowHour = new Date().getHours();
+  const skyBg = nowHour < 6 || nowHour >= 19 ? '#0c1a2e' : '#1d3a5c';
+
   const bandTheme = mode.title === 'Takeoff' ? makeTakeoffTheme(theme) : makeClearanceTheme(theme);
 
   return (
-    <View style={[styles.container, { backgroundColor: bandTheme.bg }]}>
+    <View style={[styles.container, { backgroundColor: isDark ? skyBg : bandTheme.bg }]}>
       {weatherLottie ? (
         <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
           <LottieView source={weatherLottie} autoPlay loop resizeMode="cover" style={{ flex: 1 }} />
@@ -2469,6 +2478,7 @@ export default function TakeoffScreen() {
           receives taps. As a scroll child its absolute box was overlapped
           by later content Views which swallowed the tap. */}
       <Minimap
+        size={72}
         urgentCount={urgentCount}
         onPress={() => openConductorSheet('ground')}
       />
