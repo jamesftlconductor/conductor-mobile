@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Defs, LinearGradient, Line, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Line, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { AddSignalSheet } from '@/components/AddSignalSheet';
 import { FinaleSheet } from '@/components/FinaleSheet';
@@ -411,71 +411,118 @@ function RadarImageOverlays({ cx, cy }: { cx: number; cy: number }) {
   );
 }
 
-// Breathing radar backdrop — the whole ImageBackground gently breathes its
-// opacity (0.85→1.0→0.85, 3s) and a golden center-C glow pulses as a strong
-// heartbeat over the image's center mark (scale 0.8→1.3, opacity 0.5→1.0, 2s).
+// Current-time clock-hand angle: 12 o'clock = 0°, 3 o'clock = 90°, etc.
+function clockHandAngle(): number {
+  const now = new Date();
+  const hours = now.getHours() % 12;
+  const minutes = now.getMinutes();
+  return ((hours * 60 + minutes) / 720) * 360;
+}
+
+// The C mark is the living heart of the radar. Centered on (cx,cy) — the same
+// point the rings orbit — it pulses as one organism: a strong golden glow
+// radiating outward (scale 0.75→1.35, opacity 0.4→1.0, 2s), a nebula radial
+// gradient breathing out from it (opacity 0.08→0.20, same cycle), and a baton
+// that points to the current time like a clock hand (updates each minute). The
+// glow doubles as the tap target for The Conductor chat.
 function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number; onCenterPress: () => void }) {
-  const bgPulse = useRef(new Animated.Value(0.75)).current;
-  const cScale = useRef(new Animated.Value(0.8)).current;
-  const cGlow = useRef(new Animated.Value(0.5)).current;
+  const { width: SW, height: SH } = useWindowDimensions();
+  const bgPulse = useRef(new Animated.Value(0.85)).current;
+  const cScale = useRef(new Animated.Value(0.75)).current;
+  const cGlow = useRef(new Animated.Value(0.4)).current;
+  const nebula = useRef(new Animated.Value(0.08)).current;
+  const [batonAngle, setBatonAngle] = useState<number>(() => clockHandAngle());
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(bgPulse, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(bgPulse, { toValue: 0.75, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bgPulse, { toValue: 0.85, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ]),
     );
     loop.start();
     return () => loop.stop();
   }, [bgPulse]);
 
+  // C glow + nebula pulse together on one 2s cycle, so they breathe as one.
   useEffect(() => {
     const up = Animated.parallel([
-      Animated.timing(cScale, { toValue: 1.3, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(cScale, { toValue: 1.35, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       Animated.timing(cGlow, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(nebula, { toValue: 0.2, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
     ]);
     const down = Animated.parallel([
-      Animated.timing(cScale, { toValue: 0.8, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(cGlow, { toValue: 0.5, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(cScale, { toValue: 0.75, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(cGlow, { toValue: 0.4, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(nebula, { toValue: 0.08, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
     ]);
     const loop = Animated.loop(Animated.sequence([up, down]));
     loop.start();
     return () => loop.stop();
-  }, [cScale, cGlow]);
+  }, [cScale, cGlow, nebula]);
+
+  // Baton tracks the current time; refresh every minute.
+  useEffect(() => {
+    const id = setInterval(() => setBatonAngle(clockHandAngle()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const nebulaR = Math.max(SW, SH) * 0.7;
 
   return (
     <>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: bgPulse }]}>
         <ImageBackground source={RADAR_IMG} resizeMode="cover" style={StyleSheet.absoluteFill} />
       </Animated.View>
-      {/* Center C — tap to open The Conductor chat (Hover's entry point now
-          that there's no minimap). The glow is visual; the Pressable is the
-          stable touch target above the radar layers. */}
+
+      {/* Nebula — radial gradient emanating FROM the C mark, breathing opacity
+          0.08→0.20 in sync with the C glow. */}
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: nebula }]}>
+        <Svg width={SW} height={SH}>
+          <Defs>
+            <RadialGradient id="hoverNebula" cx={cx} cy={cy} r={nebulaR} gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor={RING_HIGHLIGHT} stopOpacity={1} />
+              <Stop offset="0.5" stopColor={RING_HIGHLIGHT} stopOpacity={0.5} />
+              <Stop offset="1" stopColor={RING_HIGHLIGHT} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Rect x={0} y={0} width={SW} height={SH} fill="url(#hoverNebula)" />
+        </Svg>
+      </Animated.View>
+
+      {/* Baton — points to the current time, pivoting at the C mark. */}
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', left: cx, top: cy, zIndex: 31, transform: [{ rotate: `${batonAngle}deg` }] }}>
+        <View style={{ position: 'absolute', left: -1.5, top: -28, width: 3, height: 28, borderRadius: 1.5, backgroundColor: 'rgba(240, 208, 96, 0.9)' }} />
+      </View>
+
+      {/* Center C — strong radiating golden glow; the tap target for chat. */}
       <Pressable
         onPress={onCenterPress}
-        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+        hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         style={{
           position: 'absolute',
-          left: cx - 35,
-          top: cy - 35,
-          width: 70,
-          height: 70,
+          left: cx - 55,
+          top: cy - 55,
+          width: 110,
+          height: 110,
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 30,
         }}>
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            width: 60,
-            height: 60,
-            borderRadius: 30,
-            backgroundColor: 'rgba(240, 208, 96, 0.4)',
-            opacity: cGlow,
-            transform: [{ scale: cScale }],
-          }}
-        />
+        <Animated.View pointerEvents="none" style={{ width: 110, height: 110, opacity: cGlow, transform: [{ scale: cScale }] }}>
+          <Svg width={110} height={110}>
+            <Defs>
+              <RadialGradient id="hoverCGlow" cx="50%" cy="50%" r="50%">
+                <Stop offset="0" stopColor="rgb(240, 208, 96)" stopOpacity={0.6} />
+                <Stop offset="0.55" stopColor="rgb(240, 208, 96)" stopOpacity={0.28} />
+                <Stop offset="1" stopColor="rgb(240, 208, 96)" stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Circle cx={55} cy={55} r={55} fill="url(#hoverCGlow)" />
+          </Svg>
+        </Animated.View>
       </Pressable>
     </>
   );
@@ -2342,9 +2389,9 @@ export default function HoverScreen() {
       <View style={styles.container}>
         {/* Radar artwork as the screen background — the rings, vapor, center C
             and labels are the image itself. Dots + animated overlays sit on top. */}
-        {/* Center-C glow sits over the astrolabe IMAGE's actual center (screen
-            center), not the radar/dot center (which is 50px higher). */}
-        <HoverImageBackdrop cx={cx} cy={height / 2} onCenterPress={() => openConductorSheet('hover')} />
+        {/* Everything centers on the C mark (the radar center cx,cy): the glow,
+            nebula, baton, and the orbiting rings all share this point. */}
+        <HoverImageBackdrop cx={cx} cy={cy} onCenterPress={() => openConductorSheet('hover')} />
         {/* Faint rotating overlay rings (astrolabe glint) on top of the image. */}
         <RotatingOverlayRings cx={cx} cy={cy} />
 
