@@ -19,6 +19,8 @@ import {
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { useUserId } from '@/hooks/useUserId';
 import { getCatchphrase, type Detail, type Tone } from '@/utils/catchphrases';
+import { ACCESS_LEVELS, type AccessLevel, DEFAULT_ACCESS_LEVEL } from '@/utils/accessLevels';
+import { MOVEMENTS, MOVEMENT_KEYS } from '@/utils/movements';
 import { ChevronRight, Lock } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -1434,18 +1436,18 @@ const PILLAR_KEYS = PILLAR_CARDS.map((p) => p.key);
 function PrioritiesBlock() {
   const { theme, accentColor } = useTheme();
   const userId = useUserId();
-  const [order, setOrder] = useState<string[]>(PILLAR_KEYS);
+  const [order, setOrder] = useState<string[]>(MOVEMENT_KEYS);
 
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem('conductorHouseholdPillars');
+        const raw = await AsyncStorage.getItem('conductorMovementOrder');
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
             setOrder([
-              ...parsed.filter((k: unknown): k is string => typeof k === 'string' && PILLAR_KEYS.includes(k)),
-              ...PILLAR_KEYS.filter((k) => !parsed.includes(k)),
+              ...parsed.filter((k: unknown): k is string => typeof k === 'string' && MOVEMENT_KEYS.includes(k as never)),
+              ...MOVEMENT_KEYS.filter((k) => !parsed.includes(k)),
             ]);
           }
         }
@@ -1455,12 +1457,12 @@ function PrioritiesBlock() {
 
   function persist(next: string[]) {
     setOrder(next);
-    AsyncStorage.setItem('conductorHouseholdPillars', JSON.stringify(next)).catch(() => {});
+    AsyncStorage.setItem('conductorMovementOrder', JSON.stringify(next)).catch(() => {});
     if (!userId) return;
     fetch(`${API_BASE}/signals?type=preferences`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, preferences: { householdPillars: next } }),
+      body: JSON.stringify({ userId, preferences: { movementOrder: next } }),
     }).catch(() => { /* best-effort */ });
   }
 
@@ -1480,7 +1482,7 @@ function PrioritiesBlock() {
         The Conductor leads with what matters most to you.
       </Text>
       {order.map((key, idx) => {
-        const m = PILLAR_CARDS.find((p) => p.key === key);
+        const m = MOVEMENTS.find((p) => p.key === key);
         if (!m) return null;
         const first = idx === 0;
         const last = idx === order.length - 1;
@@ -1502,7 +1504,7 @@ function PrioritiesBlock() {
             <Text style={{ fontSize: 22, marginRight: 10 }}>{m.emoji}</Text>
             <View style={{ flex: 1 }}>
               <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>{m.label}</Text>
-              <Text style={{ color: theme.muted, fontSize: 12, marginTop: 2 }}>{m.desc}</Text>
+              <Text style={{ color: theme.muted, fontSize: 12, marginTop: 2 }}>{m.subtitle}</Text>
             </View>
             <View style={{ marginLeft: 8 }}>
               <TouchableOpacity onPress={() => move(idx, -1)} disabled={first} hitSlop={{ top: 6, bottom: 2, left: 10, right: 10 }}>
@@ -1513,6 +1515,85 @@ function PrioritiesBlock() {
               </TouchableOpacity>
             </View>
           </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// Conductor Access — how much The Conductor is allowed to see. Three levels;
+// the current one is accent-highlighted and shows its description. Tapping a
+// level persists conductorAccessLevel immediately.
+function ConductorAccessBlock() {
+  const { theme, accentColor } = useTheme();
+  const userId = useUserId();
+  const [level, setLevel] = useState<AccessLevel>(DEFAULT_ACCESS_LEVEL);
+
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${userId}`);
+        const data = await res.json();
+        const lvl = data?.preferences?.conductorAccessLevel;
+        if (lvl === 'essentials' || lvl === 'informed' || lvl === 'full') setLevel(lvl);
+      } catch { /* keep default */ }
+    })();
+  }, [userId]);
+
+  function choose(key: AccessLevel) {
+    setLevel(key);
+    if (!userId) return;
+    fetch(`${API_BASE}/signals?type=preferences`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, preferences: { conductorAccessLevel: key } }),
+    }).catch(() => { /* best-effort */ });
+  }
+
+  return (
+    <View style={{ paddingHorizontal: 22, paddingBottom: 10 }}>
+      <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 18, marginBottom: 12 }}>
+        How much should The Conductor know? Change this anytime.
+      </Text>
+      {ACCESS_LEVELS.map((lvl) => {
+        const active = level === lvl.key;
+        return (
+          <TouchableOpacity
+            key={lvl.key}
+            activeOpacity={0.7}
+            onPress={() => choose(lvl.key)}
+            style={{
+              borderWidth: 1,
+              borderColor: active ? accentColor : theme.border,
+              backgroundColor: active ? accentColor + '14' : theme.card,
+              borderRadius: 14,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              marginBottom: 8,
+            }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: 5,
+                  marginRight: 10,
+                  backgroundColor: active ? accentColor : 'transparent',
+                  borderWidth: 1,
+                  borderColor: active ? accentColor : theme.border,
+                }}
+              />
+              <Text style={{ color: active ? accentColor : theme.text, fontSize: 15, fontWeight: '600' }}>
+                {lvl.title}
+              </Text>
+            </View>
+            {active ? (
+              <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 17, marginTop: 8 }}>
+                {lvl.description}
+              </Text>
+            ) : null}
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -2482,7 +2563,7 @@ export default function SettingsScreen() {
         <VoiceStyleBlock />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Priorities">
+        <CollapsibleSection title="Your Movements">
         <PrioritiesBlock />
         </CollapsibleSection>
 
@@ -2652,6 +2733,9 @@ export default function SettingsScreen() {
           subtext="Preview all 10 weather backgrounds"
           onPress={() => router.push('/weather-skins' as never)}
         />
+        <CollapsibleSection title="Conductor Access">
+        <ConductorAccessBlock />
+        </CollapsibleSection>
         <CollapsibleSection title="What Conductor Sees">
         <Row
           label="Connected accounts"

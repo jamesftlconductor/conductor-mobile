@@ -36,9 +36,12 @@ import {
   View,
 } from 'react-native';
 
+import { Eye, ScanEye } from 'lucide-react-native';
+
 import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { useUserId } from '@/hooks/useUserId';
 import { TOKENS } from '@/utils/designTokens';
+import { ACCESS_LEVELS, type AccessLevel, DEFAULT_ACCESS_LEVEL } from '@/utils/accessLevels';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
@@ -80,7 +83,7 @@ const INTERSTITIAL_POLL_MS = 3000;
 const PIPELINE_START_KEY = 'onboard_pipeline_started_at';
 const STEP_KEY = 'onboardingStep';
 
-type Phase = 'intro' | 'joining' | 'language' | 'step1' | 'step2' | 'household' | 'work' | 'workcal' | 'step3' | 'step4' | 'pillars' | 'interstitial';
+type Phase = 'intro' | 'joining' | 'language' | 'step1' | 'step2' | 'household' | 'work' | 'workcal' | 'access' | 'step3' | 'step4' | 'pillars' | 'interstitial';
 
 // Household pillars — the four life domains the household ranks so the
 // Conductor leads with what matters most. Order here is the default order.
@@ -370,7 +373,7 @@ export default function OnboardingScreen() {
         // re-running the onboard pipeline — their household already has data.
         if (
           joinType === 'joined_existing' &&
-          (savedPhase === 'step2' || savedPhase === 'work' || savedPhase === 'workcal' || savedPhase === 'step3' || savedPhase === 'step4' || savedPhase === 'pillars')
+          (savedPhase === 'step2' || savedPhase === 'work' || savedPhase === 'workcal' || savedPhase === 'access' || savedPhase === 'step3' || savedPhase === 'step4' || savedPhase === 'pillars')
         ) {
           setIsJoining(true);
           setPhase(savedPhase);
@@ -387,6 +390,7 @@ export default function OnboardingScreen() {
           savedPhase === 'household' ||
           savedPhase === 'work' ||
           savedPhase === 'workcal' ||
+          savedPhase === 'access' ||
           savedPhase === 'step3' ||
           savedPhase === 'step4' ||
           savedPhase === 'pillars' ||
@@ -598,7 +602,7 @@ export default function OnboardingScreen() {
         body: JSON.stringify({ userId: userId, preferences: { wantsWorkCalendar: true } }),
       });
     } catch { /* best-effort */ }
-    setPhase('step3');
+    setPhase('access');
     Linking.openURL(
       `${API_BASE}/auth?service=work_calendar&userId=${encodeURIComponent(userId || '')}`,
     ).catch(() => {});
@@ -611,6 +615,20 @@ export default function OnboardingScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: userId, preferences: { workCalendarSkipped: true } }),
+      });
+    } catch { /* best-effort */ }
+    setPhase('access');
+  }
+
+  // Conductor access level — how much The Conductor may see. Persists the choice
+  // immediately, then advances to priorities.
+  const [accessLevel, setAccessLevel] = useState<AccessLevel>(DEFAULT_ACCESS_LEVEL);
+  async function confirmAccess() {
+    try {
+      await fetch(`${API_BASE}/signals?type=preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userId, preferences: { conductorAccessLevel: accessLevel } }),
       });
     } catch { /* best-effort */ }
     setPhase('step3');
@@ -848,6 +866,17 @@ export default function OnboardingScreen() {
           />
         ) : null}
 
+        {phase === 'access' ? (
+          <StepAccess
+            selected={accessLevel}
+            onSelect={setAccessLevel}
+            onContinue={confirmAccess}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
+          />
+        ) : null}
+
         {phase === 'step3' ? (
           <Step3
             picked={picked}
@@ -885,7 +914,7 @@ export default function OnboardingScreen() {
           <InterstitialBlock pipelineReady={pipelineReady} progress={progress} />
         ) : null}
 
-        {phase === 'step1' || phase === 'step2' || phase === 'household' || phase === 'work' || phase === 'workcal' || phase === 'step3' || phase === 'step4' || phase === 'pillars' ? (
+        {phase === 'step1' || phase === 'step2' || phase === 'household' || phase === 'work' || phase === 'workcal' || phase === 'access' || phase === 'step3' || phase === 'step4' || phase === 'pillars' ? (
           <StepDots
             s={stepStyles}
             active={
@@ -894,9 +923,10 @@ export default function OnboardingScreen() {
               : phase === 'household' ? 2
               : phase === 'work' ? 3
               : phase === 'workcal' ? 4
-              : phase === 'step3' ? 5
-              : phase === 'step4' ? 6
-              : 7
+              : phase === 'access' ? 5
+              : phase === 'step3' ? 6
+              : phase === 'step4' ? 7
+              : 8
             }
           />
         ) : null}
@@ -1773,6 +1803,71 @@ function StepWorkCalendar({
   );
 }
 
+// ---------- Conductor access level ----------
+
+function StepAccess({
+  selected, onSelect, onContinue, s, theme, accentColor,
+}: {
+  selected: AccessLevel;
+  onSelect: (k: AccessLevel) => void;
+  onContinue: () => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
+}) {
+  // The eye "opens" further with each level — Essentials & Informed share Eye
+  // (sized up), Full Picture uses the wide-open ScanEye.
+  const ICONS = [Eye, Eye, ScanEye];
+  return (
+    <>
+      <Text style={[s.title, { marginTop: 20 }]}>How much should The Conductor know?</Text>
+      <Text style={[s.subtitle, { marginBottom: 16 }]}>You can change this anytime in Settings.</Text>
+      <View style={{ gap: 12, marginBottom: 22 }}>
+        {ACCESS_LEVELS.map((lvl, i) => {
+          const Icon = ICONS[i] || Eye;
+          const active = selected === lvl.key;
+          return (
+            <TouchableOpacity
+              key={lvl.key}
+              activeOpacity={0.85}
+              onPress={() => onSelect(lvl.key)}
+              style={{
+                borderWidth: 1,
+                borderColor: active ? accentColor : 'rgba(255,255,255,0.12)',
+                backgroundColor: active ? accentColor + '14' : 'transparent',
+                borderRadius: 14,
+                paddingVertical: 16,
+                paddingHorizontal: 18,
+              }}>
+              {active ? (
+                <>
+                  <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, width: 14, height: 14, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderColor: accentColor }} />
+                  <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, width: 14, height: 14, borderTopWidth: 1.5, borderRightWidth: 1.5, borderColor: accentColor }} />
+                  <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, left: 0, width: 14, height: 14, borderBottomWidth: 1.5, borderLeftWidth: 1.5, borderColor: accentColor }} />
+                  <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderBottomWidth: 1.5, borderRightWidth: 1.5, borderColor: accentColor }} />
+                </>
+              ) : null}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <Icon size={20 + i * 2} color={active ? accentColor : theme.muted} />
+                <Text style={{ color: active ? accentColor : theme.text, ...TOKENS.type.body, fontWeight: '700' }}>
+                  {lvl.title}
+                </Text>
+              </View>
+              <Text style={{ color: theme.muted, ...TOKENS.type.secondary, lineHeight: 19 }}>
+                {lvl.description}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <TouchableOpacity onPress={onContinue} style={s.continueBtn}>
+        <Text style={s.continueBtnText}>Continue →</Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
 // ---------- Interstitial: cycling phrases ----------
 //
 // Rebuilt to use the wait time meaningfully:
@@ -2015,10 +2110,10 @@ function PillarsStep({
 
 // ---------- Step indicator dots ----------
 
-function StepDots({ active, s }: { active: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7; s: StepStyles }) {
+function StepDots({ active, s }: { active: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8; s: StepStyles }) {
   return (
     <View style={s.dotsRow}>
-      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+      {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => {
         const state = i === active ? 'active' : i < active ? 'done' : 'upcoming';
         return (
           <View

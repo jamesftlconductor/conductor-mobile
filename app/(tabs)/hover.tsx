@@ -32,6 +32,7 @@ import { HoverHelpModal } from '@/components/HoverHelpModal';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { categoryForType } from '@/utils/signalCategories';
 import { SignalIcon } from '@/components/SignalIcon';
+import { MOVEMENT_BY_DIRECTION } from '@/utils/movements';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
   metaForRing,
@@ -1994,10 +1995,10 @@ export default function HoverScreen() {
     (async () => {
       try {
         const [u, d, l, r] = await Promise.all([
-          AsyncStorage.getItem('hoverHint:up'),
-          AsyncStorage.getItem('hoverHint:down'),
-          AsyncStorage.getItem('hoverHint:left'),
-          AsyncStorage.getItem('hoverHint:right'),
+          AsyncStorage.getItem(MOVEMENT_BY_DIRECTION.up.discoveredKey),
+          AsyncStorage.getItem(MOVEMENT_BY_DIRECTION.down.discoveredKey),
+          AsyncStorage.getItem(MOVEMENT_BY_DIRECTION.left.discoveredKey),
+          AsyncStorage.getItem(MOVEMENT_BY_DIRECTION.right.discoveredKey),
         ]);
         setHintsSeen({ up: u === '1', down: d === '1', left: l === '1', right: r === '1' });
       } catch { /* leave all hints visible */ }
@@ -2005,7 +2006,7 @@ export default function HoverScreen() {
   }, []);
   const markSwiped = useCallback((dir: 'up' | 'down' | 'left' | 'right') => {
     setHintsSeen((prev) => (prev[dir] ? prev : { ...prev, [dir]: true }));
-    AsyncStorage.setItem(`hoverHint:${dir}`, '1').catch(() => {});
+    AsyncStorage.setItem(MOVEMENT_BY_DIRECTION[dir].discoveredKey, '1').catch(() => {});
   }, []);
 
   // Header + legend opacity animations driven by expandedRing. Both fade
@@ -2388,8 +2389,8 @@ export default function HoverScreen() {
     .onEnd((e) => {
       if (!swipeOriginRef.current?.center) return; // edge → root handles tab switch
       if (Math.abs(e.translationX) < 60) return;
-      if (e.translationX < 0) { markSwiped('left'); router.push('/(tabs)/settings?hub=score' as never); }
-      else { markSwiped('right'); router.push('/(tabs)/settings?hub=orchestra' as never); }
+      if (e.translationX < 0) { markSwiped('left'); router.push(MOVEMENT_BY_DIRECTION.left.route as never); }
+      else { markSwiped('right'); router.push(MOVEMENT_BY_DIRECTION.right.route as never); }
     });
   const vSwipe = Gesture.Pan()
     .activeOffsetY([-24, 24])
@@ -2399,8 +2400,8 @@ export default function HoverScreen() {
     .onEnd((e) => {
       if (!swipeOriginRef.current?.center) return;
       if (Math.abs(e.translationY) < 60) return;
-      if (e.translationY < 0) { markSwiped('up'); router.push('/horizon' as never); }
-      else { markSwiped('down'); router.push('/journal' as never); }
+      if (e.translationY < 0) { markSwiped('up'); router.push(MOVEMENT_BY_DIRECTION.up.route as never); }
+      else { markSwiped('down'); router.push(MOVEMENT_BY_DIRECTION.down.route as never); }
     });
 
   const composedGesture = Gesture.Race(hSwipe, vSwipe, swipeGesture, longPressGesture, tapGesture);
@@ -2420,22 +2421,22 @@ export default function HoverScreen() {
             permanently once the user has swiped that direction (#4). */}
         {!hintsSeen.up ? (
           <View pointerEvents="none" style={[styles.dirHintH, { top: insets.top + 72 }]}>
-            <Text style={[styles.dirHintText, { color: theme.muted }]}>HORIZON ↑</Text>
+            <Text style={[styles.dirHintText, styles.movementHint, { color: accentColor + '40' }]}>HOME MOVEMENT ↑</Text>
           </View>
         ) : null}
         {!hintsSeen.down ? (
           <View pointerEvents="none" style={[styles.dirHintH, { bottom: insets.bottom + 96 }]}>
-            <Text style={[styles.dirHintText, { color: theme.muted }]}>JOURNAL ↓</Text>
+            <Text style={[styles.dirHintText, styles.movementHint, { color: accentColor + '40' }]}>FAMILY MOVEMENT ↓</Text>
           </View>
         ) : null}
         {!hintsSeen.left ? (
           <View pointerEvents="none" style={[styles.dirHintV, { left: 14, top: cy - 6 }]}>
-            <Text style={[styles.dirHintText, { color: theme.muted }]}>← SCORE</Text>
+            <Text style={[styles.dirHintText, styles.movementHint, { color: accentColor + '40' }]}>WELLNESS MOVEMENT ←</Text>
           </View>
         ) : null}
         {!hintsSeen.right ? (
           <View pointerEvents="none" style={[styles.dirHintV, { right: 14, top: cy - 6 }]}>
-            <Text style={[styles.dirHintText, { color: theme.muted }]}>ORCHESTRA →</Text>
+            <Text style={[styles.dirHintText, styles.movementHint, { color: accentColor + '40' }]}>WORK MOVEMENT →</Text>
           </View>
         ) : null}
         {/* Brand wordmark banner — centered at the very top, above the
@@ -2790,6 +2791,13 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     letterSpacing: 1.5,
     opacity: 0.3,
     fontWeight: '600',
+  },
+  // Movement compass hints — 9px, letterSpacing 2, uppercase; the accent's 0.25
+  // alpha (set inline) does the fading, so opacity is reset to 1 here.
+  movementHint: {
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    opacity: 1,
   },
   // Brand wordmark banner — centered at the top of Hover. 140px wide;
   // height is the wordmark's true proportion (cropped source is
