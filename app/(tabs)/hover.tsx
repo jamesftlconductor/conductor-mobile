@@ -70,7 +70,7 @@ type RingDef = {
 const RINGS: Record<RingKey, RingDef> = {
   outer:  { key: 'outer',  radius: 165, rotationMs: 60000, strokeOpacity: 0.15, label: 'ON THE HORIZON',    pulseMs: 2500 },
   middle: { key: 'middle', radius: 115, rotationMs: 30000, strokeOpacity: 0.25, label: 'APPROACHING FAST',  pulseMs: 1500 },
-  inner:  { key: 'inner',  radius: 44,  rotationMs: 15000, strokeOpacity: 0.4,  label: 'ACT NOW',           pulseMs: 600  },
+  inner:  { key: 'inner',  radius: 26,  rotationMs: 15000, strokeOpacity: 0.4,  label: 'ACT NOW',           pulseMs: 600  },
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -552,7 +552,10 @@ function SpinRing({ cx, cy, radius, durationMs, clockwise }: { cx: number; cy: n
 function RotatingOverlayRings({ cx, cy }: { cx: number; cy: number }) {
   return (
     <>
-      <SpinRing cx={cx} cy={cy} radius={44} durationMs={30000} clockwise />
+      {/* Inner ring hugs the C mark like a halo — radius ≈ the C glyph's outer
+          edge (~12% of screen width) + a 2px gap. Middle/outer keep their
+          proportions. */}
+      <SpinRing cx={cx} cy={cy} radius={26} durationMs={30000} clockwise />
       <SpinRing cx={cx} cy={cy} radius={115} durationMs={45000} clockwise={false} />
       <SpinRing cx={cx} cy={cy} radius={165} durationMs={60000} clockwise />
     </>
@@ -2315,8 +2318,9 @@ export default function HoverScreen() {
       const dx = event.x - cx;
       const dy = event.y - cy;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      // Long-press the very center (the C) → The Baton hub.
-      if (distance < 34) {
+      // Long-press the very center (the C) → The Baton hub. Tightened so the
+      // inner halo ring (r≈26) stays long-pressable to expand.
+      if (distance < 18) {
         router.push('/(tabs)/settings?hub=baton' as never);
         return;
       }

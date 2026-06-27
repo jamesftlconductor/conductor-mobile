@@ -5,6 +5,7 @@ import * as security from '@/app/security';
 import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { Minimap } from '@/components/Minimap';
 import { WeatherBackground } from '@/components/WeatherBackground';
+import { GlassCard } from '@/components/GlassCard';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useCatchphrase } from '@/hooks/useCatchphrase';
 import {
@@ -476,16 +477,7 @@ function CollapsibleSection({
           setOpen((o) => !o);
         }}
         style={styles.collapsibleHeader}>
-        {/* Hubs (sections with a subtitle) get classified-dossier corner
-            brackets; nested child sections don't. */}
-        {subtitle ? (
-          <>
-            <View pointerEvents="none" style={[styles.hubBracket, styles.hubBracketTL]} />
-            <View pointerEvents="none" style={[styles.hubBracket, styles.hubBracketTR]} />
-            <View pointerEvents="none" style={[styles.hubBracket, styles.hubBracketBL]} />
-            <View pointerEvents="none" style={[styles.hubBracket, styles.hubBracketBR]} />
-          </>
-        ) : null}
+        {/* Hub corner brackets now come from the GlassCard wrapping each hub. */}
         <View style={{ flex: 1 }}>
           <Text style={subtitle ? styles.hubHeaderText : styles.sectionHeader}>
             {subtitle ? `[${title}]` : title}
@@ -2336,6 +2328,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
 
+        <GlassCard style={styles.hubGlass}>
         <CollapsibleSection title="The Baton" subtitle="how The Conductor works for you" forceOpen={hub === 'baton'}>
         <CollapsibleSection title="Your Brief">
         <ChevronRow
@@ -2444,7 +2437,9 @@ export default function SettingsScreen() {
         <BriefCustomizeBlock />
         </CollapsibleSection>
         </CollapsibleSection>
+        </GlassCard>
 
+        <GlassCard style={styles.hubGlass}>
         <CollapsibleSection title="The Orchestra" subtitle="the people and places it watches" forceOpen={hub === 'orchestra'}>
         <CollapsibleSection title="Your Household">
         <HouseholdNameRow />
@@ -2541,7 +2536,9 @@ export default function SettingsScreen() {
         <ChevronRow label="Crew" onPress={() => router.push('/crew')} />
         </CollapsibleSection>
         </CollapsibleSection>
+        </GlassCard>
 
+        <GlassCard style={styles.hubGlass}>
         <CollapsibleSection title="The Score" subtitle="everything The Conductor reads from" forceOpen={hub === 'score'}>
         <ChevronRow
           label="Weather Skins"
@@ -2724,6 +2721,7 @@ export default function SettingsScreen() {
         />
         </CollapsibleSection>
         </CollapsibleSection>
+        </GlassCard>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -2893,6 +2891,18 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 20,
+  },
+  // Each of the three hubs floats on its own glass card. The -12 horizontal
+  // margin pulls the card out toward the screen edge (against the 24px content
+  // padding) and the 12px card padding restores the original 24px inner inset,
+  // so a 12px weather margin shows on each side; marginBottom gaps the cards so
+  // the 0.38 weather backdrop shows between them too.
+  hubGlass: {
+    marginHorizontal: -12,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingTop: 2,
+    paddingBottom: 14,
   },
   title: {
     color: OFF_WHITE,

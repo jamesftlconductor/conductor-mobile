@@ -30,6 +30,7 @@ import { SignalIcon } from './SignalIcon';
 import { CameraScanner } from './CameraScanner';
 import { SMSComposerSheet } from './SMSComposerSheet';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
+import { GlassCard } from './GlassCard';
 import { Tooltip } from './Tooltip';
 import { useTheme } from '../app/theme';
 import { useUserId } from '@/hooks/useUserId';
@@ -117,7 +118,8 @@ function CategorySheet(props: CategoryProps) {
         style={[styles.modalBackdrop, styles.filterBackdrop]}
         onPress={onClose}>
         <Pressable style={styles.filterSheet} onPress={() => {}}>
-          {/* Operations-center backdrop: faint schematic grid + accent top line. */}
+          <GlassCard style={styles.filterGlass}>
+          {/* Faint schematic grid behind the content. */}
           <View pointerEvents="none" style={styles.gridPattern}>
             <Svg width="100%" height="100%">
               <Defs>
@@ -129,8 +131,6 @@ function CategorySheet(props: CategoryProps) {
             </Svg>
           </View>
           <RadialGlow accentColor={accentColor} />
-          <View pointerEvents="none" style={styles.accentTopLine} />
-          <CornerBrackets styles={styles} />
           <View style={styles.filterHeader}>
             <View style={styles.filterTitleRow}>
               {title ? (
@@ -203,6 +203,7 @@ function CategorySheet(props: CategoryProps) {
               })
             )}
           </ScrollView>
+          </GlassCard>
         </Pressable>
       </Pressable>
     </Modal>
@@ -513,8 +514,10 @@ function SingleSheet({
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
         <SwipeDismissSheet style={styles.sheet} onClose={onClose}>
           <Pressable onPress={() => {}}>
-          {/* Faint technical-schematic grid behind everything + a thin accent
-              line at the very top — operations-center briefing aesthetic. */}
+          {/* Glass panel — the weather/Ground shows behind it; GlassCard
+              provides the tint, rim lighting, inner glow and corner brackets. */}
+          <GlassCard style={styles.finaleGlass}>
+          {/* Faint technical-schematic grid behind the content. */}
           <View pointerEvents="none" style={styles.gridPattern}>
             <Svg width="100%" height="100%">
               <Defs>
@@ -526,8 +529,6 @@ function SingleSheet({
             </Svg>
           </View>
           <RadialGlow accentColor={accentColor} />
-          <View pointerEvents="none" style={styles.accentTopLine} />
-          <CornerBrackets styles={styles} />
           {/* HEADER — bracketed signal type (left); id + ADJUST (right). */}
           <View style={styles.hudHeader}>
             <Text style={styles.hudTypeLabel} numberOfLines={1}>
@@ -809,6 +810,7 @@ function SingleSheet({
               </View>
             </>
           )}
+          </GlassCard>
           </Pressable>
         </SwipeDismissSheet>
       </Pressable>
@@ -1134,19 +1136,21 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     modalBackdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      // Lighter dim so Ground's weather shows behind the glass sheet.
+      backgroundColor: 'rgba(0,0,0,0.32)',
       justifyContent: 'flex-end',
     },
     sheet: {
-      backgroundColor: HUD_BG,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      paddingHorizontal: 24,
-      paddingTop: 14,
-      paddingBottom: 44,
-      overflow: 'hidden',
-      borderTopWidth: 1,
-      borderColor: accentColor + '33',
+      // Transparent positioning container — the GlassCard inside is the visible
+      // surface (its 0.72 tint replaces the old solid HUD_BG), so the weather
+      // shows around the floating glass panel.
+      backgroundColor: 'transparent',
+      paddingHorizontal: 8,
+      paddingBottom: 10,
+    },
+    // Glass panel holding the single-signal content (extra bottom room).
+    finaleGlass: {
+      paddingBottom: 28,
     },
     // Faint technical-schematic grid behind the content.
     gridPattern: {
@@ -1663,18 +1667,21 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       letterSpacing: 0.3,
     },
     filterBackdrop: {
-      backgroundColor: 'rgba(0,0,0,0.4)',
+      backgroundColor: 'rgba(0,0,0,0.32)',
     },
     filterSheet: {
-      backgroundColor: HUD_BG,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      paddingTop: 14,
-      paddingBottom: 22,
+      // Transparent positioning container; GlassCard is the visible surface.
+      backgroundColor: 'transparent',
       maxHeight: '70%',
-      overflow: 'hidden',
-      borderTopWidth: 1,
-      borderColor: accentColor + '33',
+      paddingHorizontal: 8,
+      paddingBottom: 10,
+    },
+    // Glass panel for the category list — children manage their own horizontal
+    // padding, so drop GlassCard's default 20 and let it shrink to maxHeight.
+    filterGlass: {
+      padding: 0,
+      paddingTop: 6,
+      flexShrink: 1,
     },
     filterHeader: {
       flexDirection: 'row',

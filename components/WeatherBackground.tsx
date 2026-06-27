@@ -50,7 +50,14 @@ const ASSETS: Record<WeatherKind, ImageSourcePropType> = {
 export function resolveWeatherKind(condition?: string | null, hour: number = new Date().getHours()): WeatherKind {
   const c = (condition || '').toLowerCase();
   const isNight = hour < 6 || hour >= 20;
-  if (isNight && (c.includes('clear') || c.includes('fair'))) return 'clear-night';
+  // Night takes PRIORITY over the condition string: only severe storms break
+  // through; otherwise it's always the calm clear-night sky.
+  if (isNight) {
+    if (c.includes('thunder') || c.includes('storm')) return 'thunderstorm';
+    if (c.includes('hurricane') || c.includes('severe') || c.includes('tornado')) return 'hurricane';
+    return 'clear-night';
+  }
+  // Daytime — resolve by the condition string, then hour-based fallbacks.
   if (c.includes('thunder') || c.includes('storm')) return 'thunderstorm';
   if (c.includes('hurricane') || c.includes('severe') || c.includes('tornado')) return 'hurricane';
   if (c.includes('heavy rain') || c.includes('downpour')) return 'heavy-rain';
