@@ -80,7 +80,7 @@ const INTERSTITIAL_POLL_MS = 3000;
 const PIPELINE_START_KEY = 'onboard_pipeline_started_at';
 const STEP_KEY = 'onboardingStep';
 
-type Phase = 'intro' | 'joining' | 'language' | 'step1' | 'step2' | 'household' | 'work' | 'step3' | 'step4' | 'interstitial';
+type Phase = 'intro' | 'joining' | 'language' | 'step1' | 'step2' | 'household' | 'work' | 'workcal' | 'step3' | 'step4' | 'interstitial';
 
 // Household situation builder option sets (new step after communication prefs).
 const HOUSEHOLD_SITUATIONS = [
@@ -359,7 +359,7 @@ export default function OnboardingScreen() {
         // re-running the onboard pipeline — their household already has data.
         if (
           joinType === 'joined_existing' &&
-          (savedPhase === 'step2' || savedPhase === 'work' || savedPhase === 'step3' || savedPhase === 'step4')
+          (savedPhase === 'step2' || savedPhase === 'work' || savedPhase === 'workcal' || savedPhase === 'step3' || savedPhase === 'step4')
         ) {
           setIsJoining(true);
           setPhase(savedPhase);
@@ -375,6 +375,7 @@ export default function OnboardingScreen() {
           savedPhase === 'step2' ||
           savedPhase === 'household' ||
           savedPhase === 'work' ||
+          savedPhase === 'workcal' ||
           savedPhase === 'step3' ||
           savedPhase === 'step4' ||
           savedPhase === 'interstitial'
@@ -571,6 +572,35 @@ export default function OnboardingScreen() {
         });
       } catch { /* best-effort */ }
     }
+    setPhase('workcal');
+  }
+
+  // Dedicated work-calendar step. Connect opens Google OAuth with the calendar
+  // scope (advance first so the OAuth redirect resumes past this step); skip
+  // records workCalendarSkipped so Ground can surface a gentle nudge later.
+  async function connectWorkCalendar() {
+    try {
+      await fetch(`${API_BASE}/signals?type=preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userId, preferences: { wantsWorkCalendar: true } }),
+      });
+    } catch { /* best-effort */ }
+    setPhase('step3');
+    Linking.openURL(
+      `${API_BASE}/auth?service=work_calendar&userId=${encodeURIComponent(userId || '')}`,
+    ).catch(() => {});
+  }
+
+  async function skipWorkCalendar() {
+    try { await AsyncStorage.setItem('workCalendarSkipped', 'true'); } catch { /* best-effort */ }
+    try {
+      await fetch(`${API_BASE}/signals?type=preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userId, preferences: { workCalendarSkipped: true } }),
+      });
+    } catch { /* best-effort */ }
     setPhase('step3');
   }
 
@@ -780,6 +810,16 @@ export default function OnboardingScreen() {
           />
         ) : null}
 
+        {phase === 'workcal' ? (
+          <StepWorkCalendar
+            onConnect={connectWorkCalendar}
+            onSkip={skipWorkCalendar}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
+          />
+        ) : null}
+
         {phase === 'step3' ? (
           <Step3
             picked={picked}
@@ -806,7 +846,7 @@ export default function OnboardingScreen() {
           <InterstitialBlock pipelineReady={pipelineReady} progress={progress} />
         ) : null}
 
-        {phase === 'step1' || phase === 'step2' || phase === 'household' || phase === 'work' || phase === 'step3' || phase === 'step4' ? (
+        {phase === 'step1' || phase === 'step2' || phase === 'household' || phase === 'work' || phase === 'workcal' || phase === 'step3' || phase === 'step4' ? (
           <StepDots
             s={stepStyles}
             active={
@@ -814,8 +854,9 @@ export default function OnboardingScreen() {
               : phase === 'step2' ? 1
               : phase === 'household' ? 2
               : phase === 'work' ? 3
-              : phase === 'step3' ? 4
-              : 5
+              : phase === 'workcal' ? 4
+              : phase === 'step3' ? 5
+              : 6
             }
           />
         ) : null}
@@ -1642,6 +1683,56 @@ function StepWork({
   );
 }
 
+// ---------- Work calendar (dedicated connect/skip step) ----------
+
+function StepWorkCalendar({
+  onConnect, onSkip, s, theme, accentColor,
+}: {
+  onConnect: () => void;
+  onSkip: () => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
+}) {
+  return (
+    <>
+      <Text style={[s.title, { marginTop: 20 }]}>The Conductor watches for conflicts</Text>
+      <Text style={[s.subtitle, { marginBottom: 12 }]}>
+        When your work calendar is connected, The Conductor can catch:
+      </Text>
+      <View style={{ gap: 10, marginBottom: 22 }}>
+        <Text style={{ color: theme.text, ...TOKENS.type.body, lineHeight: 22 }}>
+          → Service appointments during your meetings
+        </Text>
+        <Text style={{ color: theme.text, ...TOKENS.type.body, lineHeight: 22 }}>
+          → Deliveries during travel days
+        </Text>
+        <Text style={{ color: theme.text, ...TOKENS.type.body, lineHeight: 22 }}>
+          → Childcare gaps on your busiest days
+        </Text>
+      </View>
+      <Text style={{ color: theme.muted, ...TOKENS.type.secondary, lineHeight: 20, marginBottom: 14 }}>
+        Your privacy is protected by design. The Conductor only sees time blocks
+        — never meeting titles, attendees, or content.
+      </Text>
+      <Text style={{ color: theme.text, ...TOKENS.type.body, fontWeight: '600', lineHeight: 22 }}>
+        Your work life stays private. Your household runs better.
+      </Text>
+
+      <TouchableOpacity onPress={onConnect} style={s.continueBtn}>
+        <Text style={s.continueBtnText}>Connect work calendar →</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={onSkip}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{ marginTop: 14, alignItems: 'center' }}>
+        <Text style={{ color: theme.muted, ...TOKENS.type.secondary }}>I&apos;ll do this later</Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
 // ---------- Interstitial: cycling phrases ----------
 //
 // Rebuilt to use the wait time meaningfully:
@@ -1787,10 +1878,10 @@ function InterstitialBlock({
 
 // ---------- Step indicator dots ----------
 
-function StepDots({ active, s }: { active: 0 | 1 | 2 | 3 | 4 | 5; s: StepStyles }) {
+function StepDots({ active, s }: { active: 0 | 1 | 2 | 3 | 4 | 5 | 6; s: StepStyles }) {
   return (
     <View style={s.dotsRow}>
-      {[0, 1, 2, 3, 4, 5].map((i) => {
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => {
         const state = i === active ? 'active' : i < active ? 'done' : 'upcoming';
         return (
           <View

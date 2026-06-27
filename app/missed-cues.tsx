@@ -124,7 +124,7 @@ export default function MissedCuesScreen() {
             <View key={String(s.id)} style={styles.row}>
               <SignalIcon type={s.type} size={20} />
               <View style={styles.rowText}>
-                <Text style={styles.description} numberOfLines={2}>
+                <Text style={styles.description} numberOfLines={4}>
                   {s.description || 'Unknown'}
                 </Text>
                 {!!s.sender && (

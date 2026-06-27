@@ -783,6 +783,7 @@ function RotatingRing({
   expandedRing,
   freshlyAddedIds,
   onSignalPress,
+  onSignalLongPress,
   crewColorMap,
   prominentTypes,
 }: {
@@ -797,6 +798,7 @@ function RotatingRing({
   expandedRing: RingKey | null;
   freshlyAddedIds: Set<string>;
   onSignalPress: (s: Signal) => void;
+  onSignalLongPress?: (s: Signal) => void;
   crewColorMap: Record<string, string>;
   prominentTypes: Set<string>;
 }) {
@@ -981,6 +983,7 @@ function RotatingRing({
             focused={isFocused}
             freshlyAdded={freshlyAddedIds.has(String(s.id))}
             onPress={() => onSignalPress(s)}
+            onLongPress={() => onSignalLongPress?.(s)}
             crewOverride={crewOverride}
             isAttributed={!!crewMemberId}
             clusterCount={isClusterSignal(s) ? s.clusterCount : undefined}
@@ -1004,6 +1007,7 @@ function SignalDot({
   focused,
   freshlyAdded,
   onPress,
+  onLongPress,
   crewOverride,
   isAttributed,
   clusterCount,
@@ -1022,6 +1026,7 @@ function SignalDot({
   focused?: boolean;
   freshlyAdded?: boolean;
   onPress: () => void;
+  onLongPress?: () => void;
   crewOverride?: string;
   isAttributed?: boolean;
   clusterCount?: number;
@@ -1103,6 +1108,8 @@ function SignalDot({
     // expands they SNAP to their time-slot positions instantly — no easing.
     <TouchableOpacity
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={300}
       activeOpacity={0.7}
       style={[styles.signalHit, { left: x - 18, top: y - 18, opacity: baseOpacity }]}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
@@ -1911,6 +1918,14 @@ export default function HoverScreen() {
     }
   };
 
+  // Long-press a radar dot → surface its full description in a tooltip (the dot
+  // itself only shows a type icon).
+  const [dotTip, setDotTip] = useState<string | null>(null);
+  const handleDotLongPress = (s: Signal) => {
+    const d = (s.description || '').trim();
+    if (d) setDotTip(d);
+  };
+
   // Lazily resolve the trip theme ("Paris trip — June 12-23") for the
   // expanded cluster header. The member list renders instantly from the
   // local cluster; this just upgrades the title when the thread record
@@ -2557,6 +2572,7 @@ export default function HoverScreen() {
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={handleDotPress}
+          onSignalLongPress={handleDotLongPress}
           crewColorMap={crewColorMap}
           prominentTypes={prominentTypes}
         />
@@ -2572,6 +2588,7 @@ export default function HoverScreen() {
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={handleDotPress}
+          onSignalLongPress={handleDotLongPress}
           crewColorMap={crewColorMap}
           prominentTypes={prominentTypes}
         />
@@ -2587,6 +2604,7 @@ export default function HoverScreen() {
           expandedRing={expandedRing}
           freshlyAddedIds={freshlyAddedIds}
           onSignalPress={handleDotPress}
+          onSignalLongPress={handleDotLongPress}
           crewColorMap={crewColorMap}
           prominentTypes={prominentTypes}
         />
@@ -2626,6 +2644,30 @@ export default function HoverScreen() {
         {ripples.map((r) => (
           <Ripple key={r.id} cx={cx} cy={cy} color={r.color} delay={r.delay} />
         ))}
+
+        {/* Long-press tooltip — the held radar dot's full description (the dot
+            itself only shows a type icon). Tap anywhere to dismiss. */}
+        {dotTip ? (
+          <Pressable
+            style={{ ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+            onPress={() => setDotTip(null)}>
+            <View
+              style={{
+                maxWidth: '80%',
+                backgroundColor: 'rgba(8,12,20,0.92)',
+                borderColor: accentColor + '66',
+                borderWidth: 1,
+                borderRadius: 14,
+                paddingVertical: 14,
+                paddingHorizontal: 18,
+              }}>
+              <Text style={{ color: '#fff', fontSize: 15, lineHeight: 21 }}>{dotTip}</Text>
+              <Text style={{ color: theme.muted, fontSize: 10, marginTop: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
+                Tap to dismiss
+              </Text>
+            </View>
+          </Pressable>
+        ) : null}
 
         <CollapsibleNavBar
           bottomInset={insets.bottom}

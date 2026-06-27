@@ -325,7 +325,7 @@ function WorkCalendarNudge() {
           activeOpacity={0.6}
           onPress={() => router.push('/(tabs)/settings?hub=score' as never)}>
           <Text style={{ color: accentColor, fontSize: 13, letterSpacing: 0.2, lineHeight: 18 }}>
-            Connect your work calendar → conflicts caught before they happen
+            Connect work calendar to catch conflicts →
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -1021,6 +1021,10 @@ export default function TakeoffScreen() {
   // unobtrusive InfoHint "i" affordances next to The Pulse and the brief.
   const [brief, setBrief] = useState('');
   const [segments, setSegments] = useState<BriefSegment[]>([]);
+  // signalId -> full description, retained from the signals fetch so brief chips
+  // can surface the actual signal detail (first 45 chars) rather than just the
+  // backend's short phrase.
+  const [signalDescriptions, setSignalDescriptions] = useState<Record<string, string>>({});
   // Brief Customize prefs (Settings → The Baton → Customize), applied to the
   // rendered brief: hidden types are filtered out, the rest re-ranked.
   const [signalVisibility, setSignalVisibility] = useState<Record<string, boolean>>({});
@@ -1335,6 +1339,12 @@ export default function TakeoffScreen() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!Array.isArray(data.signals)) throw new Error('Invalid response: missing signals array');
+      // Retain each signal's description by id so brief chips can show real detail.
+      const descMap: Record<string, string> = {};
+      for (const s of data.signals) {
+        if (s && s.id != null && typeof s.description === 'string') descMap[String(s.id)] = s.description;
+      }
+      setSignalDescriptions(descMap);
       setConnected(true);
       generateBrief();
     } catch {
@@ -1884,6 +1894,13 @@ export default function TakeoffScreen() {
                   if (seg.type === 'signal') {
                     const color = (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
                     const acted = quickActed[String(seg.signalId)];
+                    // Prefer the real signal description (first 45 chars) over the
+                    // backend's short chip phrase, when we have it.
+                    const fullDesc = signalDescriptions[String(seg.signalId)];
+                    const chipText =
+                      fullDesc && fullDesc.trim().length > 0
+                        ? fullDesc.trim().slice(0, 45)
+                        : seg.content;
                     // Optimistic chip styling per applied action.
                     const chipExtra: any = {};
                     if (acted === 'done') chipExtra.textDecorationLine = 'line-through';
@@ -1905,7 +1922,7 @@ export default function TakeoffScreen() {
                           textDecorationStyle: 'solid',
                           ...chipExtra,
                         }}>
-                        {seg.content}
+                        {chipText}
                       </Text>
                     );
                   }
