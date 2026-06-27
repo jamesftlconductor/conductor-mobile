@@ -1,64 +1,83 @@
 // THE HOME MOVEMENT — swipe UP from The Conductor. "your house, maintained".
 import { useEffect, useState } from 'react';
-import { useUserId } from '@/hooks/useUserId';
-import { categoryForType } from '@/utils/signalCategories';
+import { Text, View, StyleSheet } from 'react-native';
+import { useUserId, useHouseholdId } from '@/hooks/useUserId';
+import { useTheme } from '@/app/theme';
 import {
   MovementScreen,
   MovementSection,
   SignalRow,
   EmptyLine,
-  MovementSignal,
 } from '@/components/MovementScreen';
-
-const API_BASE = 'https://conductor-ivory.vercel.app/api';
+import { fetchMovement, MovementApiResponse } from '@/utils/movementApi';
 
 export default function MovementHomeScreen() {
   const userId = useUserId();
-  const [signals, setSignals] = useState<MovementSignal[]>([]);
+  const householdId = useHouseholdId();
+  const { theme, accentColor } = useTheme();
+  const [data, setData] = useState<MovementApiResponse>({});
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/signals?userId=${userId}`);
-        const data = await res.json();
-        if (cancelled) return;
-        const active = (data.signals || []).filter(
-          (s: MovementSignal) => !s.state || s.state === 'incoming' || s.state === 'active',
-        );
-        setSignals(active);
-      } catch {
-        /* best-effort */
-      }
+      const res = await fetchMovement('home', householdId, userId);
+      if (!cancelled) setData(res);
     })();
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, householdId]);
 
-  const homeSignals = signals.filter((s) =>
-    ['delivery', 'home', 'deadline'].includes(categoryForType(s.type)),
-  );
-  const services = signals.filter((s) => categoryForType(s.type) === 'service');
+  const signals = data.activeSignals ?? [];
+  const renewals = data.vaultRenewals ?? [];
+  const inventory = data.inventory ?? [];
 
   return (
     <MovementScreen movementKey="home">
-      <MovementSection title="Active Home Signals">
-        {homeSignals.length ? (
-          homeSignals.map((s) => <SignalRow key={String(s.id)} signal={s} />)
+      <MovementSection title="Active Signals">
+        {signals.length ? (
+          signals.map((s) => <SignalRow key={String(s.id)} signal={s} />)
         ) : (
           <EmptyLine text="Your house is quiet today." />
         )}
       </MovementSection>
 
-      <MovementSection title="Service & Maintenance">
-        {services.length ? (
-          services.map((s) => <SignalRow key={String(s.id)} signal={s} />)
+      <MovementSection title="Upcoming Renewals">
+        {renewals.length ? (
+          renewals.map((r, i) => (
+            <View key={i} style={styles.line}>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+                {r.name}
+              </Text>
+              {!!r.date && <Text style={[styles.meta, { color: accentColor }]}>{r.date}</Text>}
+            </View>
+          ))
         ) : (
-          <EmptyLine text="No upcoming service appointments." />
+          <EmptyLine text="No renewals or expirations on the horizon." />
+        )}
+      </MovementSection>
+
+      <MovementSection title="Home Inventory">
+        {inventory.length ? (
+          inventory.map((it, i) => (
+            <View key={i} style={styles.line}>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+                {it.name}
+              </Text>
+              {!!it.note && <Text style={[styles.meta, { color: theme.muted }]}>{it.note}</Text>}
+            </View>
+          ))
+        ) : (
+          <EmptyLine text="Nothing in the inventory needs attention." />
         )}
       </MovementSection>
     </MovementScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, gap: 12 },
+  name: { fontSize: 14, flex: 1 },
+  meta: { fontSize: 12, letterSpacing: 0.3 },
+});

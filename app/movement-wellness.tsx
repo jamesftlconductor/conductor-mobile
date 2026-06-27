@@ -2,72 +2,59 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { useUserId } from '@/hooks/useUserId';
+import { useUserId, useHouseholdId } from '@/hooks/useUserId';
 import { useTheme } from '@/app/theme';
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
 import {
   MovementScreen,
   MovementSection,
-  SignalRow,
   EmptyLine,
   ConnectPrompt,
-  MovementSignal,
 } from '@/components/MovementScreen';
-
-const API_BASE = 'https://conductor-ivory.vercel.app/api';
+import { fetchMovement, MovementApiResponse } from '@/utils/movementApi';
 
 export default function MovementWellnessScreen() {
   const userId = useUserId();
+  const householdId = useHouseholdId();
   const { theme, accentColor } = useTheme();
-  const [snap, setSnap] = useState<HealthSnapshot | null>(null);
-  const [signals, setSignals] = useState<MovementSignal[]>([]);
+  const [data, setData] = useState<MovementApiResponse>({});
+  // On-device HealthKit fallback so we don't regress device vitals when the
+  // backend hasn't synced health data yet.
+  const [device, setDevice] = useState<HealthSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const res = await fetchMovement('wellness', householdId, userId);
+      if (!cancelled) setData(res);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, householdId]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const s = await fetchHealthSnapshot().catch(() => null);
-      if (!cancelled) setSnap(s);
+      if (!cancelled) setDevice(s);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/signals?userId=${userId}`);
-        const data = await res.json();
-        if (cancelled) return;
-        setSignals(
-          (data.signals || []).filter(
-            (sig: MovementSignal) => !sig.state || sig.state === 'incoming' || sig.state === 'active',
-          ),
-        );
-      } catch {
-        /* best-effort */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  const hasHealth =
-    !!snap &&
-    (snap.sleep.duration != null ||
-      snap.hrv.current != null ||
-      snap.restingHR != null ||
-      snap.steps > 0);
-
-  const medical = signals.filter((s) =>
-    /medical|appointment|doctor|prescription|medication|refill|pharmacy|dentist|clinic/i.test(
-      `${s.type || ''} ${s.description || ''}`,
-    ),
-  );
-  const meds = medical.filter((s) => /medication|refill|prescription|pharmacy/i.test(`${s.description || ''}`));
+  const apiHealth = data.healthSnapshot ?? null;
+  const medical = data.medicalAppointments ?? [];
+  const meds = data.medicationReminders ?? [];
+  const deviceHasHealth =
+    !!device &&
+    (device.sleep.duration != null ||
+      device.hrv.current != null ||
+      device.restingHR != null ||
+      device.steps > 0);
+  const hasHealth = !!apiHealth || deviceHasHealth;
 
   const vital = (label: string, value: string | null) =>
     value ? (
@@ -87,24 +74,34 @@ export default function MovementWellnessScreen() {
       ) : (
         <MovementSection title="Vitals">
           <View style={styles.vitalsRow}>
-            {vital('SLEEP', snap?.sleep.duration != null ? `${snap.sleep.duration.toFixed(1)}h` : null)}
-            {vital('HRV', snap?.hrv.current != null ? `${Math.round(snap.hrv.current)}ms` : null)}
-            {vital('RESTING HR', snap?.restingHR != null ? `${Math.round(snap.restingHR)}` : null)}
-            {vital('STEPS', snap && snap.steps > 0 ? `${snap.steps.toLocaleString()}` : null)}
+            {apiHealth ? (
+              <>
+                {vital('HRV', apiHealth.hrv != null ? `${Math.round(apiHealth.hrv)}ms` : null)}
+                {vital('SLEEP', apiHealth.sleepHours != null ? `${apiHealth.sleepHours.toFixed(1)}h` : null)}
+                {vital('READINESS', apiHealth.readiness != null ? `${Math.round(apiHealth.readiness)}` : null)}
+              </>
+            ) : (
+              <>
+                {vital('SLEEP', device?.sleep.duration != null ? `${device.sleep.duration.toFixed(1)}h` : null)}
+                {vital('HRV', device?.hrv.current != null ? `${Math.round(device.hrv.current)}ms` : null)}
+                {vital('RESTING HR', device?.restingHR != null ? `${Math.round(device.restingHR)}` : null)}
+                {vital('STEPS', device && device.steps > 0 ? `${device.steps.toLocaleString()}` : null)}
+              </>
+            )}
           </View>
-          {snap?.hrv.current != null && snap?.hrv.baseline7d != null ? (
-            <Text style={[styles.obs, { color: theme.muted }]}>
-              {snap.hrv.current >= snap.hrv.baseline7d
-                ? 'HRV is at or above your 7-day baseline — recovery looks good.'
-                : 'HRV is below your 7-day baseline — consider an easier day.'}
-            </Text>
-          ) : null}
         </MovementSection>
       )}
 
       <MovementSection title="Medical">
         {medical.length ? (
-          medical.map((s) => <SignalRow key={String(s.id)} signal={s} />)
+          medical.map((a, i) => (
+            <View key={i} style={styles.line}>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+                {a.title || a.description || 'Appointment'}
+              </Text>
+              {!!a.date && <Text style={[styles.meta, { color: accentColor }]}>{a.date}</Text>}
+            </View>
+          ))
         ) : (
           <EmptyLine text="No medical appointments upcoming." />
         )}
@@ -112,7 +109,14 @@ export default function MovementWellnessScreen() {
 
       <MovementSection title="Medications">
         {meds.length ? (
-          meds.map((s) => <SignalRow key={String(s.id)} signal={s} />)
+          meds.map((m, i) => (
+            <View key={i} style={styles.line}>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+                {m.name}
+              </Text>
+              {!!m.schedule && <Text style={[styles.meta, { color: theme.muted }]}>{m.schedule}</Text>}
+            </View>
+          ))
         ) : (
           <EmptyLine text="No medication reminders." />
         )}
@@ -126,5 +130,7 @@ const styles = StyleSheet.create({
   vital: { minWidth: 70 },
   vitalVal: { fontSize: 22, fontWeight: '700' },
   vitalLabel: { fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 },
-  obs: { fontSize: 13, lineHeight: 19, marginTop: 14, fontStyle: 'italic' },
+  line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, gap: 12 },
+  name: { fontSize: 14, flex: 1 },
+  meta: { fontSize: 12, letterSpacing: 0.3 },
 });

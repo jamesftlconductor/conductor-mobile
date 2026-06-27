@@ -1,80 +1,84 @@
 // THE WORK MOVEMENT — swipe RIGHT from The Conductor. "your schedule, protected".
 import { useEffect, useState } from 'react';
+import { Text, View, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
-import { useUserId } from '@/hooks/useUserId';
-import { categoryForType } from '@/utils/signalCategories';
+import { useUserId, useHouseholdId } from '@/hooks/useUserId';
+import { useTheme } from '@/app/theme';
 import {
   MovementScreen,
   MovementSection,
   SignalRow,
   EmptyLine,
   ConnectPrompt,
-  MovementSignal,
 } from '@/components/MovementScreen';
-
-const API_BASE = 'https://conductor-ivory.vercel.app/api';
+import { fetchMovement, MovementApiResponse } from '@/utils/movementApi';
 
 export default function MovementWorkScreen() {
   const userId = useUserId();
-  const [signals, setSignals] = useState<MovementSignal[]>([]);
-  const [workCalName, setWorkCalName] = useState<string>('');
+  const householdId = useHouseholdId();
+  const { theme, accentColor } = useTheme();
+  const [data, setData] = useState<MovementApiResponse>({});
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     (async () => {
-      try {
-        const [sigRes, prefRes] = await Promise.all([
-          fetch(`${API_BASE}/signals?userId=${userId}`),
-          fetch(`${API_BASE}/signals?type=preferences&userId=${userId}`),
-        ]);
-        const sigData = await sigRes.json();
-        const prefData = await prefRes.json();
-        if (cancelled) return;
-        setSignals(
-          (sigData.signals || []).filter(
-            (s: MovementSignal) => !s.state || s.state === 'incoming' || s.state === 'active',
-          ),
-        );
-        setWorkCalName(String(prefData?.preferences?.workCalendarName || '').trim());
-      } catch {
-        /* best-effort */
-      }
+      const res = await fetchMovement('work', householdId, userId);
+      if (!cancelled) setData(res);
     })();
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, householdId]);
 
-  const connected = workCalName.length > 0;
-  const deadlines = signals.filter((s) => categoryForType(s.type) === 'deadline');
-  const financial = signals.filter((s) => categoryForType(s.type) === 'financial');
-  const load = deadlines.length + financial.length;
-  const loadLabel =
-    load === 0 ? 'Light' : load <= 3 ? 'Moderate' : load <= 6 ? 'Busy' : 'Heavy';
+  const blocks = data.workBlocksToday ?? [];
+  const conflicts = data.conflicts ?? [];
+  const financial = data.financialSignals ?? [];
+  const connected = data.workCalendarConnected ?? blocks.length > 0;
+
+  // Not connected and no schedule → the connection prompt IS the screen.
+  if (!connected && blocks.length === 0) {
+    return (
+      <MovementScreen movementKey="work">
+        <MovementSection title="Activate The Work Movement">
+          <EmptyLine text="The Conductor protects your schedule by watching your work calendar for conflicts — service calls during meetings, deliveries on travel days." />
+          <ConnectPrompt
+            text="Connect your work calendar to activate this movement →"
+            onPress={() => router.push('/(tabs)/settings?hub=score' as never)}
+          />
+        </MovementSection>
+      </MovementScreen>
+    );
+  }
 
   return (
     <MovementScreen movementKey="work">
-      {!connected ? (
-        <ConnectPrompt
-          text="Connect your work calendar to activate this movement →"
-          onPress={() => router.push('/(tabs)/settings?hub=score' as never)}
-        />
-      ) : (
-        <MovementSection title="Today's Calendar">
-          <EmptyLine text={`Connected to ${workCalName}.`} />
+      {conflicts.length > 0 && (
+        <MovementSection title="Conflicts">
+          {conflicts.map((c, i) => (
+            <View key={i} style={[styles.conflict, { borderColor: accentColor + '99' }]}>
+              <Text style={[styles.conflictText, { color: theme.text }]}>{c.text}</Text>
+            </View>
+          ))}
         </MovementSection>
       )}
 
-      <MovementSection title="Your Week">
-        <EmptyLine text={`${loadLabel} — ${load} work-related signal${load === 1 ? '' : 's'} this week.`} />
-      </MovementSection>
-
-      <MovementSection title="Deadlines">
-        {deadlines.length ? (
-          deadlines.map((s) => <SignalRow key={String(s.id)} signal={s} />)
+      <MovementSection title="Today's Schedule">
+        {blocks.length ? (
+          blocks.map((b, i) => (
+            <View key={i} style={styles.line}>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+                {b.title}
+              </Text>
+              {(b.start || b.end) && (
+                <Text style={[styles.meta, { color: accentColor }]}>
+                  {[b.start, b.end].filter(Boolean).join('–')}
+                </Text>
+              )}
+            </View>
+          ))
         ) : (
-          <EmptyLine text="No work deadlines flagged." />
+          <EmptyLine text="Nothing on the calendar today." />
         )}
       </MovementSection>
 
@@ -88,3 +92,11 @@ export default function MovementWorkScreen() {
     </MovementScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, gap: 12 },
+  name: { fontSize: 14, flex: 1 },
+  meta: { fontSize: 12, letterSpacing: 0.3 },
+  conflict: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8 },
+  conflictText: { fontSize: 14, lineHeight: 19 },
+});

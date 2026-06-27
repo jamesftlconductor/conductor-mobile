@@ -1120,6 +1120,11 @@ export default function TakeoffScreen() {
   const [pulse, setPulse] = useState<string | null>(null);
   const [pulseFlags, setPulseFlags] = useState<string[]>([]);
   const [pulseData, setPulseData] = useState<PulseData | null>(null);
+  // Cross-movement insights from the brief response; the highest-urgency one is
+  // shown below The Pulse.
+  const [crossInsights, setCrossInsights] = useState<
+    { text: string; urgency?: number; movements?: string[] }[]
+  >([]);
   // Household interview — one profile-building question surfaced under The
   // Pulse when the radar is thin (brief.householdInterview).
   const [householdInterview, setHouseholdInterview] =
@@ -1618,6 +1623,7 @@ export default function TakeoffScreen() {
         setUserName(data.user);
       }
       setBrief(data.brief);
+      setCrossInsights(Array.isArray(data.crossMovementInsights) ? data.crossMovementInsights : []);
       if (Array.isArray(data.segments) && data.segments.length > 0) {
         setSegments(data.segments);
       } else {
@@ -1755,6 +1761,7 @@ export default function TakeoffScreen() {
     } catch {
       const fallback = "Nothing to report today. You're clear.";
       setBrief(fallback);
+      setCrossInsights([]);
       setSegments([{ type: 'text', content: fallback }]);
       setTransparency(null);
     } finally {
@@ -1963,7 +1970,20 @@ export default function TakeoffScreen() {
     });
     let insight: { text: string; colorA: string; colorB: string } | null = null;
     const active = Array.from(activeMovements);
-    if (active.length >= 2) {
+    if (crossInsights.length > 0) {
+      // Data-driven: the highest-urgency insight from the brief response. Its two
+      // movements drive the split-border colors.
+      const top = [...crossInsights].sort((x, y) => (y.urgency ?? 0) - (x.urgency ?? 0))[0];
+      const mvs = (top.movements || [])
+        .map((k) => MOVEMENTS.find((m) => m.key === k))
+        .filter((m): m is (typeof MOVEMENTS)[number] => !!m);
+      insight = {
+        text: top.text,
+        colorA: mvs[0]?.color ?? accentColor,
+        colorB: mvs[1]?.color ?? mvs[0]?.color ?? accentColor,
+      };
+    } else if (active.length >= 2) {
+      // Fallback heuristic when the backend sends no insights.
       const a = MOVEMENTS.find((m) => m.key === active[0])!;
       const b = MOVEMENTS.find((m) => m.key === active[1])!;
       insight = {
@@ -1973,7 +1993,7 @@ export default function TakeoffScreen() {
       };
     }
     return { chordStates: states, crossInsight: insight };
-  }, [segments]);
+  }, [segments, crossInsights, accentColor]);
   // Cache the latest condition so the Settings backdrop can mirror it.
   useEffect(() => {
     if (typeof weatherCondition === 'string' && weatherCondition) {
