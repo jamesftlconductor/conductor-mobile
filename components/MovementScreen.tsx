@@ -73,7 +73,10 @@ export function MovementScreen({
             paddingTop: insets.top + 8,
             paddingBottom: insets.bottom + 8,
           }}>
-          <GlassCard style={{ flex: 1, padding: 0 }}>
+          <GlassCard
+            style={{ flex: 1, padding: 0 }}
+            tint={movement.glassTint}
+            bracketColor={movement.bracketColor ?? accentColor}>
             <View style={styles.inner}>
               <View style={styles.headerRow}>
                 <TouchableOpacity

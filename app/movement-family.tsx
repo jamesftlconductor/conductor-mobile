@@ -1,5 +1,5 @@
 // THE FAMILY MOVEMENT — swipe DOWN from The Conductor.
-// "the people you come home to".
+// "the people in your life" — all crew (partner, kids, extended, pets).
 import { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useUserId } from '@/hooks/useUserId';
@@ -42,9 +42,12 @@ export default function MovementFamilyScreen() {
         const crewData = await crewRes.json();
         const sigData = await sigRes.json();
         if (cancelled) return;
+        // All household crew — partner, kids, extended family, pets — but not
+        // synced Google Contacts (same memberType allowlist the radar uses).
+        const ALLOWED = ['member', 'extended', 'child', 'pet'];
         setCrew(
           (Array.isArray(crewData?.crew) ? crewData.crew : []).filter(
-            (m: CrewMember) => m && m.name,
+            (m: CrewMember) => m && m.name && ALLOWED.includes(m.memberType || ''),
           ),
         );
         setSignals(
@@ -102,8 +105,25 @@ export default function MovementFamilyScreen() {
                     )}
                   </View>
                 </View>
-                {sigs.length > 0 &&
-                  sigs.map((s) => <SignalRow key={String(s.id)} signal={s} />)}
+                {(m.birthday || m.anniversary) && (
+                  <View style={styles.occasions}>
+                    {m.birthday ? (
+                      <Text style={[styles.occasion, { color: accentColor }]} numberOfLines={1}>
+                        🎂  Birthday — {m.birthday}
+                      </Text>
+                    ) : null}
+                    {m.anniversary ? (
+                      <Text style={[styles.occasion, { color: accentColor }]} numberOfLines={1}>
+                        💍  Anniversary — {m.anniversary}
+                      </Text>
+                    ) : null}
+                  </View>
+                )}
+                {sigs.length > 0 ? (
+                  sigs.map((s) => <SignalRow key={String(s.id)} signal={s} />)
+                ) : (
+                  <Text style={[styles.quiet, { color: theme.muted }]}>All quiet — nothing pending.</Text>
+                )}
               </View>
             );
           })
@@ -135,5 +155,8 @@ const styles = StyleSheet.create({
   avatarFallback: { borderWidth: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1a1f2a' },
   name: { fontSize: 15, fontWeight: '600' },
   sub: { fontSize: 11, marginTop: 1 },
+  occasions: { marginTop: 6, marginLeft: 44, gap: 2 },
+  occasion: { fontSize: 12, letterSpacing: 0.2 },
+  quiet: { fontSize: 12, fontStyle: 'italic', marginTop: 6, marginLeft: 44 },
   dateLine: { fontSize: 13, lineHeight: 20, paddingVertical: 3 },
 });

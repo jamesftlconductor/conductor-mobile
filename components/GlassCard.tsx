@@ -14,6 +14,7 @@ export function GlassCard({
   children,
   style,
   tint,
+  bracketColor,
   topBracketsOnly = false,
 }: {
   children: ReactNode;
@@ -21,11 +22,15 @@ export function GlassCard({
   // Override the dark glass tint (default rgba(8,12,20,0.72)). The chat panel
   // passes a slightly more opaque 0.82.
   tint?: string;
+  // Override the corner-bracket color (used full-strength as given). Default is
+  // the theme accent at 0.35 (59 hex). Movement screens pass their own accent.
+  bracketColor?: string;
   // Render corner brackets only at the top two corners — for a bottom-anchored
   // panel whose lower corners sit at the screen edge.
   topBracketsOnly?: boolean;
 }) {
   const { accentColor } = useTheme();
+  const bracket = bracketColor ?? accentColor + '59';
   return (
     <View style={[styles.card, tint ? { backgroundColor: tint } : null, style]}>
       {children}
@@ -57,13 +62,13 @@ export function GlassCard({
         </View>
         {/* Inner accent glow — faint energized rim just inside the border. */}
         <View style={[styles.innerGlow, { borderColor: accentColor + '0a' }]} />
-        {/* Corner bracket clamps — accent at 0.35 (59 hex), 1.5px, 16px arms. */}
-        <View style={[styles.bracket, styles.bracketTL, { borderColor: accentColor + '59' }]} />
-        <View style={[styles.bracket, styles.bracketTR, { borderColor: accentColor + '59' }]} />
+        {/* Corner bracket clamps — 1.5px, 16px arms; color per movement/accent. */}
+        <View style={[styles.bracket, styles.bracketTL, { borderColor: bracket }]} />
+        <View style={[styles.bracket, styles.bracketTR, { borderColor: bracket }]} />
         {!topBracketsOnly ? (
           <>
-            <View style={[styles.bracket, styles.bracketBL, { borderColor: accentColor + '59' }]} />
-            <View style={[styles.bracket, styles.bracketBR, { borderColor: accentColor + '59' }]} />
+            <View style={[styles.bracket, styles.bracketBL, { borderColor: bracket }]} />
+            <View style={[styles.bracket, styles.bracketBR, { borderColor: bracket }]} />
           </>
         ) : null}
       </View>

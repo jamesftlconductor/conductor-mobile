@@ -20,6 +20,10 @@ export type Movement = {
   arrow: string;
   /** AsyncStorage key flipped true once the user has swiped this way. */
   discoveredKey: string;
+  /** Per-movement GlassCard tint. */
+  glassTint: string;
+  /** Per-movement corner-bracket color. Omitted = the theme accent. */
+  bracketColor?: string;
 };
 
 export const MOVEMENTS: Movement[] = [
@@ -33,6 +37,8 @@ export const MOVEMENTS: Movement[] = [
     direction: 'up',
     arrow: '↑',
     discoveredKey: 'movement:home:discovered',
+    glassTint: 'rgba(20, 14, 6, 0.72)', // warm amber
+    bracketColor: '#c9a227', // warm brass
   },
   {
     key: 'work',
@@ -44,17 +50,21 @@ export const MOVEMENTS: Movement[] = [
     direction: 'right',
     arrow: '→',
     discoveredKey: 'movement:work:discovered',
+    glassTint: 'rgba(6, 10, 20, 0.72)', // cool blue-black
+    // bracketColor omitted → theme accent (precise, professional)
   },
   {
     key: 'family',
     emoji: '👨‍👩‍👧',
     label: 'The Family Movement',
     title: 'THE FAMILY MOVEMENT',
-    subtitle: 'the people you come home to',
+    subtitle: 'the people in your life',
     route: '/movement-family',
     direction: 'down',
     arrow: '↓',
     discoveredKey: 'movement:family:discovered',
+    glassTint: 'rgba(20, 10, 10, 0.72)', // warm rose-black
+    bracketColor: 'rgba(200, 100, 80, 0.6)', // warm rose accent
   },
   {
     key: 'wellness',
@@ -66,6 +76,8 @@ export const MOVEMENTS: Movement[] = [
     direction: 'left',
     arrow: '←',
     discoveredKey: 'movement:wellness:discovered',
+    glassTint: 'rgba(6, 14, 10, 0.72)', // deep green-black
+    bracketColor: 'rgba(80, 160, 100, 0.6)', // calm green accent
   },
 ];
 
