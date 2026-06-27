@@ -584,6 +584,15 @@ export default function RootLayout() {
                   authed group to keep it out of the fresh-install (!isAuthed)
                   candidate set, where its tabs-redirect would fight the guard. */}
               <Stack.Screen name="onboard-first-intro" options={{ headerShown: false, gestureEnabled: false }} />
+              {/* Movement screens — slide in from the swipe direction that
+                  reaches them (up→home, right→work, down→family, left→wellness)
+                  and slide back the opposite way on return. */}
+              <Stack.Screen name="movement-home" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="movement-work" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }} />
+              {/* No 'slide_from_top' preset exists in react-native-screens, so
+                  the down-entered Family movement uses a clean fade. */}
+              <Stack.Screen name="movement-family" options={{ headerShown: false, gestureEnabled: true, animation: 'fade' }} />
+              <Stack.Screen name="movement-wellness" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_left' }} />
             </Stack.Protected>
           </Stack>
           )}

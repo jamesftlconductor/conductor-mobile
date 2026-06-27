@@ -1423,16 +1423,6 @@ function BriefCustomizeBlock() {
 
 // Household pillars — the ranked life domains the Conductor leads with.
 // Mirrors the onboarding pillar step. Persists to AsyncStorage + the
-// householdPillars preference (nested under `preferences` to match the
-// ?type=preferences handler, which shallow-merges that object).
-const PILLAR_CARDS: { key: string; emoji: string; label: string; desc: string }[] = [
-  { key: 'house', emoji: '🏠', label: 'House', desc: 'home, maintenance, deliveries, documents' },
-  { key: 'work', emoji: '💼', label: 'Work', desc: 'calendar, meetings, deadlines, conflicts' },
-  { key: 'kids', emoji: '👶', label: 'Kids', desc: 'school, activities, appointments, schedules' },
-  { key: 'health', emoji: '❤️', label: 'Health', desc: 'sleep, fitness, medical, wellness' },
-];
-const PILLAR_KEYS = PILLAR_CARDS.map((p) => p.key);
-
 function PrioritiesBlock() {
   const { theme, accentColor } = useTheme();
   const userId = useUserId();
