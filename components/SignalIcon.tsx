@@ -44,7 +44,11 @@ export function SignalIcon({
 }) {
   const { accentColor } = useTheme();
   const tint = color ?? accentColor;
-  const Icon = CATEGORY_ICON[categoryForType(type)] ?? CircleDot;
+  // Accept either a raw signal type (mapped via categoryForType) OR a category
+  // key directly (e.g. a Customize picker iterating the 8 keys like 'home',
+  // which isn't itself one of its member raw types).
+  const key = type && CATEGORY_ICON[type] ? type : categoryForType(type);
+  const Icon = CATEGORY_ICON[key] ?? CircleDot;
   return (
     <View
       style={

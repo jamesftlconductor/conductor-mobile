@@ -19,6 +19,7 @@ import { HelpButton } from '@/components/HelpButton';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SignalFilterPills } from '@/components/SignalFilterPills';
 import { TYPE_META } from '@/components/signalTypes';
+import { SignalIcon } from '@/components/SignalIcon';
 import { PulsingCMark } from '@/components/PulsingCMark';
 import { applyFilter as applyMeCrewHouse, useSignalFilter } from '@/hooks/useSignalFilter';
 import { useUserId } from '@/hooks/useUserId';
@@ -210,7 +211,9 @@ function JournalScreen() {
                   styles.row,
                   isCaught && styles.rowCaught,
                 ]}>
-                <Text style={styles.emoji}>{meta?.emoji || '•'}</Text>
+                <View style={{ width: 22, alignItems: 'center' }}>
+                  <SignalIcon type={e.type} size={16} />
+                </View>
                 <View style={styles.rowMain}>
                   <Text style={styles.desc} numberOfLines={2}>
                     {e.description || 'Signal'}

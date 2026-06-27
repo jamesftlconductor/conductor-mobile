@@ -12,6 +12,7 @@ import { HelpButton } from '@/components/HelpButton';
 import { PulsingCMark } from '@/components/PulsingCMark';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TYPE_META } from '@/components/signalTypes';
+import { SignalIcon } from '@/components/SignalIcon';
 import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
 
@@ -92,7 +93,7 @@ function TypeRow({
   return (
     <View style={styles.typeRow}>
       <View style={styles.typeLabelGroup}>
-        {meta ? <Text style={styles.typeEmoji}>{meta.emoji}</Text> : null}
+        <SignalIcon type={type} size={14} />
         <Text style={styles.typeLabel}>{type}</Text>
       </View>
       <View style={styles.typeBarOuter}>

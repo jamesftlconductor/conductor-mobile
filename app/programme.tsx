@@ -14,6 +14,7 @@ import { PulsingCMark } from '@/components/PulsingCMark';
 import { SignalFilterPills } from '@/components/SignalFilterPills';
 import { applyFilter as applyMeCrewHouse, useSignalFilter } from '@/hooks/useSignalFilter';
 import { metaFor, type Signal } from '@/components/signalTypes';
+import { SignalIcon } from '@/components/SignalIcon';
 import { useTheme } from './theme';
 import { useUserId } from '@/hooks/useUserId';
 
@@ -63,6 +64,7 @@ type ProgrammeItem = {
   sortKey: number;        // unix ms; for stable within-day ordering
   emoji: string;
   emojiColor?: string;    // brass / brass-tinted for some kinds
+  type?: string;          // signal type → drives the SignalIcon (signals only)
   description: string;
   ownerTag?: string;      // "[Sarah's]" when not yours; undefined otherwise
   timeLabel?: string;     // "9:30 AM" / "today" / etc.
@@ -172,6 +174,7 @@ function buildItems(args: {
       sortKey: ms,
       emoji: meta.emoji,
       emojiColor: meta.color,
+      type: s.type,
       description: s.description || 'Unknown',
       ownerTag: ownerTagFor((s as Signal & { userId?: string }).userId),
       timeLabel: isAllDay(s.eta) ? undefined : formatTime(d),
@@ -416,9 +419,15 @@ export default function ProgrammeScreen() {
                 style={styles.itemRow}
                 onPress={() => handleItemTap(it)}
                 activeOpacity={it.kind === 'signal' ? 0.6 : 1}>
-                <Text style={[styles.itemEmoji, it.emojiColor ? { color: it.emojiColor } : null]}>
-                  {it.emoji}
-                </Text>
+                {it.kind === 'signal' ? (
+                  <View style={{ width: 28, alignItems: 'center' }}>
+                    <SignalIcon type={it.type} size={18} />
+                  </View>
+                ) : (
+                  <Text style={[styles.itemEmoji, it.emojiColor ? { color: it.emojiColor } : null]}>
+                    {it.emoji}
+                  </Text>
+                )}
                 <View style={styles.itemBody}>
                   <Text style={styles.itemDescription} numberOfLines={2}>
                     {it.description}

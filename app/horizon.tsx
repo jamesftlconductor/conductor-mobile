@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 
 import { metaFor, type Signal } from '@/components/signalTypes';
+import { SignalIcon } from '@/components/SignalIcon';
 import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
 
@@ -74,6 +75,7 @@ type Item = {
   date: string;             // ISO-ish for sorting
   dateMs: number;
   emoji: string;
+  type?: string;            // signal type → drives the SignalIcon (signals only)
   ownerTag?: string;
   source: 'signal' | 'vault' | 'gmail' | 'crew';
   signalRef?: Signal;       // when kind === 'signal'
@@ -208,6 +210,7 @@ function buildItems(args: {
       date: hasUsableDate ? (s.eta || '') : '',
       dateMs: hasUsableDate ? rawMs : FAR_FUTURE_MS,
       emoji: meta.emoji,
+      type: s.type,
       ownerTag: ownerTagFor((s as Signal & { userId?: string }).userId),
       source: 'gmail',
       signalRef: s,
@@ -617,7 +620,13 @@ function HorizonItemRow({
       activeOpacity={0.7}
       style={[styles.itemRow, noted && { opacity: 0.7 }]}>
       <View style={styles.itemHeaderRow}>
-        <Text style={styles.itemEmoji}>{item.emoji}</Text>
+        {item.kind === 'signal' ? (
+          <View style={{ width: 28, alignItems: 'center' }}>
+            <SignalIcon type={item.type} size={18} />
+          </View>
+        ) : (
+          <Text style={styles.itemEmoji}>{item.emoji}</Text>
+        )}
         <View style={styles.itemBody}>
           <Text style={styles.itemDescription} numberOfLines={2}>
             {item.description}

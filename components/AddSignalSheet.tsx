@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { LEGEND_ORDER, Signal, TYPE_META } from './signalTypes';
+import { SignalIcon } from './SignalIcon';
 import { SwipeDismissSheet } from './SwipeDismissSheet';
 
 const BG = '#0f0f0f';
@@ -144,7 +145,7 @@ export function AddSignalSheet({ visible, userId, onClose, onAdded, initialEta }
                   key={key}
                   style={[styles.typeButton, selected && styles.typeButtonSelected]}
                   onPress={() => setTypeKey(key)}>
-                  <Text style={styles.typeEmoji}>{meta.emoji}</Text>
+                  <SignalIcon type={key} size={22} />
                 </TouchableOpacity>
               );
             })}

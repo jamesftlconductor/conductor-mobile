@@ -24,6 +24,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { SignalFilterPills } from '@/components/SignalFilterPills';
 import { SwipeDismissSheet } from '@/components/SwipeDismissSheet';
 import { metaForRing, type Signal, TYPE_META } from '@/components/signalTypes';
+import { SignalIcon } from '@/components/SignalIcon';
 import { applyFilter as applyMeCrewHouse, useSignalFilter } from '@/hooks/useSignalFilter';
 import { useUserId } from '@/hooks/useUserId';
 import { useTheme } from './theme';
@@ -409,9 +410,12 @@ export default function CalendarScreen() {
                     onPress={() => openFinaleFor(s)}
                     activeOpacity={0.6}
                     style={styles.sheetRow}>
-                    <Text style={styles.sheetRowText} numberOfLines={2}>
-                      {typeMeta.emoji}  {s.description || 'Signal'}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <SignalIcon type={s.type} size={14} />
+                      <Text style={[styles.sheetRowText, { flex: 1 }]} numberOfLines={2}>
+                        {s.description || 'Signal'}
+                      </Text>
+                    </View>
                     <View style={styles.sheetRowMetaRow}>
                       {s.crewMemberId ? (
                         <View

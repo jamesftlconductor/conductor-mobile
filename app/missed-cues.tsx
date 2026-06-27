@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { metaFor, Signal } from '@/components/signalTypes';
+import { SignalIcon } from '@/components/SignalIcon';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonStack } from '@/components/SkeletonRow';
 import { TOKENS } from '@/utils/designTokens';
@@ -118,11 +119,10 @@ export default function MissedCuesScreen() {
 
       {!loading &&
         signals.map((s) => {
-          const meta = metaFor(s);
           const age = ageDescription(s, accentColor, theme.muted);
           return (
             <View key={String(s.id)} style={styles.row}>
-              <Text style={styles.emoji}>{meta.emoji}</Text>
+              <SignalIcon type={s.type} size={20} />
               <View style={styles.rowText}>
                 <Text style={styles.description} numberOfLines={2}>
                   {s.description || 'Unknown'}

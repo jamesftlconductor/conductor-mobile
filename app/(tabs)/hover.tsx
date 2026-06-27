@@ -31,6 +31,7 @@ import { FinaleSheet } from '@/components/FinaleSheet';
 import { HoverHelpModal } from '@/components/HoverHelpModal';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { categoryForType } from '@/utils/signalCategories';
+import { SignalIcon } from '@/components/SignalIcon';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
   metaForRing,
@@ -960,6 +961,7 @@ function RotatingRing({
           <SignalDot
             key={String(s.id)}
             meta={meta}
+            signalType={s.type}
             x={x}
             y={y}
             pulseMs={effectivePulseMs}
@@ -997,8 +999,10 @@ function SignalDot({
   isAttributed,
   clusterCount,
   prominent,
+  signalType,
 }: {
   meta: TypeMeta;
+  signalType?: string;
   x: number;
   y: number;
   pulseMs: number;
@@ -1121,7 +1125,7 @@ function SignalDot({
             style={[styles.signalCircle, styles.signalAgedOverlay]}
           />
         ) : null}
-        <Text style={styles.signalEmoji}>{meta.emoji}</Text>
+        <SignalIcon type={signalType} size={16} />
         {typeof clusterCount === 'number' && clusterCount > 1 ? (
           <View
             pointerEvents="none"
