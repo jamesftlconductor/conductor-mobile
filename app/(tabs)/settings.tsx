@@ -1325,7 +1325,10 @@ function BriefCustomizeBlock() {
     fetch(`${API_BASE}/signals?type=preferences`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, signalPriority: nextOrder, signalVisibility: nextVisible }),
+      // Must nest under `preferences` — the ?type=preferences handler reads
+      // req.body.preferences and 400s on a body without it. Top-level keys
+      // (the prior shape) silently never reached the backend.
+      body: JSON.stringify({ userId, preferences: { signalPriority: nextOrder, signalVisibility: nextVisible } }),
     }).catch(() => { /* best-effort */ });
   }
 
@@ -1409,6 +1412,106 @@ function BriefCustomizeBlock() {
               thumbColor={'#f5f0eb'}
               ios_backgroundColor={theme.inputBackground}
             />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// Household pillars — the ranked life domains the Conductor leads with.
+// Mirrors the onboarding pillar step. Persists to AsyncStorage + the
+// householdPillars preference (nested under `preferences` to match the
+// ?type=preferences handler, which shallow-merges that object).
+const PILLAR_CARDS: { key: string; emoji: string; label: string; desc: string }[] = [
+  { key: 'house', emoji: '🏠', label: 'House', desc: 'home, maintenance, deliveries, documents' },
+  { key: 'work', emoji: '💼', label: 'Work', desc: 'calendar, meetings, deadlines, conflicts' },
+  { key: 'kids', emoji: '👶', label: 'Kids', desc: 'school, activities, appointments, schedules' },
+  { key: 'health', emoji: '❤️', label: 'Health', desc: 'sleep, fitness, medical, wellness' },
+];
+const PILLAR_KEYS = PILLAR_CARDS.map((p) => p.key);
+
+function PrioritiesBlock() {
+  const { theme, accentColor } = useTheme();
+  const userId = useUserId();
+  const [order, setOrder] = useState<string[]>(PILLAR_KEYS);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('conductorHouseholdPillars');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            setOrder([
+              ...parsed.filter((k: unknown): k is string => typeof k === 'string' && PILLAR_KEYS.includes(k)),
+              ...PILLAR_KEYS.filter((k) => !parsed.includes(k)),
+            ]);
+          }
+        }
+      } catch { /* fall back to default order */ }
+    })();
+  }, []);
+
+  function persist(next: string[]) {
+    setOrder(next);
+    AsyncStorage.setItem('conductorHouseholdPillars', JSON.stringify(next)).catch(() => {});
+    if (!userId) return;
+    fetch(`${API_BASE}/signals?type=preferences`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, preferences: { householdPillars: next } }),
+    }).catch(() => { /* best-effort */ });
+  }
+
+  function move(idx: number, dir: -1 | 1) {
+    const j = idx + dir;
+    if (j < 0 || j >= order.length) return;
+    const next = order.slice();
+    const tmp = next[idx];
+    next[idx] = next[j];
+    next[j] = tmp;
+    persist(next);
+  }
+
+  return (
+    <View style={{ paddingHorizontal: 22, paddingBottom: 10 }}>
+      <Text style={{ color: theme.muted, fontSize: 12, lineHeight: 18, marginBottom: 12 }}>
+        The Conductor leads with what matters most to you.
+      </Text>
+      {order.map((key, idx) => {
+        const m = PILLAR_CARDS.find((p) => p.key === key);
+        if (!m) return null;
+        const first = idx === 0;
+        const last = idx === order.length - 1;
+        return (
+          <View
+            key={key}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: first ? accentColor : theme.border,
+              backgroundColor: first ? accentColor + '14' : theme.card,
+              borderRadius: 14,
+              paddingVertical: 12,
+              paddingHorizontal: 12,
+              marginBottom: 8,
+            }}>
+            <Text style={{ width: 20, color: accentColor, fontWeight: '700', fontSize: 14 }}>{idx + 1}</Text>
+            <Text style={{ fontSize: 22, marginRight: 10 }}>{m.emoji}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>{m.label}</Text>
+              <Text style={{ color: theme.muted, fontSize: 12, marginTop: 2 }}>{m.desc}</Text>
+            </View>
+            <View style={{ marginLeft: 8 }}>
+              <TouchableOpacity onPress={() => move(idx, -1)} disabled={first} hitSlop={{ top: 6, bottom: 2, left: 10, right: 10 }}>
+                <Text style={{ color: accentColor, fontSize: 13, lineHeight: 15, opacity: first ? 0.25 : 1 }}>▲</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => move(idx, 1)} disabled={last} hitSlop={{ top: 2, bottom: 6, left: 10, right: 10 }}>
+                <Text style={{ color: accentColor, fontSize: 13, lineHeight: 15, opacity: last ? 0.25 : 1 }}>▼</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         );
       })}
@@ -2377,6 +2480,10 @@ export default function SettingsScreen() {
         ) : null}
         <SectionHeader title="Your Voice" subtext="How Conductor talks to you" />
         <VoiceStyleBlock />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Priorities">
+        <PrioritiesBlock />
         </CollapsibleSection>
 
         <CollapsibleSection title="What You Love">

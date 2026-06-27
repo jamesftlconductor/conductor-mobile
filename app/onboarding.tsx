@@ -80,7 +80,17 @@ const INTERSTITIAL_POLL_MS = 3000;
 const PIPELINE_START_KEY = 'onboard_pipeline_started_at';
 const STEP_KEY = 'onboardingStep';
 
-type Phase = 'intro' | 'joining' | 'language' | 'step1' | 'step2' | 'household' | 'work' | 'workcal' | 'step3' | 'step4' | 'interstitial';
+type Phase = 'intro' | 'joining' | 'language' | 'step1' | 'step2' | 'household' | 'work' | 'workcal' | 'step3' | 'step4' | 'pillars' | 'interstitial';
+
+// Household pillars — the four life domains the household ranks so the
+// Conductor leads with what matters most. Order here is the default order.
+const PILLARS_META: { id: string; emoji: string; label: string; desc: string }[] = [
+  { id: 'house', emoji: '🏠', label: 'House', desc: 'home, maintenance, deliveries, documents' },
+  { id: 'work', emoji: '💼', label: 'Work', desc: 'calendar, meetings, deadlines, conflicts' },
+  { id: 'kids', emoji: '👶', label: 'Kids', desc: 'school, activities, appointments, schedules' },
+  { id: 'health', emoji: '❤️', label: 'Health', desc: 'sleep, fitness, medical, wellness' },
+];
+const DEFAULT_PILLAR_ORDER = PILLARS_META.map((p) => p.id);
 
 // Household situation builder option sets (new step after communication prefs).
 const HOUSEHOLD_SITUATIONS = [
@@ -299,6 +309,7 @@ export default function OnboardingScreen() {
 
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [hobbiesPicked, setHobbiesPicked] = useState<Set<string>>(new Set());
+  const [pillars, setPillars] = useState<string[]>(DEFAULT_PILLAR_ORDER);
 
   // Household situation builder (new step after communication prefs).
   const [householdSituation, setHouseholdSituation] = useState<string | null>(null);
@@ -359,7 +370,7 @@ export default function OnboardingScreen() {
         // re-running the onboard pipeline — their household already has data.
         if (
           joinType === 'joined_existing' &&
-          (savedPhase === 'step2' || savedPhase === 'work' || savedPhase === 'workcal' || savedPhase === 'step3' || savedPhase === 'step4')
+          (savedPhase === 'step2' || savedPhase === 'work' || savedPhase === 'workcal' || savedPhase === 'step3' || savedPhase === 'step4' || savedPhase === 'pillars')
         ) {
           setIsJoining(true);
           setPhase(savedPhase);
@@ -378,6 +389,7 @@ export default function OnboardingScreen() {
           savedPhase === 'workcal' ||
           savedPhase === 'step3' ||
           savedPhase === 'step4' ||
+          savedPhase === 'pillars' ||
           savedPhase === 'interstitial'
         ) {
           setPhase(savedPhase);
@@ -638,6 +650,22 @@ export default function OnboardingScreen() {
         });
       } catch { /* best-effort */ }
     }
+    // Pillar ranking is the final personalization step — show it before any
+    // terminal routing so every household (including joining members) sets
+    // their priorities. The terminal routing now lives in confirmPillars.
+    setPhase('pillars');
+  }
+
+  // Save the household's ranked pillars, then do the terminal routing that
+  // used to live at the end of confirmStep4.
+  async function confirmPillars() {
+    try {
+      await fetch(`${API_BASE}/signals?type=preferences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userId, preferences: { householdPillars: pillars } }),
+      });
+    } catch { /* best-effort */ }
     // Joining members skip the pipeline reveal/interstitial — their
     // household already has data — and land straight in the app.
     if (isJoining) {
@@ -842,11 +870,22 @@ export default function OnboardingScreen() {
           />
         ) : null}
 
+        {phase === 'pillars' ? (
+          <PillarsStep
+            pillars={pillars}
+            setPillars={setPillars}
+            onContinue={confirmPillars}
+            s={stepStyles}
+            theme={theme}
+            accentColor={accentColor}
+          />
+        ) : null}
+
         {phase === 'interstitial' ? (
           <InterstitialBlock pipelineReady={pipelineReady} progress={progress} />
         ) : null}
 
-        {phase === 'step1' || phase === 'step2' || phase === 'household' || phase === 'work' || phase === 'workcal' || phase === 'step3' || phase === 'step4' ? (
+        {phase === 'step1' || phase === 'step2' || phase === 'household' || phase === 'work' || phase === 'workcal' || phase === 'step3' || phase === 'step4' || phase === 'pillars' ? (
           <StepDots
             s={stepStyles}
             active={
@@ -856,7 +895,8 @@ export default function OnboardingScreen() {
               : phase === 'work' ? 3
               : phase === 'workcal' ? 4
               : phase === 'step3' ? 5
-              : 6
+              : phase === 'step4' ? 6
+              : 7
             }
           />
         ) : null}
@@ -1876,12 +1916,109 @@ function InterstitialBlock({
   );
 }
 
+// ---------- Pillar ranking step ----------
+
+function PillarsStep({
+  pillars, setPillars, onContinue, s, theme, accentColor,
+}: {
+  pillars: string[];
+  setPillars: (p: string[]) => void;
+  onContinue: () => void;
+  s: StepStyles;
+  theme: ThemeColors;
+  accentColor: string;
+}) {
+  function move(index: number, dir: -1 | 1) {
+    const j = index + dir;
+    if (j < 0 || j >= pillars.length) return;
+    const next = pillars.slice();
+    const tmp = next[index];
+    next[index] = next[j];
+    next[j] = tmp;
+    setPillars(next);
+  }
+
+  return (
+    <>
+      <Text style={s.title}>What matters most to your household?</Text>
+      <Text style={[s.subtitle, { marginBottom: 6 }]}>
+        The Conductor leads with what you care about most.
+      </Text>
+      <Text style={[s.subtitle, { marginBottom: 18, color: theme.muted }]}>
+        Use the arrows to rank. The Conductor leads with your top priority.
+      </Text>
+
+      <View style={{ gap: 10 }}>
+        {pillars.map((id, index) => {
+          const m = PILLARS_META.find((p) => p.id === id);
+          if (!m) return null;
+          const isTop = index === 0;
+          return (
+            <View
+              key={id}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: isTop ? accentColor : theme.border,
+                backgroundColor: isTop ? accentRgba(accentColor, 0.08) : theme.surface,
+                borderRadius: 16,
+                paddingVertical: 14,
+                paddingHorizontal: 14,
+              }}>
+              <Text style={{ width: 22, color: accentColor, fontWeight: '700', fontSize: 15 }}>
+                {index + 1}
+              </Text>
+              <Text style={{ fontSize: 24, marginRight: 10 }}>{m.emoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>{m.label}</Text>
+                <Text style={{ color: theme.muted, fontSize: 12, marginTop: 2 }}>{m.desc}</Text>
+              </View>
+              <View style={{ flexDirection: 'column', gap: 4 }}>
+                <TouchableOpacity
+                  onPress={() => move(index, -1)}
+                  disabled={index === 0}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  style={{ opacity: index === 0 ? 0.25 : 1, paddingHorizontal: 6 }}>
+                  <Text style={{ color: theme.text, fontSize: 16 }}>▲</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => move(index, 1)}
+                  disabled={index === pillars.length - 1}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  style={{ opacity: index === pillars.length - 1 ? 0.25 : 1, paddingHorizontal: 6 }}>
+                  <Text style={{ color: theme.text, fontSize: 16 }}>▼</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      <TouchableOpacity
+        onPress={onContinue}
+        activeOpacity={0.85}
+        style={{
+          marginTop: 32,
+          backgroundColor: accentColor,
+          paddingVertical: 14,
+          borderRadius: 24,
+          alignItems: 'center',
+        }}>
+        <Text style={{ color: '#0f0f0f', fontSize: 15, fontWeight: '600', letterSpacing: 0.5 }}>
+          Continue →
+        </Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
 // ---------- Step indicator dots ----------
 
-function StepDots({ active, s }: { active: 0 | 1 | 2 | 3 | 4 | 5 | 6; s: StepStyles }) {
+function StepDots({ active, s }: { active: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7; s: StepStyles }) {
   return (
     <View style={s.dotsRow}>
-      {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
         const state = i === active ? 'active' : i < active ? 'done' : 'upcoming';
         return (
           <View
