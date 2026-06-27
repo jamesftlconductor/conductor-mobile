@@ -5,17 +5,20 @@
 // to The Conductor.
 
 import { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 
 import { useTheme } from '@/app/theme';
-import { WeatherBackground } from '@/components/WeatherBackground';
 import { GlassCard } from '@/components/GlassCard';
 import { SignalIcon } from '@/components/SignalIcon';
 import { MOVEMENTS, MovementKey, SwipeDirection } from '@/utils/movements';
+
+// The astrolabe — the shared "intelligence layer" backdrop behind The Conductor
+// and all four movements (Ground keeps the real-world weather backdrop).
+const RADAR_IMG = require('../assets/conductor-radar.png');
 
 export type MovementSignal = {
   id: string | number;
@@ -64,7 +67,13 @@ export function MovementScreen({
 
   return (
     <View style={{ flex: 1, backgroundColor: '#05080f' }}>
-      <WeatherBackground animated style={StyleSheet.absoluteFillObject} />
+      {/* Astrolabe backdrop (same artwork as Hover), cover-cropped, then dimmed
+          so the glass card stays readable while the rings show through/around. */}
+      <ImageBackground source={RADAR_IMG} resizeMode="cover" style={StyleSheet.absoluteFillObject} />
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFillObject, { backgroundColor: '#05080f', opacity: 0.6 }]}
+      />
       <GestureDetector gesture={backSwipe}>
         <View
           style={{
