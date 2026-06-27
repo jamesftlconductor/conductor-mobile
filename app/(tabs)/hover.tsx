@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -34,6 +34,7 @@ import { categoryForType } from '@/utils/signalCategories';
 import { SignalIcon } from '@/components/SignalIcon';
 import { MOVEMENT_BY_DIRECTION, MOVEMENTS, movementForCategory } from '@/utils/movements';
 import { ChordIndicator } from '@/components/ChordIndicator';
+import { WeatherBackground } from '@/components/WeatherBackground';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
   metaForRing,
@@ -455,6 +456,22 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
     return () => loop.stop();
   }, [cScale, cGlow, nebula]);
 
+  // Weather → astrolabe crossfade on focus: when Hover gains focus the
+  // real-world weather shows for a beat, then the astrolabe materializes over
+  // it (400ms). On blur (navigating back to Ground / out to a movement) it
+  // reverses — the astrolabe fades out, revealing the weather again.
+  const focusFade = useRef(new Animated.Value(0)).current;
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    Animated.timing(focusFade, {
+      toValue: isFocused ? 1 : 0,
+      duration: 400,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [isFocused, focusFade]);
+  const weatherOpacity = focusFade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+
   const nebulaR = Math.max(SW, SH) * 0.7;
   // Pulse/C-mark alignment: the C mark logo renders at ≈12% of screen width, so
   // its outer radius is SW*0.06. The glow's base diameter is sized so that at
@@ -465,13 +482,19 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
 
   return (
     <>
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: bgPulse }]}>
+      {/* Real-world weather glimpse beneath the astrolabe — visible for a beat
+          on focus, fading out as the astrolabe fades in. Mirrors Ground's
+          weather (self-resolved from the cached condition). */}
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: weatherOpacity }]}>
+        <WeatherBackground animated={false} />
+      </Animated.View>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: Animated.multiply(bgPulse, focusFade) }]}>
         <ImageBackground source={RADAR_IMG} resizeMode="cover" style={StyleSheet.absoluteFill} />
       </Animated.View>
 
       {/* Nebula — radial gradient emanating FROM the C mark, breathing opacity
           0.08→0.20 in sync with the C glow. */}
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: nebula }]}>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: Animated.multiply(nebula, focusFade) }]}>
         <Svg width={SW} height={SH}>
           <Defs>
             <RadialGradient id="hoverNebula" cx={cx} cy={cy} r={nebulaR} gradientUnits="userSpaceOnUse">
@@ -498,7 +521,7 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
           justifyContent: 'center',
           zIndex: 30,
         }}>
-        <Animated.View pointerEvents="none" style={{ width: G, height: G, opacity: cGlow, transform: [{ scale: cScale }] }}>
+        <Animated.View pointerEvents="none" style={{ width: G, height: G, opacity: Animated.multiply(cGlow, focusFade), transform: [{ scale: cScale }] }}>
           <Svg width={G} height={G}>
             <Defs>
               <RadialGradient id="hoverCGlow" cx="50%" cy="50%" r="50%">
