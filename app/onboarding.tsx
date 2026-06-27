@@ -42,6 +42,7 @@ import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { useUserId } from '@/hooks/useUserId';
 import { TOKENS } from '@/utils/designTokens';
 import { ACCESS_LEVELS, type AccessLevel, DEFAULT_ACCESS_LEVEL } from '@/utils/accessLevels';
+import { MOVEMENTS, MOVEMENT_KEYS } from '@/utils/movements';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 
@@ -85,15 +86,18 @@ const STEP_KEY = 'onboardingStep';
 
 type Phase = 'intro' | 'joining' | 'language' | 'step1' | 'step2' | 'household' | 'work' | 'workcal' | 'access' | 'step3' | 'step4' | 'pillars' | 'interstitial';
 
-// Household pillars — the four life domains the household ranks so the
-// Conductor leads with what matters most. Order here is the default order.
-const PILLARS_META: { id: string; emoji: string; label: string; desc: string }[] = [
-  { id: 'house', emoji: '🏠', label: 'House', desc: 'home, maintenance, deliveries, documents' },
-  { id: 'work', emoji: '💼', label: 'Work', desc: 'calendar, meetings, deadlines, conflicts' },
-  { id: 'kids', emoji: '👶', label: 'Kids', desc: 'school, activities, appointments, schedules' },
-  { id: 'health', emoji: '❤️', label: 'Health', desc: 'sleep, fitness, medical, wellness' },
-];
-const DEFAULT_PILLAR_ORDER = PILLARS_META.map((p) => p.id);
+// The four Movements — ranked here so the Conductor leads with what matters
+// most. Order here (home/work/family/wellness) is the default. Keys + colors
+// come from the shared movement config so onboarding and Settings stay in sync.
+const PILLARS_META: { id: string; emoji: string; label: string; desc: string; color: string }[] =
+  MOVEMENTS.map((m) => ({
+    id: m.key,
+    emoji: m.emoji,
+    label: m.label, // "The Home Movement"
+    desc: m.subtitle, // "your house, maintained"
+    color: m.color, // amber / blue / rose / green
+  }));
+const DEFAULT_PILLAR_ORDER: string[] = [...MOVEMENT_KEYS];
 
 // Household situation builder option sets (new step after communication prefs).
 const HOUSEHOLD_SITUATIONS = [
@@ -681,8 +685,12 @@ export default function OnboardingScreen() {
       await fetch(`${API_BASE}/signals?type=preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: userId, preferences: { householdPillars: pillars } }),
+        body: JSON.stringify({ userId: userId, preferences: { movementOrder: pillars } }),
       });
+    } catch { /* best-effort */ }
+    // Mirror Settings' storage so the ranking stays consistent across both.
+    try {
+      await AsyncStorage.setItem('conductorMovementOrder', JSON.stringify(pillars));
     } catch { /* best-effort */ }
     // Joining members skip the pipeline reveal/interstitial — their
     // household already has data — and land straight in the app.
@@ -2055,13 +2063,17 @@ function PillarsStep({
                 flexDirection: 'row',
                 alignItems: 'center',
                 borderWidth: 1,
-                borderColor: isTop ? accentColor : theme.border,
-                backgroundColor: isTop ? accentRgba(accentColor, 0.08) : theme.surface,
+                borderColor: isTop ? m.color : theme.border,
+                // Always a subtle movement-color left bar; the top-ranked card
+                // also tints its border + background in that movement's color.
+                borderLeftWidth: 4,
+                borderLeftColor: m.color,
+                backgroundColor: isTop ? m.color + '14' : theme.surface,
                 borderRadius: 16,
                 paddingVertical: 14,
                 paddingHorizontal: 14,
               }}>
-              <Text style={{ width: 22, color: accentColor, fontWeight: '700', fontSize: 15 }}>
+              <Text style={{ width: 22, color: m.color, fontWeight: '700', fontSize: 15 }}>
                 {index + 1}
               </Text>
               <Text style={{ fontSize: 24, marginRight: 10 }}>{m.emoji}</Text>

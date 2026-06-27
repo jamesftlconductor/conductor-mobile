@@ -5,6 +5,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -16,6 +17,7 @@ import {
 } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import Svg, {
   Circle,
   Defs,
@@ -502,6 +504,53 @@ function SingleSheet({
     setEditing(false);
   };
 
+  // ── Swipe-to-act: swipe LEFT → Rest, RIGHT → Hold (the fast path; the tap
+  // buttons stay the considered path). Only CLEAR horizontal gestures are
+  // claimed, so vertical swipe-DOWN still reaches SwipeDismissSheet to close.
+  // All driven on the JS thread (setValue + non-native springs) so dragX can
+  // also feed the tint opacity without a native/JS driver conflict.
+  const dragX = useRef(new Animated.Value(0)).current;
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const swipeActionRef = useRef<{ rest: () => void; hold: () => void }>({ rest: () => {}, hold: () => {} });
+  swipeActionRef.current = {
+    rest: () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      dismissFinaleTip();
+      onRest(signal);
+    },
+    hold: () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      dismissFinaleTip();
+      onHold(signal);
+    },
+  };
+  const swipePan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) =>
+        !editingRef.current && Math.abs(g.dx) > 20 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderMove: (_e, g) => {
+        dragX.setValue(g.dx);
+      },
+      onPanResponderRelease: (_e, g) => {
+        if (g.dx < -60) {
+          swipeActionRef.current.rest();
+          dragX.setValue(0);
+        } else if (g.dx > 60) {
+          swipeActionRef.current.hold();
+          dragX.setValue(0);
+        } else {
+          Animated.spring(dragX, { toValue: 0, useNativeDriver: false }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(dragX, { toValue: 0, useNativeDriver: false }).start();
+      },
+    }),
+  ).current;
+  const restTintOpacity = dragX.interpolate({ inputRange: [-120, 0], outputRange: [0.25, 0], extrapolate: 'clamp' });
+  const holdTintOpacity = dragX.interpolate({ inputRange: [0, 120], outputRange: [0, 0.25], extrapolate: 'clamp' });
+
   return (
     <Modal
       visible={visible}
@@ -515,7 +564,11 @@ function SingleSheet({
         <SwipeDismissSheet style={styles.sheet} onClose={onClose}>
           <Pressable onPress={() => {}}>
           {/* Glass panel — the weather/Ground shows behind it; GlassCard
-              provides the tint, rim lighting, inner glow and corner brackets. */}
+              provides the tint, rim lighting, inner glow and corner brackets.
+              Wrapped in a horizontally-draggable Animated.View for swipe-to-act. */}
+          <Animated.View
+            {...swipePan.panHandlers}
+            style={{ transform: [{ translateX: dragX }] }}>
           <GlassCard style={styles.finaleGlass}>
           {/* Faint technical-schematic grid behind the content. */}
           <View pointerEvents="none" style={styles.gridPattern}>
@@ -810,7 +863,11 @@ function SingleSheet({
               </View>
             </>
           )}
+          {/* Swipe tint — green = Rest (left), amber = Hold (right). */}
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#34d399', opacity: restTintOpacity }]} />
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#f59e0b', opacity: holdTintOpacity }]} />
           </GlassCard>
+          </Animated.View>
           </Pressable>
         </SwipeDismissSheet>
       </Pressable>

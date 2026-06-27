@@ -20,6 +20,7 @@ import { fetchHealthSnapshot } from '@/components/HealthContext';
 import { GlassCard } from '@/components/GlassCard';
 import { SignalIcon } from '@/components/SignalIcon';
 import { ChordIndicator } from '@/components/ChordIndicator';
+import { MovementQuestions } from '@/components/MovementQuestion';
 import { MOVEMENTS, MovementKey, SwipeDirection } from '@/utils/movements';
 import { MOVEMENT_SOURCES, SourceIconKey, SourceItem } from '@/utils/movementSources';
 
@@ -133,6 +134,7 @@ export function MovementScreen({
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}>
                 {children}
+                <MovementQuestions movementKey={movementKey} />
                 <MovementSources movementKey={movementKey} />
               </ScrollView>
               {/* Movement jump nav — the chord with this movement enlarged; tap

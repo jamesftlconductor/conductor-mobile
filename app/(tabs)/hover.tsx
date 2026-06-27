@@ -519,8 +519,28 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
 // baked ring. A mostly-transparent full circle plus a brighter ~22% arc; the
 // whole layer spins so the arc reads as a moving glint. Box is centered on
 // (cx,cy) so the rotation happens in place. pointerEvents none.
-function SpinRing({ cx, cy, radius, durationMs, clockwise }: { cx: number; cy: number; radius: number; durationMs: number; clockwise: boolean }) {
+function SpinRing({
+  cx,
+  cy,
+  radius,
+  durationMs,
+  clockwise,
+  pulseMin,
+  pulseMax,
+  pulseMs,
+}: {
+  cx: number;
+  cy: number;
+  radius: number;
+  durationMs: number;
+  clockwise: boolean;
+  pulseMin: number;
+  pulseMax: number;
+  pulseMs: number;
+}) {
   const rot = useRef(new Animated.Value(0)).current;
+  // Opacity pulse — INDEPENDENT of the rotation: the ring spins AND breathes.
+  const pulse = useRef(new Animated.Value(pulseMin)).current;
   useEffect(() => {
     const loop = Animated.loop(
       Animated.timing(rot, { toValue: 1, duration: durationMs, easing: Easing.linear, useNativeDriver: true }),
@@ -528,6 +548,17 @@ function SpinRing({ cx, cy, radius, durationMs, clockwise }: { cx: number; cy: n
     loop.start();
     return () => loop.stop();
   }, [rot, durationMs]);
+  useEffect(() => {
+    const half = pulseMs / 2;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: pulseMax, duration: half, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: pulseMin, duration: half, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, pulseMin, pulseMax, pulseMs]);
   const spin = rot.interpolate({ inputRange: [0, 1], outputRange: clockwise ? ['0deg', '360deg'] : ['0deg', '-360deg'] });
   const sw = 2;
   const box = radius * 2 + sw * 2;
@@ -537,7 +568,7 @@ function SpinRing({ cx, cy, radius, durationMs, clockwise }: { cx: number; cy: n
   return (
     <Animated.View
       pointerEvents="none"
-      style={{ position: 'absolute', left: cx - c, top: cy - c, width: box, height: box, transform: [{ rotate: spin }] }}>
+      style={{ position: 'absolute', left: cx - c, top: cy - c, width: box, height: box, opacity: pulse, transform: [{ rotate: spin }] }}>
       <Svg width={box} height={box}>
         <Circle cx={c} cy={c} r={radius} stroke={RING_HIGHLIGHT} strokeOpacity={0.15} strokeWidth={1.5} fill="none" />
         <Circle
@@ -563,9 +594,9 @@ function RotatingOverlayRings({ cx, cy }: { cx: number; cy: number }) {
       {/* Inner ring hugs the C mark like a halo — radius ≈ the C glyph's outer
           edge (~12% of screen width) + a 2px gap. Middle/outer keep their
           proportions. */}
-      <SpinRing cx={cx} cy={cy} radius={26} durationMs={30000} clockwise />
-      <SpinRing cx={cx} cy={cy} radius={115} durationMs={45000} clockwise={false} />
-      <SpinRing cx={cx} cy={cy} radius={165} durationMs={60000} clockwise />
+      <SpinRing cx={cx} cy={cy} radius={26} durationMs={30000} clockwise pulseMin={0.4} pulseMax={1.0} pulseMs={1500} />
+      <SpinRing cx={cx} cy={cy} radius={115} durationMs={45000} clockwise={false} pulseMin={0.3} pulseMax={0.8} pulseMs={2500} />
+      <SpinRing cx={cx} cy={cy} radius={165} durationMs={60000} clockwise pulseMin={0.2} pulseMax={0.6} pulseMs={4000} />
     </>
   );
 }

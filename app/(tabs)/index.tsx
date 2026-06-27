@@ -130,6 +130,42 @@ function renderMovementText(text: string, keyBase: string) {
   });
 }
 
+// ── Morning brief sentence stagger ───────────────────────────────────────
+// Group the inline brief segments into sentence "runs" so each can fade in
+// sequentially on the once-per-day morning expansion. A run closes at sentence
+// terminators (. ! ?) inside text segments; signal chips attach to the current
+// run (a chip never ends a sentence). Uses a capturing split (no regex
+// lookbehind) so it's Hermes-safe.
+const MAX_BRIEF_SENTENCES = 24;
+type BriefPiece =
+  | { kind: 'text'; text: string }
+  | { kind: 'signal'; seg: Extract<BriefSegment, { type: 'signal' }> };
+function groupBriefSentences(segs: BriefSegment[]): BriefPiece[][] {
+  const runs: BriefPiece[][] = [];
+  let current: BriefPiece[] = [];
+  const closeRun = () => {
+    if (current.length) {
+      runs.push(current);
+      current = [];
+    }
+  };
+  for (const seg of segs) {
+    if (seg.type === 'signal') {
+      current.push({ kind: 'signal', seg });
+      continue;
+    }
+    const text = seg.content || '';
+    if (!text) continue;
+    for (const token of text.split(/([.!?]+\s+)/)) {
+      if (!token) continue;
+      current.push({ kind: 'text', text: token });
+      if (/[.!?]+\s+$/.test(token)) closeRun(); // token IS a terminator → end sentence
+    }
+  }
+  closeRun();
+  return runs;
+}
+
 const SIGNAL_TYPE_COLORS: Record<string, string> = {
   package: '#60a5fa',
   delivery: '#7dd3fc',
@@ -1299,6 +1335,13 @@ export default function TakeoffScreen() {
   const introModeRef = useRef<'animate' | 'static' | null>(null);
   const cardLayoutRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const introRanRef = useRef(false);
+  // Per-sentence opacity for the brief stagger. Default 1 (visible) so the
+  // static path and any non-animated case show the full brief instantly.
+  const sentenceOpacities = useRef(
+    Array.from({ length: MAX_BRIEF_SENTENCES }, () => new Animated.Value(1)),
+  ).current;
+  const sentencesRef = useRef<BriefPiece[][]>([]);
+  const revealDoneRef = useRef(false);
 
   const startIntroIfReady = useCallback(() => {
     if (introModeRef.current !== 'animate' || introRanRef.current) return;
@@ -1327,11 +1370,22 @@ export default function TakeoffScreen() {
         Animated.timing(miniGreetOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
       ]),
     ]).start(({ finished }) => {
-      if (finished) {
-        AsyncStorage.setItem('groundCardExpandedToday', new Date().toISOString().slice(0, 10)).catch(() => {});
+      if (!finished) return;
+      AsyncStorage.setItem('groundCardExpandedToday', new Date().toISOString().slice(0, 10)).catch(() => {});
+      // After the card reaches full size, reveal the brief body sentence by
+      // sentence — each fades in 80ms after the previous one.
+      revealDoneRef.current = true;
+      const n = Math.min(sentencesRef.current.length, MAX_BRIEF_SENTENCES);
+      if (n > 0) {
+        Animated.stagger(
+          80,
+          Array.from({ length: n }, (_, i) =>
+            Animated.timing(sentenceOpacities[i], { toValue: 1, duration: 240, useNativeDriver: true }),
+          ),
+        ).start();
       }
     });
-  }, [cardOpacity, cardScale, cardTX, cardTY, miniGreetOpacity]);
+  }, [cardOpacity, cardScale, cardTX, cardTY, miniGreetOpacity, sentenceOpacities]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1348,6 +1402,11 @@ export default function TakeoffScreen() {
       introModeRef.current = playAnim ? 'animate' : 'static';
       if (playAnim) {
         setShowIntroGreeting(true);
+        // Hide any already-loaded brief sentences so the card fades in without
+        // body text; the spring-completion callback staggers them back in.
+        for (let i = 0; i < Math.min(sentencesRef.current.length, MAX_BRIEF_SENTENCES); i++) {
+          sentenceOpacities[i].setValue(0);
+        }
         startIntroIfReady();
       } else {
         cardOpacity.setValue(1); // static: card already in final position
@@ -1361,7 +1420,30 @@ export default function TakeoffScreen() {
       cardTY.stopAnimation();
       miniGreetOpacity.stopAnimation();
     };
-  }, [startIntroIfReady, cardOpacity, cardScale, cardTX, cardTY, miniGreetOpacity]);
+  }, [startIntroIfReady, cardOpacity, cardScale, cardTX, cardTY, miniGreetOpacity, sentenceOpacities]);
+
+  // Brief grouped into sentence runs for the morning stagger (also the source
+  // of truth for rendering the brief). Kept in a ref so the intro's completion
+  // callback can read the latest count.
+  const briefRuns = useMemo(
+    () =>
+      groupBriefSentences(
+        applySignalPrefs(
+          segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment],
+          signalVisibility,
+        ),
+      ),
+    [segments, brief, signalVisibility],
+  );
+  sentencesRef.current = briefRuns;
+  // If the brief loads DURING the animated intro (before the reveal runs), hide
+  // the new sentences so they stagger in after the spring rather than flashing.
+  useEffect(() => {
+    if (introModeRef.current !== 'animate' || revealDoneRef.current) return;
+    for (let i = 0; i < Math.min(briefRuns.length, MAX_BRIEF_SENTENCES); i++) {
+      sentenceOpacities[i].setValue(0);
+    }
+  }, [briefRuns, sentenceOpacities]);
 
   const navigation = useNavigation();
 
@@ -2028,53 +2110,59 @@ export default function TakeoffScreen() {
                   styles.brief,
                   { color: bandTheme.brief },
                 ]}>
-                {applySignalPrefs(
-                  segments.length > 0 ? segments : [{ type: 'text', content: brief } as BriefSegment],
-                  signalVisibility,
-                ).map((seg, i) => {
-                  if (seg.type === 'signal') {
-                    // Underline color by movement attribution when the signal's
-                    // category maps to one (home=amber, work=blue); else by type.
-                    const mvColor = colorForMovement(
-                      seg.signalType ? movementForCategory(categoryForType(seg.signalType)) : null,
-                    );
-                    const color =
-                      mvColor || (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
-                    const acted = quickActed[String(seg.signalId)];
-                    // Prefer the real signal description (first 45 chars) over the
-                    // backend's short chip phrase, when we have it.
-                    const fullDesc = signalDescriptions[String(seg.signalId)];
-                    const chipText =
-                      fullDesc && fullDesc.trim().length > 0
-                        ? fullDesc.trim().slice(0, 45)
-                        : seg.content;
-                    // Optimistic chip styling per applied action.
-                    const chipExtra: any = {};
-                    if (acted === 'done') chipExtra.textDecorationLine = 'line-through';
-                    else if (acted === 'snoozed') chipExtra.opacity = 0.45;
-                    else if (acted === 'dismissed') chipExtra.opacity = 0.25;
-                    return (
-                      <Text
-                        key={i}
-                        onPress={() => handleSignalTap(seg.signalId)}
-                        onLongPress={() => {
-                          setQuickActionTarget({
-                            signalId: seg.signalId,
-                            phrase: seg.content || '',
-                          });
-                        }}
-                        style={{
-                          textDecorationLine: acted === 'done' ? 'line-through' : 'underline',
-                          textDecorationColor: color,
-                          textDecorationStyle: 'solid',
-                          ...chipExtra,
-                        }}>
-                        {chipText}
-                      </Text>
-                    );
-                  }
-                  return <Text key={i}>{renderMovementText(seg.content, String(i))}</Text>;
-                })}
+                {briefRuns.map((run, si) => (
+                  // Each sentence is its own nested Text so it can fade in on the
+                  // morning stagger; opacity defaults to 1 (instant) otherwise.
+                  <Animated.Text
+                    key={`s-${si}`}
+                    style={si < MAX_BRIEF_SENTENCES ? { opacity: sentenceOpacities[si] } : undefined}>
+                    {run.map((piece, pi) => {
+                      if (piece.kind === 'signal') {
+                        const seg = piece.seg;
+                        // Underline color by movement attribution when the signal's
+                        // category maps to one (home=amber, work=blue); else by type.
+                        const mvColor = colorForMovement(
+                          seg.signalType ? movementForCategory(categoryForType(seg.signalType)) : null,
+                        );
+                        const color =
+                          mvColor || (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
+                        const acted = quickActed[String(seg.signalId)];
+                        // Prefer the real signal description (first 45 chars) over
+                        // the backend's short chip phrase, when we have it.
+                        const fullDesc = signalDescriptions[String(seg.signalId)];
+                        const chipText =
+                          fullDesc && fullDesc.trim().length > 0
+                            ? fullDesc.trim().slice(0, 45)
+                            : seg.content;
+                        // Optimistic chip styling per applied action.
+                        const chipExtra: any = {};
+                        if (acted === 'done') chipExtra.textDecorationLine = 'line-through';
+                        else if (acted === 'snoozed') chipExtra.opacity = 0.45;
+                        else if (acted === 'dismissed') chipExtra.opacity = 0.25;
+                        return (
+                          <Text
+                            key={`c-${si}-${pi}`}
+                            onPress={() => handleSignalTap(seg.signalId)}
+                            onLongPress={() => {
+                              setQuickActionTarget({
+                                signalId: seg.signalId,
+                                phrase: seg.content || '',
+                              });
+                            }}
+                            style={{
+                              textDecorationLine: acted === 'done' ? 'line-through' : 'underline',
+                              textDecorationColor: color,
+                              textDecorationStyle: 'solid',
+                              ...chipExtra,
+                            }}>
+                            {chipText}
+                          </Text>
+                        );
+                      }
+                      return <Text key={`t-${si}-${pi}`}>{renderMovementText(piece.text, `${si}-${pi}`)}</Text>;
+                    })}
+                  </Animated.Text>
+                ))}
               </Text>
               {showSignalTapTip ? (
                 <View style={styles.tooltipInline} pointerEvents="box-none">
