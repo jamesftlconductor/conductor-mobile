@@ -4,17 +4,44 @@
 // OPPOSITE direction of entry (or the back affordance / hardware back) returns
 // to The Conductor.
 
-import { ReactNode } from 'react';
-import { Animated, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ReactNode, useEffect, useState } from 'react';
+import { Alert, Animated, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft } from 'lucide-react-native';
+import {
+  Activity, Boxes, Building2, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight,
+  GraduationCap, Heart, Mail, MessageSquare, Users, Watch, Zap,
+} from 'lucide-react-native';
 
 import { useTheme } from '@/app/theme';
+import { useUserId } from '@/hooks/useUserId';
+import { fetchHealthSnapshot } from '@/components/HealthContext';
 import { GlassCard } from '@/components/GlassCard';
 import { SignalIcon } from '@/components/SignalIcon';
 import { MOVEMENTS, MovementKey, SwipeDirection } from '@/utils/movements';
+import { MOVEMENT_SOURCES, SourceIconKey, SourceItem } from '@/utils/movementSources';
+
+const API_BASE = 'https://conductor-ivory.vercel.app/api';
+
+// Source icon key → lucide component.
+const SOURCE_ICON: Record<SourceIconKey, typeof Mail> = {
+  gmail: Mail,
+  inventory: Boxes,
+  attom: Building2,
+  shortcuts: Zap,
+  email: Mail,
+  calendar: Calendar,
+  contacts: Users,
+  crew: Users,
+  classdojo: GraduationCap,
+  classroom: GraduationCap,
+  remind: MessageSquare,
+  healthkit: Heart,
+  oura: Activity,
+  whoop: Activity,
+  garmin: Watch,
+};
 
 // The astrolabe — the shared "intelligence layer" backdrop behind The Conductor
 // and all four movements (Ground keeps the real-world weather backdrop).
@@ -105,6 +132,7 @@ export function MovementScreen({
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}>
                 {children}
+                <MovementSources movementKey={movementKey} />
               </ScrollView>
             </View>
           </GlassCard>
@@ -162,6 +190,117 @@ export function ConnectPrompt({ text, onPress }: { text: string; onPress: () => 
   );
 }
 
+// Collapsible "Sources" section — what feeds this movement (CONNECTED, with a
+// ✓) and what could feed it better (AVAILABLE, with a value line + Connect →).
+// Google Calendar / Work Calendar (work) and Apple HealthKit (wellness) are
+// injected from the live connection state; the rest is static config.
+type AvailableSource = { item: SourceItem; action: 'settings-score' | 'soon' };
+
+export function MovementSources({ movementKey }: { movementKey: MovementKey }) {
+  const { theme, accentColor } = useTheme();
+  const userId = useUserId();
+  const [open, setOpen] = useState(false);
+  const [workConnected, setWorkConnected] = useState(false);
+  const [healthConnected, setHealthConnected] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (movementKey === 'work' && userId) {
+        try {
+          const res = await fetch(`${API_BASE}/signals?type=preferences&userId=${userId}`);
+          const data = await res.json();
+          if (!cancelled) setWorkConnected(!!String(data?.preferences?.workCalendarName || '').trim());
+        } catch {
+          /* leave not-connected */
+        }
+      }
+      if (movementKey === 'wellness') {
+        try {
+          const snap = await fetchHealthSnapshot();
+          if (!cancelled) setHealthConnected(!!snap);
+        } catch {
+          /* leave not-connected */
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [movementKey, userId]);
+
+  const base = MOVEMENT_SOURCES[movementKey] ?? { connected: [], available: [] };
+  const connected: SourceItem[] = [...base.connected];
+  const available: AvailableSource[] = base.available.map((item) => ({ item, action: 'soon' as const }));
+
+  if (movementKey === 'work') {
+    if (workConnected) connected.unshift({ name: 'Google Calendar', icon: 'calendar' });
+    else
+      available.push({
+        item: { name: 'Work Calendar', icon: 'calendar', value: 'Connect for conflict detection' },
+        action: 'settings-score',
+      });
+  }
+  if (movementKey === 'wellness' && healthConnected) {
+    connected.unshift({ name: 'Apple HealthKit', icon: 'healthkit' });
+  }
+
+  const onConnect = (item: SourceItem, action: 'settings-score' | 'soon') => {
+    if (action === 'settings-score') router.push('/(tabs)/settings?hub=score' as never);
+    else Alert.alert('Coming soon', `${item.name} integration is coming soon.`);
+  };
+
+  return (
+    <View style={styles.section}>
+      <TouchableOpacity
+        onPress={() => setOpen((o) => !o)}
+        activeOpacity={0.7}
+        style={styles.sourcesHeader}>
+        <Text style={[styles.sectionTitle, { color: accentColor }]}>Sources</Text>
+        {open ? (
+          <ChevronDown size={16} color={accentColor} />
+        ) : (
+          <ChevronRight size={16} color={accentColor} />
+        )}
+      </TouchableOpacity>
+      <View style={[styles.sectionDivider, { backgroundColor: accentColor + '1f' }]} />
+      {open ? (
+        <>
+          {connected.map((it) => {
+            const Icon = SOURCE_ICON[it.icon];
+            return (
+              <View key={`c-${it.name}`} style={styles.row}>
+                <Icon size={16} color={theme.muted} />
+                <Text style={[styles.rowText, { color: theme.text, flex: 1 }]}>{it.name}</Text>
+                <Check size={15} color={accentColor} />
+              </View>
+            );
+          })}
+          {available.map(({ item, action }) => {
+            const Icon = SOURCE_ICON[item.icon];
+            return (
+              <View key={`a-${item.name}`} style={styles.row}>
+                <Icon size={16} color={theme.muted} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowText, { color: theme.text }]}>{item.name}</Text>
+                  {!!item.value && (
+                    <Text style={[styles.rowMeta, { color: theme.muted }]}>{item.value}</Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => onConnect(item, action)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={[styles.connectInline, { color: accentColor }]}>Connect →</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   inner: { flex: 1, paddingHorizontal: 20, paddingTop: 18 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 14 },
@@ -184,4 +323,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   connectText: { fontSize: 14, fontWeight: '600', letterSpacing: 0.3 },
+  sourcesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  connectInline: { fontSize: 13, fontWeight: '600', letterSpacing: 0.3 },
 });

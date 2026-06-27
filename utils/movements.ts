@@ -24,6 +24,9 @@ export type Movement = {
   glassTint: string;
   /** Per-movement corner-bracket color. Omitted = the theme accent. */
   bracketColor?: string;
+  /** Vivid signature color used in the chord indicator, brief text, signal
+   *  chip borders, and anywhere a movement is referenced. */
+  color: string;
 };
 
 export const MOVEMENTS: Movement[] = [
@@ -39,6 +42,7 @@ export const MOVEMENTS: Movement[] = [
     discoveredKey: 'movement:home:discovered',
     glassTint: 'rgba(20, 14, 6, 0.72)', // warm amber
     bracketColor: '#c9a227', // warm brass
+    color: '#d2a24c', // warm amber
   },
   {
     key: 'work',
@@ -52,6 +56,7 @@ export const MOVEMENTS: Movement[] = [
     discoveredKey: 'movement:work:discovered',
     glassTint: 'rgba(6, 10, 20, 0.72)', // cool blue-black
     // bracketColor omitted → theme accent (precise, professional)
+    color: '#5b9bd5', // cool blue
   },
   {
     key: 'family',
@@ -65,6 +70,7 @@ export const MOVEMENTS: Movement[] = [
     discoveredKey: 'movement:family:discovered',
     glassTint: 'rgba(20, 10, 10, 0.72)', // warm rose-black
     bracketColor: 'rgba(200, 100, 80, 0.6)', // warm rose accent
+    color: '#d17a6a', // warm rose
   },
   {
     key: 'wellness',
@@ -78,6 +84,7 @@ export const MOVEMENTS: Movement[] = [
     discoveredKey: 'movement:wellness:discovered',
     glassTint: 'rgba(6, 14, 10, 0.72)', // deep green-black
     bracketColor: 'rgba(80, 160, 100, 0.6)', // calm green accent
+    color: '#5cb377', // calm green
   },
 ];
 

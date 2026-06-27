@@ -5,7 +5,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
+import { Animated, Dimensions, Image, LayoutAnimation, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { fetchHealthSnapshot, type HealthSnapshot } from '@/components/HealthContext';
@@ -1267,6 +1267,84 @@ export default function TakeoffScreen() {
   const [middayEnabled, setMiddayEnabled] = useState(false);
   const [mode, setMode] = useState(getBriefMode(new Date().getHours(), 23));
   const [showYesterday, setShowYesterday] = useState(false);
+
+  // ── Morning intro: the glass card grows FROM the minimap, once per day ────
+  // Gated on AsyncStorage `groundCardExpandedToday`. Any failure degrades to the
+  // normal static card (cardOpacity → 1, no transform). The minimap itself never
+  // moves — the card springs out of its top-right corner.
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
+  const cardTX = useRef(new Animated.Value(0)).current;
+  const cardTY = useRef(new Animated.Value(0)).current;
+  const miniGreetOpacity = useRef(new Animated.Value(0)).current;
+  const [showIntroGreeting, setShowIntroGreeting] = useState(false);
+  const introModeRef = useRef<'animate' | 'static' | null>(null);
+  const cardLayoutRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const introRanRef = useRef(false);
+
+  const startIntroIfReady = useCallback(() => {
+    if (introModeRef.current !== 'animate' || introRanRef.current) return;
+    const L = cardLayoutRef.current;
+    if (!L || L.w < 1) return; // wait for the card's layout
+    introRanRef.current = true;
+    const screenW = Dimensions.get('window').width;
+    const miniCx = screenW - 52; // minimap center x (right:20, size 64)
+    const miniCy = 144 + 32; //     minimap center y (top:144, size 64)
+    const cardCx = L.x + L.w / 2;
+    const cardCy = L.y + L.h / 2;
+    cardScale.setValue(Math.max(0.05, 64 / L.w));
+    cardTX.setValue(miniCx - cardCx);
+    cardTY.setValue(miniCy - cardCy);
+    cardOpacity.setValue(0);
+    Animated.sequence([
+      // tiny greeting fades in inside the minimap, then a beat…
+      Animated.timing(miniGreetOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.delay(400),
+      // …then the card springs out to its place + fades up; greeting fades out.
+      Animated.parallel([
+        Animated.spring(cardScale, { toValue: 1, tension: 40, friction: 8, useNativeDriver: true }),
+        Animated.spring(cardTX, { toValue: 0, tension: 40, friction: 8, useNativeDriver: true }),
+        Animated.spring(cardTY, { toValue: 0, tension: 40, friction: 8, useNativeDriver: true }),
+        Animated.timing(cardOpacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(miniGreetOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+      ]),
+    ]).start(({ finished }) => {
+      if (finished) {
+        AsyncStorage.setItem('groundCardExpandedToday', new Date().toISOString().slice(0, 10)).catch(() => {});
+      }
+    });
+  }, [cardOpacity, cardScale, cardTX, cardTY, miniGreetOpacity]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let playAnim = false;
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const stored = await AsyncStorage.getItem('groundCardExpandedToday');
+        playAnim = stored !== today;
+      } catch {
+        playAnim = false; // any failure → just show the final card
+      }
+      if (cancelled) return;
+      introModeRef.current = playAnim ? 'animate' : 'static';
+      if (playAnim) {
+        setShowIntroGreeting(true);
+        startIntroIfReady();
+      } else {
+        cardOpacity.setValue(1); // static: card already in final position
+      }
+    })();
+    return () => {
+      cancelled = true;
+      cardOpacity.stopAnimation();
+      cardScale.stopAnimation();
+      cardTX.stopAnimation();
+      cardTY.stopAnimation();
+      miniGreetOpacity.stopAnimation();
+    };
+  }, [startIntroIfReady, cardOpacity, cardScale, cardTX, cardTY, miniGreetOpacity]);
+
   const navigation = useNavigation();
 
   // The bottom tab bar always shows now that Overwatch (which used to hide it)
@@ -1856,7 +1934,18 @@ export default function TakeoffScreen() {
 
           {/* Glass card — lifts the greeting, mode label, brief hero, "took
               care of" line and The Pulse off the weather photo. The Minimap
-              and the handoff note stay outside it. */}
+              and the handoff note stay outside it. Wrapped in an Animated.View
+              so the once-per-day morning intro can grow it out of the minimap. */}
+          <Animated.View
+            onLayout={(e) => {
+              const { x, y, width, height } = e.nativeEvent.layout;
+              cardLayoutRef.current = { x, y, w: width, h: height };
+              startIntroIfReady();
+            }}
+            style={{
+              opacity: cardOpacity,
+              transform: [{ translateX: cardTX }, { translateY: cardTY }, { scale: cardScale }],
+            }}>
           <GlassCard style={styles.groundGlass}>
           {/* Greeting + mode label sit as quiet context directly above the
               brief hero (not at the top). */}
@@ -2440,6 +2529,7 @@ export default function TakeoffScreen() {
             </TouchableOpacity>
           ) : null}
           </GlassCard>
+          </Animated.View>
 
           <WorkCalendarNudge />
 
@@ -2491,6 +2581,30 @@ export default function TakeoffScreen() {
       <View style={{ position: 'absolute', top: 144, right: 20, zIndex: 50 }}>
         <Minimap floating={false} size={64} onPress={() => openConductorSheet('ground')} />
       </View>
+      {/* Morning intro: the greeting appears tiny inside the minimap first, then
+          fades as the glass card springs out of it. */}
+      {showIntroGreeting ? (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 144,
+            right: 20,
+            width: 64,
+            height: 64,
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 51,
+            opacity: miniGreetOpacity,
+          }}>
+          <Text
+            numberOfLines={2}
+            style={{ color: accentColor, fontSize: 8, lineHeight: 10, textAlign: 'center', letterSpacing: 0.2 }}>
+            {greeting || 'Good morning'}
+            {userName && userName !== 'there' ? `, ${userName}` : ''}.
+          </Text>
+        </Animated.View>
+      ) : null}
 
       <YesterdayModal
         visible={showYesterday}
