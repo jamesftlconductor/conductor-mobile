@@ -32,7 +32,8 @@ import { HoverHelpModal } from '@/components/HoverHelpModal';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { categoryForType } from '@/utils/signalCategories';
 import { SignalIcon } from '@/components/SignalIcon';
-import { MOVEMENT_BY_DIRECTION } from '@/utils/movements';
+import { MOVEMENT_BY_DIRECTION, MOVEMENTS, movementForCategory } from '@/utils/movements';
+import { ChordIndicator } from '@/components/ChordIndicator';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import {
   metaForRing,
@@ -1922,6 +1923,13 @@ export default function HoverScreen() {
   // Long-press a radar dot → surface its full description in a tooltip (the dot
   // itself only shows a type icon).
   const [dotTip, setDotTip] = useState<string | null>(null);
+  // Tap a chord mark → its movement's current status (auto-dismisses).
+  const [chordTip, setChordTip] = useState<string | null>(null);
+  useEffect(() => {
+    if (!chordTip) return;
+    const t = setTimeout(() => setChordTip(null), 2800);
+    return () => clearTimeout(t);
+  }, [chordTip]);
   const handleDotLongPress = (s: Signal) => {
     const d = (s.description || '').trim();
     if (d) setDotTip(d);
@@ -2201,6 +2209,28 @@ export default function HoverScreen() {
     for (const s of dots) out[ringForSignal(s)].push(s);
     return out;
   }, [signals, resolveAnims, viewMode, crewFilter, userId, signalVisibility]);
+
+  // Per-movement stats for the chord: active counts from all signals, urgent =
+  // inner-ring (ACT NOW) signals.
+  const movementStats = useMemo(() => {
+    const active: Record<string, number> = {};
+    const urgent: Record<string, boolean> = {};
+    for (const s of signals) {
+      const mv = movementForCategory(categoryForType(s.type));
+      if (mv) active[mv] = (active[mv] || 0) + 1;
+    }
+    for (const s of grouped.inner) {
+      const mv = movementForCategory(categoryForType(s.type));
+      if (mv) urgent[mv] = true;
+    }
+    return { active, urgent };
+  }, [signals, grouped]);
+  const chordStates = {
+    home: { urgent: !!movementStats.urgent.home },
+    work: { urgent: !!movementStats.urgent.work },
+    family: { urgent: !!movementStats.urgent.family },
+    wellness: { urgent: !!movementStats.urgent.wellness },
+  };
 
   function startRest(signal: Signal) {
     const ring = ringForSignal(signal);
@@ -2669,6 +2699,43 @@ export default function HoverScreen() {
             </View>
           </Pressable>
         ) : null}
+
+        {/* The Chord — five marks bottom-right (outside any glass); marks with
+            urgent ACT NOW signals pulse; tap a movement for its status. */}
+        <View
+          pointerEvents="box-none"
+          style={{ position: 'absolute', right: 14, bottom: insets.bottom + 64, alignItems: 'flex-end', zIndex: 40 }}>
+          {chordTip ? (
+            <View
+              style={{
+                marginBottom: 8,
+                maxWidth: 230,
+                backgroundColor: 'rgba(8,12,20,0.92)',
+                borderColor: accentColor + '40',
+                borderWidth: 1,
+                borderRadius: 10,
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+              }}>
+              <Text style={{ color: '#fff', fontSize: 12 }}>{chordTip}</Text>
+            </View>
+          ) : null}
+          <ChordIndicator
+            size={16}
+            gap={12}
+            states={chordStates}
+            onPress={(k) => {
+              if (k === 'conductor') {
+                setChordTip('The Conductor — watching everything.');
+                return;
+              }
+              const label = MOVEMENTS.find((m) => m.key === k)?.label ?? k;
+              const a = movementStats.active[k] || 0;
+              const u = movementStats.urgent[k];
+              setChordTip(`${label} — ${a ? `${a} active${u ? ', some urgent' : ''}` : 'all quiet'}`);
+            }}
+          />
+        </View>
 
         <CollapsibleNavBar
           bottomInset={insets.bottom}

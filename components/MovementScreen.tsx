@@ -19,6 +19,7 @@ import { useUserId } from '@/hooks/useUserId';
 import { fetchHealthSnapshot } from '@/components/HealthContext';
 import { GlassCard } from '@/components/GlassCard';
 import { SignalIcon } from '@/components/SignalIcon';
+import { ChordIndicator } from '@/components/ChordIndicator';
 import { MOVEMENTS, MovementKey, SwipeDirection } from '@/utils/movements';
 import { MOVEMENT_SOURCES, SourceIconKey, SourceItem } from '@/utils/movementSources';
 
@@ -134,6 +135,12 @@ export function MovementScreen({
                 {children}
                 <MovementSources movementKey={movementKey} />
               </ScrollView>
+              {/* Movement jump nav — the chord with this movement enlarged; tap
+                  any other mark to slide straight to it without returning to
+                  The Conductor. */}
+              <View style={styles.chordBar}>
+                <ChordIndicator active={movementKey} size={16} gap={16} />
+              </View>
             </View>
           </GlassCard>
         </View>
@@ -303,6 +310,15 @@ export function MovementSources({ movementKey }: { movementKey: MovementKey }) {
 
 const styles = StyleSheet.create({
   inner: { flex: 1, paddingHorizontal: 20, paddingTop: 18 },
+  chordBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 14 },
   backBtn: { marginTop: 1 },
   title: { fontSize: 16, fontWeight: '700', letterSpacing: 2 },

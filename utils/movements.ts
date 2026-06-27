@@ -98,3 +98,27 @@ export const MOVEMENT_BY_DIRECTION: Record<SwipeDirection, Movement> = MOVEMENTS
 
 /** Default rank order (key list) for "Your Movements" before the user reorders. */
 export const MOVEMENT_KEYS: MovementKey[] = MOVEMENTS.map((m) => m.key);
+
+/** Map a Customize signal category (see utils/signalCategories) to a movement,
+ *  for coloring signal chips / health by movement. Family & wellness have no
+ *  clean signal-category home, so unmapped categories return null. */
+export function movementForCategory(category: string): MovementKey | null {
+  switch (category) {
+    case 'delivery':
+    case 'food':
+    case 'service':
+    case 'home':
+      return 'home';
+    case 'financial':
+    case 'travel':
+    case 'deadline':
+      return 'work';
+    default:
+      return null;
+  }
+}
+
+/** The signature color for a movement key (null/unknown → undefined). */
+export function colorForMovement(key?: MovementKey | null): string | undefined {
+  return MOVEMENTS.find((m) => m.key === key)?.color;
+}

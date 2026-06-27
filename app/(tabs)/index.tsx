@@ -20,6 +20,8 @@ import { WeeklySymphony } from '@/components/WeeklySymphony';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { Minimap } from '@/components/Minimap';
 import { categoryForType } from '@/utils/signalCategories';
+import { ChordIndicator, ChordKey, MarkState } from '@/components/ChordIndicator';
+import { MOVEMENTS, MovementKey, movementForCategory, colorForMovement } from '@/utils/movements';
 import { useUrgentCount } from '@/hooks/useUrgentCount';
 import { getUserId, useUserId } from '@/hooks/useUserId';
 import YesterdayModal from '@/components/YesterdayModal';
@@ -110,6 +112,22 @@ function applySignalPrefs(
   return segs.filter(
     (s) => !(s.type === 'signal' && visibility[categoryForType(s.signalType)] === false),
   );
+}
+
+// Movement names in the brief prose ("The Home Movement", etc.) get their
+// signature color so the language reads as part of the visual thread.
+const MOVEMENT_LABEL_RE = new RegExp(`(${MOVEMENTS.map((m) => m.label).join('|')})`, 'g');
+function renderMovementText(text: string, keyBase: string) {
+  return text.split(MOVEMENT_LABEL_RE).map((part, j) => {
+    const mv = MOVEMENTS.find((m) => m.label === part);
+    return mv ? (
+      <Text key={`${keyBase}-mv-${j}`} style={{ color: mv.color, fontWeight: '500' }}>
+        {part}
+      </Text>
+    ) : (
+      part
+    );
+  });
 }
 
 const SIGNAL_TYPE_COLORS: Record<string, string> = {
@@ -1845,6 +1863,35 @@ export default function TakeoffScreen() {
   // top. The skyBg container tone shows only until the image paints (no grey
   // film). The transparent ScrollView content sits on top.
   const weatherCondition = pulseData?.weather?.conditions;
+
+  // The chord: which movements have active signals (→ "needs attention" → dim,
+  // per the health spec), and a derived cross-movement insight when two
+  // distinct movements are both active.
+  const { chordStates, crossInsight } = useMemo(() => {
+    const activeMovements = new Set<MovementKey>();
+    for (const seg of segments) {
+      if (seg.type === 'signal' && seg.signalType) {
+        const mv = movementForCategory(categoryForType(seg.signalType));
+        if (mv) activeMovements.add(mv);
+      }
+    }
+    const states: Partial<Record<ChordKey, MarkState>> = {};
+    activeMovements.forEach((mv) => {
+      states[mv] = { dim: true }; // has signals → needs attention → dimmed
+    });
+    let insight: { text: string; colorA: string; colorB: string } | null = null;
+    const active = Array.from(activeMovements);
+    if (active.length >= 2) {
+      const a = MOVEMENTS.find((m) => m.key === active[0])!;
+      const b = MOVEMENTS.find((m) => m.key === active[1])!;
+      insight = {
+        text: `${a.label} and ${b.label} both need you today.`,
+        colorA: a.color,
+        colorB: b.color,
+      };
+    }
+    return { chordStates: states, crossInsight: insight };
+  }, [segments]);
   // Cache the latest condition so the Settings backdrop can mirror it.
   useEffect(() => {
     if (typeof weatherCondition === 'string' && weatherCondition) {
@@ -1947,6 +1994,11 @@ export default function TakeoffScreen() {
               transform: [{ translateX: cardTX }, { translateY: cardTY }, { scale: cardScale }],
             }}>
           <GlassCard style={styles.groundGlass}>
+          {/* The chord — five C marks (movements + Conductor) in the top-right
+              corner; tap any to jump to that movement. */}
+          <View style={styles.groundChord}>
+            <ChordIndicator size={12} states={chordStates} />
+          </View>
           {/* Greeting + mode label sit as quiet context directly above the
               brief hero (not at the top). */}
           <View style={styles.header}>
@@ -1981,7 +2033,13 @@ export default function TakeoffScreen() {
                   signalVisibility,
                 ).map((seg, i) => {
                   if (seg.type === 'signal') {
-                    const color = (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
+                    // Underline color by movement attribution when the signal's
+                    // category maps to one (home=amber, work=blue); else by type.
+                    const mvColor = colorForMovement(
+                      seg.signalType ? movementForCategory(categoryForType(seg.signalType)) : null,
+                    );
+                    const color =
+                      mvColor || (seg.signalType && SIGNAL_TYPE_COLORS[seg.signalType]) || DEFAULT_SIGNAL_COLOR;
                     const acted = quickActed[String(seg.signalId)];
                     // Prefer the real signal description (first 45 chars) over the
                     // backend's short chip phrase, when we have it.
@@ -2015,7 +2073,7 @@ export default function TakeoffScreen() {
                       </Text>
                     );
                   }
-                  return <Text key={i}>{seg.content}</Text>;
+                  return <Text key={i}>{renderMovementText(seg.content, String(i))}</Text>;
                 })}
               </Text>
               {showSignalTapTip ? (
@@ -2528,6 +2586,23 @@ export default function TakeoffScreen() {
               ) : null}
             </TouchableOpacity>
           ) : null}
+
+          {/* Cross-movement insight — the most urgent thread spanning two
+              movements. Split color bar = the two movements involved. Tap →
+              The Conductor (the hook has no initial-message field, so it just
+              opens the chat with a cross-movement context breadcrumb). */}
+          {crossInsight ? (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => openConductorSheet('cross-movement-insight')}
+              style={styles.insightCard}>
+              <View style={styles.insightBar}>
+                <View style={{ flex: 1, backgroundColor: crossInsight.colorA }} />
+                <View style={{ flex: 1, backgroundColor: crossInsight.colorB }} />
+              </View>
+              <Text style={styles.insightText}>{crossInsight.text}</Text>
+            </TouchableOpacity>
+          ) : null}
           </GlassCard>
           </Animated.View>
 
@@ -2970,6 +3045,37 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
     marginHorizontal: -16,
     marginTop: 4,
     marginBottom: 12,
+  },
+  // The chord — top-right corner inside the brief glass card.
+  groundChord: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    zIndex: 10,
+  },
+  // Cross-movement insight card below The Pulse, inside the glass panel.
+  insightCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingRight: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    overflow: 'hidden',
+  },
+  insightBar: {
+    width: 3,
+    alignSelf: 'stretch',
+    marginRight: 12,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  insightText: {
+    color: '#ffffff',
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
   },
   // Brand wordmark banner — the first thing you see, large + centered at the
   // top. 220px wide; height is the wordmark's true proportion (554×202 →

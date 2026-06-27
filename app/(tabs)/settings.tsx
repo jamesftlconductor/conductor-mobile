@@ -5,6 +5,7 @@ import * as security from '@/app/security';
 import { ACCENTS, useTheme, type AccentKey, type ThemeMode } from '@/app/theme';
 import { Minimap } from '@/components/Minimap';
 import { WeatherBackground } from '@/components/WeatherBackground';
+import { ChordIndicator } from '@/components/ChordIndicator';
 import { GlassCard } from '@/components/GlassCard';
 import { openConductorSheet } from '@/hooks/useConductorSheet';
 import { useCatchphrase } from '@/hooks/useCatchphrase';
@@ -450,6 +451,7 @@ function CollapsibleSection({
   subtitle,
   defaultOpen = false,
   forceOpen,
+  tintColor,
   children,
 }: {
   title: string;
@@ -458,6 +460,9 @@ function CollapsibleSection({
   // Deep-link signal: when this flips true (e.g. navigated to with ?hub=...),
   // the section auto-expands. Does not force-close.
   forceOpen?: boolean;
+  // Subtle per-hub tint applied to the bracketed hub title only (movement
+  // color language). Defaults to the accent (brass).
+  tintColor?: string;
   children: React.ReactNode;
 }) {
   const { theme, accentColor } = useTheme();
@@ -481,7 +486,12 @@ function CollapsibleSection({
         style={styles.collapsibleHeader}>
         {/* Hub corner brackets now come from the GlassCard wrapping each hub. */}
         <View style={{ flex: 1 }}>
-          <Text style={subtitle ? styles.hubHeaderText : styles.sectionHeader}>
+          <Text
+            style={
+              subtitle
+                ? [styles.hubHeaderText, tintColor ? { color: tintColor } : null]
+                : styles.sectionHeader
+            }>
             {subtitle ? `[${title}]` : title}
           </Text>
           {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
@@ -2502,6 +2512,28 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Your House</Text>
 
+        {/* The Chord — household configuration completeness. A movement still
+            seeking data renders outlined/faint; tap any mark to jump to the
+            hub that configures it. */}
+        <ChordIndicator
+          size={14}
+          gap={10}
+          style={{ marginTop: 4, marginBottom: 18, paddingLeft: 2 }}
+          states={{
+            work: settings.workCalendarName?.trim() ? undefined : { outlined: true },
+            wellness: { outlined: true },
+          }}
+          onPress={(key) => {
+            const target =
+              key === 'work' || key === 'wellness'
+                ? 'score'
+                : key === 'conductor'
+                  ? 'baton'
+                  : 'orchestra';
+            router.push(`/(tabs)/settings?hub=${target}` as never);
+          }}
+        />
+
         <GlassCard style={styles.hubGlass}>
         <CollapsibleSection title="The Baton" subtitle="how The Conductor works for you" forceOpen={hub === 'baton'}>
         <CollapsibleSection title="Your Brief">
@@ -2618,7 +2650,7 @@ export default function SettingsScreen() {
         </GlassCard>
 
         <GlassCard style={styles.hubGlass}>
-        <CollapsibleSection title="The Orchestra" subtitle="the people and places it watches" forceOpen={hub === 'orchestra'}>
+        <CollapsibleSection title="The Orchestra" subtitle="the people and places it watches" forceOpen={hub === 'orchestra'} tintColor="#d17a6a">
         <CollapsibleSection title="Your Household">
         <HouseholdNameRow />
         <Row label="RangerOaks925" subtext="Your household" />
@@ -2717,7 +2749,7 @@ export default function SettingsScreen() {
         </GlassCard>
 
         <GlassCard style={styles.hubGlass}>
-        <CollapsibleSection title="The Score" subtitle="everything The Conductor reads from" forceOpen={hub === 'score'}>
+        <CollapsibleSection title="The Score" subtitle="everything The Conductor reads from" forceOpen={hub === 'score'} tintColor="#5b9bd5">
         <ChevronRow
           label="Weather Skins"
           subtext="Preview all 10 weather backgrounds"
