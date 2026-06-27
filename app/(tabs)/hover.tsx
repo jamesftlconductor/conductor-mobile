@@ -454,6 +454,12 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
   }, [cScale, cGlow, nebula]);
 
   const nebulaR = Math.max(SW, SH) * 0.7;
+  // Pulse/C-mark alignment: the C mark logo renders at ≈12% of screen width, so
+  // its outer radius is SW*0.06. The glow's base diameter is sized so that at
+  // PEAK pulse (scale 1.35) its outer edge lands exactly on that logo radius —
+  // glow and logo trace the same circle at maximum expansion.
+  const logoRadius = SW * 0.06;
+  const G = Math.round((logoRadius / 1.35) * 2);
 
   return (
     <>
@@ -479,19 +485,19 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
       {/* Center C — strong radiating golden glow; the tap target for chat. */}
       <Pressable
         onPress={onCenterPress}
-        hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+        hitSlop={{ top: 28, bottom: 28, left: 28, right: 28 }}
         style={{
           position: 'absolute',
-          left: cx - 55,
-          top: cy - 55,
-          width: 110,
-          height: 110,
+          left: cx - G / 2,
+          top: cy - G / 2,
+          width: G,
+          height: G,
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 30,
         }}>
-        <Animated.View pointerEvents="none" style={{ width: 110, height: 110, opacity: cGlow, transform: [{ scale: cScale }] }}>
-          <Svg width={110} height={110}>
+        <Animated.View pointerEvents="none" style={{ width: G, height: G, opacity: cGlow, transform: [{ scale: cScale }] }}>
+          <Svg width={G} height={G}>
             <Defs>
               <RadialGradient id="hoverCGlow" cx="50%" cy="50%" r="50%">
                 <Stop offset="0" stopColor="rgb(240, 208, 96)" stopOpacity={0.6} />
@@ -499,7 +505,7 @@ function HoverImageBackdrop({ cx, cy, onCenterPress }: { cx: number; cy: number;
                 <Stop offset="1" stopColor="rgb(240, 208, 96)" stopOpacity={0} />
               </RadialGradient>
             </Defs>
-            <Circle cx={55} cy={55} r={55} fill="url(#hoverCGlow)" />
+            <Circle cx={G / 2} cy={G / 2} r={G / 2} fill="url(#hoverCGlow)" />
           </Svg>
         </Animated.View>
       </Pressable>
@@ -2348,11 +2354,11 @@ export default function HoverScreen() {
       if (!insideExpandedRing) setExpandedRing(null);
     });
 
-  // Swipe navigation. Two direction-locked Pan gestures (activeOffset makes
-  // activation reliable on EVERY swipe — the prior manualActivation version
-  // could miss after the first). Origin within the center 60% = directional
-  // nav; edge origin = tab switch (handled here because this GestureDetector
-  // intercepts the root PanResponder in _layout.tsx).
+  // Directional swipe navigation — CENTER-origin only. The root PanResponder in
+  // _layout.tsx now only claims edge-origin swipes (outer 20%) for tab
+  // switching, so center swipes fall through to these gestures here. A swipe
+  // that starts in the middle 60% and travels >60px navigates directionally;
+  // edge-origin swipes are ignored (the root handles them as tab switches).
   const swipeOriginRef = useRef<{ center: boolean } | null>(null);
   const recordOrigin = (x: number, y: number) => {
     swipeOriginRef.current = {
@@ -2365,17 +2371,10 @@ export default function HoverScreen() {
     .runOnJS(true)
     .onBegin((e) => recordOrigin(e.x, e.y))
     .onEnd((e) => {
-      if (Math.abs(e.translationX) < 45) return;
-      const center = !!swipeOriginRef.current?.center;
-      if (e.translationX < 0) {
-        // Swipe left.
-        if (center) { markSwiped('left'); router.push('/(tabs)/settings?hub=score' as never); }
-        else router.push('/(tabs)/settings' as never);
-      } else {
-        // Swipe right.
-        if (center) { markSwiped('right'); router.push('/(tabs)/settings?hub=orchestra' as never); }
-        else router.push('/(tabs)' as never);
-      }
+      if (!swipeOriginRef.current?.center) return; // edge → root handles tab switch
+      if (Math.abs(e.translationX) < 60) return;
+      if (e.translationX < 0) { markSwiped('left'); router.push('/(tabs)/settings?hub=score' as never); }
+      else { markSwiped('right'); router.push('/(tabs)/settings?hub=orchestra' as never); }
     });
   const vSwipe = Gesture.Pan()
     .activeOffsetY([-24, 24])
@@ -2383,8 +2382,8 @@ export default function HoverScreen() {
     .runOnJS(true)
     .onBegin((e) => recordOrigin(e.x, e.y))
     .onEnd((e) => {
-      if (Math.abs(e.translationY) < 45) return;
       if (!swipeOriginRef.current?.center) return;
+      if (Math.abs(e.translationY) < 60) return;
       if (e.translationY < 0) { markSwiped('up'); router.push('/horizon' as never); }
       else { markSwiped('down'); router.push('/journal' as never); }
     });

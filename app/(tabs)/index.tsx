@@ -259,6 +259,85 @@ function accentRgba(accentColor: string, opacity: number): string {
   return `rgba(${r},${g},${b},${opacity})`;
 }
 
+// Subtle persistent nudge below the brief to connect a work calendar. The app
+// stores the calendar as `preferences.workCalendarName` (empty string = not
+// connected — there is no separate `workCalendarConnected` boolean), so we treat
+// a non-empty name as connected. Shows only when not connected AND the user has
+// dismissed it fewer than 3 times (count persisted in AsyncStorage). Tapping the
+// text opens Settings → The Score; the × increments the dismissal count.
+const WORK_CAL_NUDGE_KEY = 'workCalNudgeDismissals';
+
+function WorkCalendarNudge() {
+  const userId = useUserId();
+  const { theme, accentColor } = useTheme();
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(WORK_CAL_NUDGE_KEY);
+        const dismissed = parseInt(raw || '0', 10) || 0;
+        if (dismissed >= 3) return;
+        const res = await fetch(
+          `https://conductor-ivory.vercel.app/api/signals?type=preferences&userId=${userId}`,
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const name = data?.preferences?.workCalendarName;
+        const connected = typeof name === 'string' && name.trim().length > 0;
+        if (!cancelled && !connected) setShow(true);
+      } catch {
+        // Best-effort — on any failure just don't show the nudge.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  async function dismiss() {
+    setShow(false);
+    try {
+      const raw = await AsyncStorage.getItem(WORK_CAL_NUDGE_KEY);
+      const next = (parseInt(raw || '0', 10) || 0) + 1;
+      await AsyncStorage.setItem(WORK_CAL_NUDGE_KEY, String(next));
+    } catch {
+      // ignore — worst case the nudge reappears next launch
+    }
+  }
+
+  if (!show) return null;
+
+  return (
+    <View style={{ marginTop: 14 }}>
+      <View
+        style={{
+          height: StyleSheet.hairlineWidth,
+          backgroundColor: 'rgba(255,255,255,0.10)',
+          marginBottom: 12,
+        }}
+      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, gap: 12 }}>
+        <TouchableOpacity
+          style={{ flex: 1 }}
+          activeOpacity={0.6}
+          onPress={() => router.push('/(tabs)/settings?hub=score' as never)}>
+          <Text style={{ color: accentColor, fontSize: 13, letterSpacing: 0.2, lineHeight: 18 }}>
+            Connect your work calendar → conflicts caught before they happen
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={dismiss}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={{ color: theme.muted, fontSize: 18, lineHeight: 18 }}>×</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 // Band themes were module-level constants tied to the dark palette.
 // They're now factories so they pick up the current theme + accent.
 // Clearance is intentionally a quieter variant of the same palette
@@ -2344,6 +2423,8 @@ export default function TakeoffScreen() {
             </TouchableOpacity>
           ) : null}
           </GlassCard>
+
+          <WorkCalendarNudge />
 
           {householdInterview ? (
             // Household interview — when the radar is thin the brief surfaces

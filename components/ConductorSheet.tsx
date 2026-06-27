@@ -23,8 +23,10 @@ import {
   Animated,
   Dimensions,
   Easing,
+  FlatList,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -40,11 +42,12 @@ import { useTheme } from '@/app/theme';
 import { closeConductorSheet, useConductorSheetState } from '@/hooks/useConductorSheet';
 import { useUserId } from '@/hooks/useUserId';
 import { debugLog } from '@/utils/debugLog';
-import { SwipeDismissSheet } from './SwipeDismissSheet';
+import { GlassCard } from './GlassCard';
 
 const API_BASE = 'https://conductor-ivory.vercel.app/api';
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.65);
+// Fixed glass panel height — never changes with content or keyboard.
+const PANEL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.52);
 const MAX_HISTORY_PAIRS = 5;
 
 // Per-context suggestion chips. Default list covers the catch-all
@@ -189,12 +192,56 @@ export function ConductorSheet() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [actions, setActions] = useState<AskResponse | null>(null);
   const inputRef = useRef<TextInput | null>(null);
-  const scrollRef = useRef<ScrollView | null>(null);
   const submittingRef = useRef(false);
   // Holds the household-interview question while the sheet is open in
   // interview mode. Consumed by the first submit so that one answer is
   // routed to the interview handler; cleared on close.
   const interviewQRef = useRef<string | null>(null);
+
+  // Slide animation + keep-mounted-through-close. `mounted` stays true during
+  // the slide-down so the panel animates out before unmounting; the store's
+  // `visible` drives open (spring up, ~300ms) / close (slide down, 250ms).
+  const [mounted, setMounted] = useState(false);
+  const slide = useRef(new Animated.Value(PANEL_HEIGHT)).current;
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      slide.setValue(PANEL_HEIGHT);
+      Animated.spring(slide, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 24,
+        stiffness: 260,
+        mass: 0.9,
+      }).start();
+    } else {
+      Animated.timing(slide, {
+        toValue: PANEL_HEIGHT,
+        duration: 250,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setMounted(false);
+      });
+    }
+  }, [visible, slide]);
+
+  // Drag the handle/header down to dismiss; release under threshold springs back.
+  const dragResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_e, g) => {
+        if (g.dy > 0) slide.setValue(g.dy);
+      },
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > 80) {
+          closeConductorSheet();
+        } else {
+          Animated.spring(slide, { toValue: 0, useNativeDriver: true, damping: 24, stiffness: 260 }).start();
+        }
+      },
+    }),
+  ).current;
 
   // Combined search — live signal-description matches + screen/feature
   // destinations, computed from the same input as Ask. Tapping a result
@@ -293,13 +340,6 @@ export function ConductorSheet() {
     debugLog('Sheet', 'ConductorSheet mounted at root');
     return () => debugLog('Sheet', 'ConductorSheet UNMOUNTED');
   }, []);
-
-  // Auto-scroll to the bottom whenever a new message lands.
-  useEffect(() => {
-    if (messages.length === 0) return;
-    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
-    return () => clearTimeout(t);
-  }, [messages.length]);
 
   async function submit(rawQuestion: string) {
     const q = rawQuestion.trim();
@@ -423,204 +463,205 @@ export function ConductorSheet() {
 
   const chips = suggestionsFor(context);
 
+  // Inverted FlatList wants newest-first data (data[0] renders at the bottom).
+  const reversedMessages = useMemo(() => messages.slice().reverse(), [messages]);
+  const lastConductorId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'conductor') return messages[i].id;
+    }
+    return null;
+  }, [messages]);
+
+  function renderMessage(m: Message) {
+    if (m.role === 'user') {
+      return (
+        <View style={styles.userBubble}>
+          <Text style={styles.userBubbleText}>{m.text}</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.conductorBlock}>
+        {m.showLabel ? <Text style={styles.conductorLabel}>THE CONDUCTOR</Text> : null}
+        <View style={styles.conductorBubble}>
+          <Text style={styles.conductorBubbleText}>{m.text}</Text>
+        </View>
+        {m.id === lastConductorId && actions?.action ? (
+          <ActionRenderer
+            action={actions.action}
+            styles={styles}
+            accentColor={accentColor}
+            theme={theme}
+            onNavigateOffer={actNavigateOffer}
+            onConfirmSetting={actConfirmSetting}
+            onResolveCandidate={actResolveCandidate}
+            onGotIt={actGotIt}
+          />
+        ) : null}
+      </View>
+    );
+  }
+
+  // Keep the panel mounted through the slide-down close animation.
+  if (!mounted) return null;
+
   return (
     <Modal
-      visible={visible}
-      animationType="slide"
+      visible
+      animationType="none"
       transparent
       onRequestClose={closeConductorSheet}>
-      {/* KeyboardAvoidingView lives OUTSIDE SwipeDismissSheet so the
-          entire sheet rises with the keyboard. Wrapping the KAV inside
-          the fixed-height sheet (the previous structure) couldn't grow
-          the sheet beyond SHEET_HEIGHT, so the input bar disappeared
-          behind the keyboard. Moving KAV to the screen-level flex
-          container — with the backdrop's justifyContent:flex-end
-          anchoring the sheet to the bottom — lets padding/height
-          behavior push the whole sheet upward by the keyboard's height. */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={20}
-        style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
+        {/* Light dim — Ground's weather stays visible behind the glass panel. */}
         <Pressable
           style={styles.backdrop}
-          onPress={backdropActive ? closeConductorSheet : undefined}>
-          <SwipeDismissSheet
-            style={[styles.sheet, { height: SHEET_HEIGHT }]}
-            onClose={closeConductorSheet}
-            enabled={backdropActive}>
-            <Pressable onPress={() => {}} style={{ flex: 1 }}>
-              {/* Header */}
-              {/* Header — title pinned left, Done pinned right. The
-                  context pill takes a flex-shrinkable middle slot so
-                  long context labels can never push Done offscreen. */}
-              <View style={styles.headerRow}>
-                <Text style={styles.title} numberOfLines={1}>The Conductor</Text>
-                <View style={styles.contextPill}>
-                  <Text style={styles.contextPillText} numberOfLines={1}>
-                    📍 {contextLabelFor(context)}
-                  </Text>
+          onPress={backdropActive ? closeConductorSheet : undefined}
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
+          style={styles.kav}
+          pointerEvents="box-none">
+          <Animated.View style={[styles.panel, { transform: [{ translateY: slide }] }]}>
+            <GlassCard tint="rgba(8, 12, 20, 0.82)" topBracketsOnly style={styles.glassPanel}>
+              {/* Drag handle + header — drag this zone down to dismiss. */}
+              <View {...dragResponder.panHandlers}>
+                <View style={styles.handle} />
+                <View style={styles.headerRow}>
+                  <Text style={styles.headerLabel}>The Conductor</Text>
+                  <View style={styles.contextPill}>
+                    <Text style={styles.contextPillText} numberOfLines={1}>
+                      📍 {contextLabelFor(context)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      closeConductorSheet();
+                    }}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.closeBtn}>
+                    <Text style={styles.closeBtnText}>Done</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    closeConductorSheet();
-                  }}
-                  activeOpacity={0.6}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  style={styles.closeBtn}>
-                  <Text style={styles.closeBtnText}>Done</Text>
-                </TouchableOpacity>
               </View>
               <View style={styles.divider} />
 
-              {/* Input bar — the dominant, primary element, pinned at the
-                  top and auto-focused on open. Chips sit below as secondary
-                  options. */}
-              <View style={styles.inputBar}>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    inputRef.current?.focus();
-                  }}
-                  activeOpacity={0.6}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={styles.micBtn}>
-                  <Text style={styles.micGlyph}>🎙</Text>
-                </TouchableOpacity>
-                <TextInput
-                  ref={inputRef}
-                  value={input}
-                  onChangeText={setInput}
-                  onSubmitEditing={() => submit(input)}
-                  placeholder="Search or ask anything..."
-                  placeholderTextColor={theme.muted}
-                  returnKeyType="send"
-                  blurOnSubmit={false}
-                  style={styles.input}
-                  autoCorrect
-                  autoComplete="off"
-                  textContentType="none"
-                />
-                <TouchableOpacity
-                  onPress={() => submit(input)}
-                  disabled={!input.trim() || loading}
-                  activeOpacity={0.6}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={[
-                    styles.sendBtn,
-                    { backgroundColor: input.trim() && !loading ? accentColor : theme.muted },
-                  ]}>
-                  <Text style={styles.sendGlyph}>↑</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Message list — inverted FlatList that scrolls WITHIN the
+                  fixed-height panel. Loading dots ride the bottom via the
+                  (inverted) list header. */}
+              <FlatList
+                style={styles.conversation}
+                data={reversedMessages}
+                keyExtractor={(m) => String(m.id)}
+                renderItem={({ item }) => renderMessage(item)}
+                inverted
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 12 }}
+                ListHeaderComponent={
+                  loading ? (
+                    <View style={{ alignSelf: 'flex-start' }}>
+                      <LoadingDots accentColor={accentColor} />
+                    </View>
+                  ) : null
+                }
+              />
 
-              {/* Search results — appear above the chips as soon as the
-                  input matches a screen/feature or a signal. Tapping a
-                  result navigates or opens the signal's Finale on Hover. */}
-              {showSearch ? (
+              {/* Bottom section — search results, suggestion chips, and the
+                  always-visible input bar, pinned below the scrolling list. */}
+              <View style={styles.bottomSection}>
+                {showSearch ? (
+                  <ScrollView
+                    style={styles.searchResults}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ paddingVertical: 4 }}>
+                    {destMatches.map((d) => (
+                      <TouchableOpacity
+                        key={`dest-${d.label}`}
+                        onPress={() => goToDestination(d.path)}
+                        activeOpacity={0.6}
+                        style={styles.searchRow}>
+                        <Text style={styles.searchEmoji}>{d.emoji}</Text>
+                        <Text style={styles.searchLabel} numberOfLines={1}>{d.label}</Text>
+                        <Text style={styles.searchKind}>screen</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {signalMatches.map((s) => (
+                      <TouchableOpacity
+                        key={`sig-${s.id}`}
+                        onPress={() => openSignalFinale(s.id)}
+                        activeOpacity={0.6}
+                        style={styles.searchRow}>
+                        <Text style={styles.searchEmoji}>📡</Text>
+                        <Text style={styles.searchLabel} numberOfLines={1}>{s.description || 'Signal'}</Text>
+                        <Text style={styles.searchKind}>signal</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                ) : null}
+
                 <ScrollView
-                  style={styles.searchResults}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.chipsRow}
                   keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={{ paddingVertical: 4 }}>
-                  {destMatches.map((d) => (
+                  contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}>
+                  {chips.map((chip) => (
                     <TouchableOpacity
-                      key={`dest-${d.label}`}
-                      onPress={() => goToDestination(d.path)}
+                      key={chip}
+                      onPress={() => handleSuggestionTap(chip)}
                       activeOpacity={0.6}
-                      style={styles.searchRow}>
-                      <Text style={styles.searchEmoji}>{d.emoji}</Text>
-                      <Text style={styles.searchLabel} numberOfLines={1}>{d.label}</Text>
-                      <Text style={styles.searchKind}>screen</Text>
-                    </TouchableOpacity>
-                  ))}
-                  {signalMatches.map((s) => (
-                    <TouchableOpacity
-                      key={`sig-${s.id}`}
-                      onPress={() => openSignalFinale(s.id)}
-                      activeOpacity={0.6}
-                      style={styles.searchRow}>
-                      <Text style={styles.searchEmoji}>📡</Text>
-                      <Text style={styles.searchLabel} numberOfLines={1}>{s.description || 'Signal'}</Text>
-                      <Text style={styles.searchKind}>signal</Text>
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                      style={styles.chip}>
+                      <Text style={styles.chipText}>{chip}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-              ) : null}
 
-              {/* Suggestion chips — secondary options below the input */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.chipsRow}
-                contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}>
-                {chips.map((chip) => (
+                <View style={styles.inputBar}>
                   <TouchableOpacity
-                    key={chip}
-                    onPress={() => handleSuggestionTap(chip)}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      inputRef.current?.focus();
+                    }}
                     activeOpacity={0.6}
-                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                    style={styles.chip}>
-                    <Text style={styles.chipText}>{chip}</Text>
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.micBtn}>
+                    <Text style={styles.micGlyph}>🎙</Text>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Conversation area — flat role-keyed bubble list.
-                  Each message renders independently in its own
-                  alignment. Loading dots render below the latest
-                  user message when a request is in flight. */}
-              <ScrollView
-                ref={scrollRef}
-                style={styles.conversation}
-                contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 16 }}
-                showsVerticalScrollIndicator={false}>
-                {messages.map((m, idx) => {
-                  if (m.role === 'user') {
-                    return (
-                      <View key={m.id} style={styles.userBubble}>
-                        <Text style={styles.userBubbleText}>{m.text}</Text>
-                      </View>
-                    );
-                  }
-                  // conductor
-                  const isLastConductor = idx === messages.length - 1;
-                  return (
-                    <View key={m.id} style={styles.conductorBlock}>
-                      {m.showLabel ? (
-                        <Text style={styles.conductorLabel}>THE CONDUCTOR</Text>
-                      ) : null}
-                      <View style={styles.conductorBubble}>
-                        <Text style={styles.conductorBubbleText}>{m.text}</Text>
-                      </View>
-                      {isLastConductor && actions?.action ? (
-                        <ActionRenderer
-                          action={actions.action}
-                          styles={styles}
-                          accentColor={accentColor}
-                          theme={theme}
-                          onNavigateOffer={actNavigateOffer}
-                          onConfirmSetting={actConfirmSetting}
-                          onResolveCandidate={actResolveCandidate}
-                          onGotIt={actGotIt}
-                        />
-                      ) : null}
-                    </View>
-                  );
-                })}
-                {/* Loading dots render below the latest user message
-                    while a request is in flight — placed AFTER the
-                    last message so it always sits at the bottom.
-                    alignSelf:flex-start mirrors the conductor side. */}
-                {loading ? (
-                  <View style={{ alignSelf: 'flex-start' }}>
-                    <LoadingDots accentColor={accentColor} />
-                  </View>
-                ) : null}
-              </ScrollView>
-            </Pressable>
-          </SwipeDismissSheet>
-        </Pressable>
-      </KeyboardAvoidingView>
+                  <TextInput
+                    ref={inputRef}
+                    value={input}
+                    onChangeText={setInput}
+                    onSubmitEditing={() => submit(input)}
+                    placeholder="Search or ask anything..."
+                    placeholderTextColor={theme.muted}
+                    returnKeyType="send"
+                    blurOnSubmit={false}
+                    style={styles.input}
+                    autoCorrect
+                    autoComplete="off"
+                    textContentType="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => submit(input)}
+                    disabled={!input.trim() || loading}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={[
+                      styles.sendBtn,
+                      { backgroundColor: input.trim() && !loading ? accentColor : theme.muted },
+                    ]}>
+                    <Text style={styles.sendGlyph}>↑</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </GlassCard>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -802,17 +843,43 @@ function ActionRenderer({
 function makeStyles(theme: ThemeColors, accentColor: string) {
   return StyleSheet.create({
     backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      // Light dim only — Ground's weather stays visible behind the glass panel.
+      backgroundColor: 'rgba(0,0,0,0.3)',
+    },
+    // Anchors the fixed-height panel to the bottom; KAV padding behavior pushes
+    // the whole panel up as one unit when the keyboard appears.
+    kav: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.55)',
       justifyContent: 'flex-end',
     },
-    sheet: {
-      backgroundColor: theme.surface,
-      borderTopLeftRadius: 16,
-      borderTopRightRadius: 16,
-      // Clear the iPhone home-indicator pill so the input bar / chips aren't
-      // cut off at the bottom of the sheet (34 = home-indicator safe area).
-      paddingBottom: Platform.OS === 'ios' ? 34 : 12,
+    // The slide wrapper — fixed height, never changes with content/keyboard.
+    panel: {
+      height: PANEL_HEIGHT,
+    },
+    // GlassCard surface filling the wrapper; square bottom corners (it sits at
+    // the screen's bottom edge), content rows manage their own horizontal pad.
+    glassPanel: {
+      flex: 1,
+      paddingHorizontal: 0,
+      paddingTop: 6,
+      paddingBottom: 0,
+      borderBottomLeftRadius: 0,
+      borderBottomRightRadius: 0,
+    },
+    handle: {
+      width: 32,
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      alignSelf: 'center',
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    // Wraps the search/chips/input below the scrolling list; pads the bottom
+    // clear of the iPhone home indicator when the keyboard is down.
+    bottomSection: {
+      paddingBottom: Platform.OS === 'ios' ? 28 : 12,
     },
     // Three-slot header: title (intrinsic width) | context pill
     // (flex-shrinkable) | Done (intrinsic width, always visible).
@@ -822,15 +889,17 @@ function makeStyles(theme: ThemeColors, accentColor: string) {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 16,
-      paddingTop: 4,
+      paddingTop: 2,
       paddingBottom: 10,
       gap: 10,
     },
-    title: {
+    // "THE CONDUCTOR" header — 11px accent, uppercase, wide tracking.
+    headerLabel: {
       color: accentColor,
-      fontSize: 16,
-      fontWeight: '700',
-      letterSpacing: 0.1,
+      fontSize: 11,
+      fontWeight: '600',
+      letterSpacing: 3,
+      textTransform: 'uppercase',
       flexShrink: 0,
     },
     contextPill: {

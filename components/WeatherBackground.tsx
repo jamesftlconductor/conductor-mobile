@@ -389,13 +389,24 @@ function WeatherOverlays({ kind }: { kind: WeatherKind }) {
 type Props = {
   condition?: string | null;
   hour?: number;
+  // Force a specific image kind regardless of condition/hour (used by the
+  // Weather Skins gallery to preview each one).
+  forceKind?: WeatherKind;
   animated?: boolean;
   opacity?: number;
   style?: ViewStyle;
 };
 
-export function WeatherBackground({ condition, hour, animated = false, opacity = 1, style }: Props) {
-  const resolvedHour = hour ?? new Date().getHours();
+export function WeatherBackground({ condition, hour, forceKind, animated = false, opacity = 1, style }: Props) {
+  // Track the LIVE hour so time-of-day transitions (esp. → clear-night at 8pm)
+  // happen even while the screen stays mounted. A static `hour` prop captured at
+  // the caller's render goes stale — e.g. Ground rendered at dusk would keep
+  // showing dusk hours later. We seed from the prop, then a timer keeps it live.
+  const [liveHour, setLiveHour] = useState<number>(() => hour ?? new Date().getHours());
+  useEffect(() => {
+    const id = setInterval(() => setLiveHour(new Date().getHours()), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   // When no condition is passed (Settings), self-resolve from the last value
   // Ground cached so the two screens stay in sync without a second data source.
@@ -414,7 +425,11 @@ export function WeatherBackground({ condition, hour, animated = false, opacity =
   }, [condition]);
 
   const effectiveCondition = condition !== undefined && condition !== null ? condition : storedCondition;
-  const kind = resolveWeatherKind(effectiveCondition, resolvedHour);
+  const kind = forceKind ?? resolveWeatherKind(effectiveCondition, liveHour);
+  // Debug (per request): show the values the resolver is actually using.
+  useEffect(() => {
+    console.log('[weather] hour:', new Date().getHours(), 'condition:', effectiveCondition, '-> kind:', kind);
+  }, [effectiveCondition, kind]);
 
   // Crossfade: the previous kind sits behind, the current kind fades in over
   // 1.5s. renderedRef avoids a stale closure when the kind changes.

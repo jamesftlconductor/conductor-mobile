@@ -1,7 +1,7 @@
 import { router, Tabs, usePathname } from 'expo-router';
 import { RadioTower, Settings as SettingsIcon } from 'lucide-react-native';
 import React, { useRef } from 'react';
-import { PanResponder, View } from 'react-native';
+import { Dimensions, PanResponder, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -12,6 +12,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 // Hubs). Vitals is hidden from the bar (href: null) but its route is kept so it
 // can be absorbed into The Conductor tab later. Swipe order mirrors the bar.
 const SWIPE_ROUTES = ['/(tabs)', '/(tabs)/hover', '/(tabs)/settings'] as const;
+
+// Only swipes that START in the outer 20% of the screen width switch tabs.
+// Center-originating swipes are left for the active screen (e.g. Hover's
+// directional navigation), which would otherwise be pre-empted by this
+// root responder.
+const { width: SCREEN_W } = Dimensions.get('window');
+const EDGE_FRACTION = 0.2;
 
 // Resolve the current tab index from the live pathname.
 function indexFromPath(path: string): number {
@@ -35,9 +42,14 @@ export default function TabLayout() {
       // touch if they claim it first.
       onMoveShouldSetPanResponderCapture: () => false,
       // Only claim clear horizontal swipes: >20px horizontal AND at least
-      // twice as horizontal as vertical (so vertical scrolls pass through).
-      onMoveShouldSetPanResponder: (_evt, g) =>
-        Math.abs(g.dx) > 20 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      // twice as horizontal as vertical (so vertical scrolls pass through) —
+      // AND only when the swipe STARTED in the outer 20% of the width. Center
+      // swipes fall through to the active screen's own gesture handler.
+      onMoveShouldSetPanResponder: (_evt, g) => {
+        const horizontal = Math.abs(g.dx) > 20 && Math.abs(g.dx) > Math.abs(g.dy) * 2;
+        if (!horizontal) return false;
+        return g.x0 < SCREEN_W * EDGE_FRACTION || g.x0 > SCREEN_W * (1 - EDGE_FRACTION);
+      },
       onPanResponderRelease: (_evt, g) => {
         const SWIPE_THRESHOLD = 60; // guards against accidental nav while scrolling
         if (Math.abs(g.dx) < SWIPE_THRESHOLD) return;

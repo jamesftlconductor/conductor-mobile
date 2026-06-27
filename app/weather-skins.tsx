@@ -19,25 +19,24 @@ import {
 
 import { useTheme } from '@/app/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { WeatherBackground } from '@/components/WeatherBackground';
+import { WeatherBackground, WeatherKind } from '@/components/WeatherBackground';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace' });
 
-// Each skin drives WeatherBackground through its public (condition, hour) API —
-// the condition strings + hours below resolve to exactly one image kind each
-// (matching components/WeatherBackground.tsx resolveWeatherKind).
-type Skin = { id: string; name: string; condition: string; hour: number };
+// Each skin forces one image kind directly (forceKind) — no condition/hour
+// guessing, so previews are exact and independent of the live time of day.
+type Skin = { id: WeatherKind; name: string };
 const SKINS: Skin[] = [
-  { id: 'clear-day', name: 'Clear Day', condition: 'clear', hour: 12 },
-  { id: 'clear-night', name: 'Clear Night', condition: 'clear', hour: 22 },
-  { id: 'partly-cloudy', name: 'Partly Cloudy', condition: 'partly', hour: 12 },
-  { id: 'overcast', name: 'Overcast', condition: 'overcast', hour: 12 },
-  { id: 'heavy-rain', name: 'Heavy Rain', condition: 'heavy rain', hour: 12 },
-  { id: 'hazy-morning', name: 'Hazy Morning', condition: 'fog', hour: 7 },
-  { id: 'sunset', name: 'Sunset', condition: 'sunset', hour: 18 },
-  { id: 'hurricane', name: 'Hurricane', condition: 'hurricane', hour: 12 },
-  { id: 'thunderstorm', name: 'Thunderstorm', condition: 'thunderstorm', hour: 12 },
-  { id: 'clearing', name: 'Clearing', condition: 'clearing', hour: 12 },
+  { id: 'clear-day', name: 'Clear Day' },
+  { id: 'clear-night', name: 'Clear Night' },
+  { id: 'partly-cloudy', name: 'Partly Cloudy' },
+  { id: 'overcast', name: 'Overcast' },
+  { id: 'heavy-rain', name: 'Heavy Rain' },
+  { id: 'hazy-morning', name: 'Hazy Morning' },
+  { id: 'sunset', name: 'Sunset' },
+  { id: 'hurricane', name: 'Hurricane' },
+  { id: 'thunderstorm', name: 'Thunderstorm' },
+  { id: 'clearing', name: 'Clearing' },
 ];
 
 export default function WeatherSkinsScreen() {
@@ -68,7 +67,7 @@ export default function WeatherSkinsScreen() {
               onPress={() => setPreview(s)}
               style={[styles.card, { width: cardW }]}>
               {/* Static thumbnail — no animation for a smooth grid. */}
-              <WeatherBackground condition={s.condition} hour={s.hour} animated={false} />
+              <WeatherBackground forceKind={s.id} animated={false} />
               <View style={styles.cardLabelWrap}>
                 <Text style={styles.cardLabel} numberOfLines={1}>
                   [{s.name.toUpperCase()}]
@@ -87,7 +86,7 @@ export default function WeatherSkinsScreen() {
         onRequestClose={() => setPreview(null)}>
         <View style={styles.previewRoot}>
           {preview ? (
-            <WeatherBackground condition={preview.condition} hour={preview.hour} animated />
+            <WeatherBackground forceKind={preview.id} animated />
           ) : null}
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setPreview(null)} />
           <View pointerEvents="box-none" style={styles.previewChrome}>

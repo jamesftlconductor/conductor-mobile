@@ -13,13 +13,21 @@ import { useTheme } from '../app/theme';
 export function GlassCard({
   children,
   style,
+  tint,
+  topBracketsOnly = false,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  // Override the dark glass tint (default rgba(8,12,20,0.72)). The chat panel
+  // passes a slightly more opaque 0.82.
+  tint?: string;
+  // Render corner brackets only at the top two corners — for a bottom-anchored
+  // panel whose lower corners sit at the screen edge.
+  topBracketsOnly?: boolean;
 }) {
   const { accentColor } = useTheme();
   return (
-    <View style={[styles.card, style]}>
+    <View style={[styles.card, tint ? { backgroundColor: tint } : null, style]}>
       {children}
       {/* Non-interactive glass surface FX layered over the content edges. */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -52,8 +60,12 @@ export function GlassCard({
         {/* Corner bracket clamps — accent at 0.35 (59 hex), 1.5px, 16px arms. */}
         <View style={[styles.bracket, styles.bracketTL, { borderColor: accentColor + '59' }]} />
         <View style={[styles.bracket, styles.bracketTR, { borderColor: accentColor + '59' }]} />
-        <View style={[styles.bracket, styles.bracketBL, { borderColor: accentColor + '59' }]} />
-        <View style={[styles.bracket, styles.bracketBR, { borderColor: accentColor + '59' }]} />
+        {!topBracketsOnly ? (
+          <>
+            <View style={[styles.bracket, styles.bracketBL, { borderColor: accentColor + '59' }]} />
+            <View style={[styles.bracket, styles.bracketBR, { borderColor: accentColor + '59' }]} />
+          </>
+        ) : null}
       </View>
     </View>
   );
